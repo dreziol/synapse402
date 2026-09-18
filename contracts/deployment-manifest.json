@@ -1,0 +1,11 @@
+{
+  "network": "tempoTestnet",
+  "chainId": 42431,
+  "deployedAt": "2026-09-12T17:40:51.812Z",
+  "contracts": {
+    "pathUSD": "0x9aa3ef4B60B6e3c440711658ee05780e236ac714",
+    "SynapseVault": "0x3c42E274FAdd8e371fB84f97203CC2F2125c8775",
+    "SynapseMPPReceiver": "0xfCEb1a2633881c19283836a2E17Ba25E612724A0"
+  },
+  "deployer": "0xa287550D1c3D277caA59C560230AC840e1Ee58B6"
+}

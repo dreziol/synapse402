@@ -1,0 +1,50 @@
+# ==============================================================================
+# Synapse402 Root .gitignore (Production Security & Hygiene)
+# ==============================================================================
+
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Environment variables with private keys (NEVER COMMIT)
+.env
+.env.*
+*.env
+**/.env
+**/.env.*
+contracts/.env
+premium_site/.env
+site/.env
+!.env.example
+!**/.env.example
+
+# Local build artifacts
+dist/
+*/dist/
+build/
+cache/
+*/cache/
+artifacts/
+*/artifacts/
+typechain-types/
+*/typechain-types/
+
+# Archive files (Prevents GitHub 100MB file limit rejection)
+*.zip
+*.tar.gz
+*.tgz
+
+# Logs & temp
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.tempmediaStorage/
+scratch/
+site/
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

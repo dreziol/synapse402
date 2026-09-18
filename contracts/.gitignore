@@ -1,0 +1,12 @@
+# Contracts .gitignore
+.env
+.env.*
+*.env
+!.env.example
+
+node_modules/
+cache/
+artifacts/
+typechain-types/
+coverage/
+*.log

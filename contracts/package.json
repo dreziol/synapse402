@@ -1,0 +1,23 @@
+{
+  "name": "synapse402-contracts",
+  "version": "1.0.0",
+  "description": "Synapse402 Smart Contracts on Tempo L1 - Machine Payments Protocol (MPP) & EIP-712 Scoped Session Vaults",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:local": "hardhat run scripts/deploy.ts",
+    "deploy:tempo": "hardhat run scripts/deploy.ts --network tempoTestnet",
+    "generate-wallet": "hardhat run scripts/generateKey.ts"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.2.0",
+    "@openzeppelin/merkle-tree": "^1.0.8"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@types/node": "^22.14.0",
+    "dotenv": "^17.2.3",
+    "hardhat": "^2.22.19",
+    "typescript": "^5.8.2"
+  }
+}
