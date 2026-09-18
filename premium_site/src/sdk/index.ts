@@ -1,4 +1,4 @@
-import { ethers } from 'ethers';
+﻿import { ethers } from 'ethers';
 
 /**
  * Configuration options for the Synapse402 Autonomous AI Agent SDK Client.
@@ -32,9 +32,9 @@ export interface TempoPaymentChallenge {
  * Result returned after autonomous EIP-712 settlement.
  */
 export interface TempoSettlementResult {
-  status: 'SETTLED' | 'VOIDED' | 'FAILED' | 'REFUNDED';
+  status: 'SETTLED' | 'EVALUATION_ONLY' | 'VOIDED' | 'FAILED' | 'REFUNDED';
   traceId: string;
-  txHash: string;
+  txHash: string | null;
   costPathUsd: number;
   latencyMs: number;
   blockHeight: number;
@@ -205,6 +205,7 @@ export class SynapseAgentClient {
     headers.set('X-Tempo-MPP-Signature', trace.eip712Signature);
     headers.set('X-Tempo-Nonce-2D', trace.nonce2D);
     headers.set('X-Tempo-Cost-PathUSD', String(challenge.minPrice));
+    headers.set('X-Synapse-Trace-Id', trace.id);
     headers.set('Authorization', `MPP-EIP712 signer="${this.wallet.address}", nonce="${trace.nonce2D}", max="${this.maxPrice}"`);
     headers.set('Idempotency-Key', idempotencyKey);
 
@@ -215,13 +216,18 @@ export class SynapseAgentClient {
 
     // If external upstream delivered mock/simulated fallback or direct response
     if (!authorizedResponse.ok && trace.liveProxyPayload) {
+      const liveConfirmed = trace.executionMode === 'LIVE_TESTNET'
+        && trace.status === 'SETTLED'
+        && typeof trace.txHash === 'string'
+        && trace.txHash.startsWith('0x');
       return new Response(JSON.stringify(trace.liveProxyPayload), {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
-          'X-Tempo-Settled': 'true',
+          'X-Tempo-Payment-Status': liveConfirmed ? 'SETTLED' : 'EVALUATION_ONLY',
           'X-Tempo-Trace-Id': trace.id,
           'X-Tempo-Latency-Ms': String(trace.latencyMs),
+          ...(liveConfirmed ? { 'X-Tempo-Tx-Hash': trace.txHash } : {}),
         },
       });
     }
@@ -289,6 +295,8 @@ export interface TempoMppMiddlewareOptions {
     maxBeforeSurge: number;
     multiplier: number;
   };
+  /** Optional gateway-side verification for first-party routes. */
+  verifyPayment?: (req: any, effectivePrice: number) => boolean;
 }
 
 /**
@@ -366,7 +374,16 @@ export function withTempoMpp(options: TempoMppMiddlewareOptions) {
     const nonce = req.headers['x-tempo-nonce-2d'];
 
     // If valid MPP cryptographic proof is attached, pass through to route handler
-    if (sig && (typeof sig === 'string') && (sig.startsWith('0x') || sig.startsWith('MPP-EIP712'))) {
+    let gatewayVerified = true;
+    if (options.verifyPayment) {
+      try {
+        gatewayVerified = options.verifyPayment(req, effectivePrice);
+      } catch {
+        gatewayVerified = false;
+      }
+    }
+
+    if (gatewayVerified && sig && (typeof sig === 'string') && (sig.startsWith('0x') || sig.startsWith('MPP-EIP712'))) {
       req.tempoMpp = {
         verified: true,
         amountPathUsd: effectivePrice,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { LivePaymentEvent } from '../types/synapse402';
 import { Activity, ExternalLink, Zap, Clock, FileText, Download, ShieldCheck, Loader2, Plus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { soundEngine } from '../utils/audioEffects';
@@ -56,6 +56,7 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'FINANCE' | 'RESEARCH' | 'SECURITY' | 'INFERENCE'>('ALL');
   const [simulationResult, setSimulationResult] = useState<{
     txHash: string;
+    liveConfirmed: boolean;
     agentName: string;
     serviceName: string;
     costUsd: number;
@@ -112,9 +113,14 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
       const latency = Math.round(performance.now() - t0);
       const data = await res.json().catch(() => null);
       if (res.ok) {
-        soundEngine.playSettlementChime();
+        const liveConfirmed = data?.trace?.executionMode === 'LIVE_TESTNET'
+          && data?.trace?.status === 'SETTLED'
+          && typeof data?.trace?.txHash === 'string'
+          && data.trace.txHash.startsWith('0x');
+        if (liveConfirmed) soundEngine.playSettlementChime();
         setSimulationResult({
-          txHash: data?.trace?.txHash || data?.settlement?.txHash || '',
+          txHash: liveConfirmed ? data.trace.txHash : '',
+          liveConfirmed,
           agentName: scenario.agentName,
           serviceName: scenario.serviceName,
           costUsd: scenario.price,
@@ -144,7 +150,7 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
             </h2>
           </div>
           <p className="text-xs text-zinc-300 font-sans leading-relaxed">
-            See what your AI paid for.
+            See what your AI requested and what was confirmed.
           </p>
           <p className="text-[11px] text-zinc-400 font-sans mt-0.5">
             Every payment records the resource, amount, provider and transaction proof.
@@ -182,17 +188,17 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
             onClick={handleTriggerMicropayment}
             disabled={isTriggering}
             className="px-4 py-2 rounded-xl bg-[#d7ff4f] hover:bg-[#cbf540] text-[#08090c] font-black text-xs flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 cursor-pointer"
-            title="Trigger a sample 0.1¢ micropayment to test receipt generation"
+            title="Run the payment flow; a chain receipt appears only after live confirmation"
           >
             {isTriggering ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Settling Payment...</span>
+                <span>Checking Payment...</span>
               </>
             ) : (
               <>
                 <Zap className="w-3.5 h-3.5 fill-current text-[#08090c]" />
-                <span>Test 0.1¢ Payment</span>
+                <span>Test payment flow</span>
               </>
             )}
           </button>
@@ -210,11 +216,11 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-white">Payment activity</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.05] text-zinc-300 border border-white/10 font-bold">
-                  Gateway Auth &lt;15ms
+                  {simulationResult.liveConfirmed ? 'Confirmed on Tempo L1' : 'Evaluation response'}
                 </span>
               </div>
               <p className="text-[11px] text-zinc-400 mt-0.5">
-                Deducted <strong className="text-white font-mono">${simulationResult.costUsd.toFixed(4)} USD</strong> from [<strong className="text-zinc-200">{simulationResult.agentName}</strong>] and settled to <strong className="text-white">{simulationResult.serviceName}</strong> (Gateway auth &lt;15ms · L1 consensus ~0.5s).
+                {simulationResult.liveConfirmed ? 'Confirmed ' : 'Planned '}<strong className="text-white font-mono">${simulationResult.costUsd.toFixed(4)} USD</strong> for [<strong className="text-zinc-200">{simulationResult.agentName}</strong>] and returned <strong className="text-white">{simulationResult.serviceName}</strong>.{simulationResult.liveConfirmed ? ' The chain receipt is available below.' : ' No blockchain transaction was submitted.'}
               </p>
               <div className="mt-1.5 p-2.5 rounded bg-black/40 border border-white/10 text-[10.5px] font-sans text-zinc-300 leading-snug space-y-1">
                 <div className="flex items-center justify-between text-[9px] font-mono uppercase font-bold text-zinc-400">
@@ -222,19 +228,19 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
                     <Zap className="w-3 h-3 text-[#d7ff4f]" />
                     <span>Production Execution Outcome:</span>
                   </span>
-                  <span className="text-zinc-500 font-mono text-[10px]">GATEWAY: &lt;15ms · L1 BLOCK: ~0.5s</span>
+                  <span className="text-zinc-500 font-mono text-[10px]">{simulationResult.liveConfirmed ? 'CHAIN RECEIPT CONFIRMED' : 'EVALUATION ONLY'}</span>
                 </div>
                 <p className="text-zinc-200 text-[11px] font-mono">
                   Production Deliverable: {simulationResult.deliverable}
                 </p>
                 <span className="text-[9.5px] text-zinc-400 block font-sans mt-1">
-                  <strong className="text-zinc-300">What this proves:</strong> Confirms micropayment settlement on Tempo L1. It does not independently verify external provider data accuracy.
+                  <strong className="text-zinc-300">What this proves:</strong> {simulationResult.liveConfirmed ? 'Confirms the payment trace on Tempo L1.' : 'Shows the payment flow and provider response without claiming a chain receipt.'} It does not independently verify external provider data accuracy.
                 </span>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2 font-mono text-xs shrink-0">
-            <button
+            {simulationResult.liveConfirmed && <button
               type="button"
               onClick={() => {
                 navigator.clipboard.writeText(simulationResult.txHash);
@@ -246,10 +252,10 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
               {copiedSimHash ? (
                 <span className="text-[#d7ff4f] font-bold">Hash Copied!</span>
               ) : (
-                <span>Copy Hash</span>
+                <span>Copy Receipt Hash</span>
               )}
-            </button>
-            <a
+            </button>}
+            {simulationResult.liveConfirmed && <a
               href="https://explore.tempo.xyz"
               target="_blank"
               rel="noopener noreferrer"
@@ -257,7 +263,7 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
             >
               <span>Tempo Explorer</span>
               <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+            </a>}
           </div>
         </div>
       )}
@@ -319,6 +325,10 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
               ) : (
                 paginatedEvents.map((event) => {
                   const isVoidedOrZero = event.amountUsd === 0 || event.status === 'VOIDED' || event.status === 'REFUNDED';
+                  const isLiveConfirmed = event.executionMode === 'LIVE_TESTNET'
+                    && event.status === 'SETTLED'
+                    && typeof event.txHash === 'string'
+                    && event.txHash.startsWith('0x');
                   
                   // Bulletproof service name sanitize
                   let cleanServiceName = event.serviceName || '';
@@ -419,13 +429,13 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
                       <td className="py-3 px-4 font-mono">
                         <div className="flex items-center gap-1.5">
                           <span className={`text-[9px] px-2 py-0.5 rounded font-mono font-semibold ${
-                            event.executionMode === 'LIVE_TESTNET'
+                            isLiveConfirmed
                               ? 'bg-[#d7ff4f]/10 text-[#d7ff4f] border border-[#d7ff4f]/30'
                               : isVoidedOrZero
                               ? 'bg-white/[0.04] text-zinc-400 border border-white/10'
                               : 'bg-white/[0.04] text-zinc-300 border border-white/10'
                           }`}>
-                            {event.executionMode === 'LIVE_TESTNET' ? 'ON-CHAIN' : isVoidedOrZero ? 'VOIDED' : 'GATEWAY'}
+                            {isLiveConfirmed ? 'ON-CHAIN' : isVoidedOrZero ? 'VOIDED' : 'EVALUATION'}
                           </span>
                           <span className="text-zinc-500 text-[10px]">
                             {event.latencyMs}ms

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { X, ShieldCheck, Check, Copy, ExternalLink, Cpu, Database, ArrowRight, Package, Zap } from 'lucide-react';
 import { soundEngine } from '../utils/audioEffects';
 import { InfoBadge } from './InfoBadge';
@@ -8,6 +8,7 @@ interface CryptoInspectorModalProps {
   onClose: () => void;
   traceData: {
     txHash?: string;
+    executionMode?: 'LIVE_TESTNET' | 'RESILIENT_SANDBOX' | 'FAILED_REVERT';
     agentName?: string;
     serviceUrl?: string;
     amountUsd?: number;
@@ -33,11 +34,15 @@ interface CryptoInspectorModalProps {
 }
 
 function getDeliveredPayload(traceData: any) {
+  const isLiveConfirmed = traceData?.executionMode === 'LIVE_TESTNET'
+    && traceData?.status === 'SETTLED'
+    && typeof traceData?.txHash === 'string'
+    && traceData.txHash.startsWith('0x');
   if (traceData?.liveProxyPayload) {
     return {
-      title: 'Delivered Response Body',
-      type: 'Live Upstream API Response',
-      alternative: 'Replaces $30–$50/mo monthly retainer',
+      title: isLiveConfirmed ? 'Delivered Response Body' : 'Evaluation Response Preview',
+      type: isLiveConfirmed ? 'Live Upstream API Response' : 'Sample Provider Response',
+      alternative: 'Shows the result returned for this paid request',
       content: typeof traceData.liveProxyPayload === 'object' 
         ? JSON.stringify(traceData.liveProxyPayload, null, 2) 
         : String(traceData.liveProxyPayload),
@@ -51,7 +56,7 @@ function getDeliveredPayload(traceData: any) {
     return {
       title: 'Security Interception Log',
       type: 'Blocked Attack Vector',
-      alternative: 'Prevented $500.00 wallet drain',
+      alternative: 'Blocked before any debit',
       content: JSON.stringify({
         status: 'BLOCKED_BY_WHITELIST',
         attemptedEndpoint: traceData?.serviceUrl || 'https://api.rogue-drainer.xyz',
@@ -64,12 +69,12 @@ function getDeliveredPayload(traceData: any) {
 
   if (url.includes('aapl') || url.includes('orderbook') || agent.includes('crypto') || agent.includes('arbitrage')) {
     return {
-      title: 'Live AAPL/USD Level 2 Orderbook Depth',
+      title: isLiveConfirmed ? 'Delivered AAPL/USD Level 2 Orderbook' : 'Evaluation AAPL/USD Orderbook Preview',
       type: 'Market Data Snapshot',
-      alternative: 'Replaces $29/mo exchange depth API subscription',
+      alternative: 'Example provider response for one request',
       content: JSON.stringify({
         ticker: 'AAPL/USD',
-        status: 'DELIVERED',
+        status: isLiveConfirmed ? 'DELIVERED' : 'EVALUATION',
         bids: [
           { price: 231.42, size: 850, exchange: 'NASDAQ' },
           { price: 231.40, size: 1420, exchange: 'BATS' },
@@ -82,18 +87,18 @@ function getDeliveredPayload(traceData: any) {
         ],
         spreadUsd: 0.01,
         liquidityDepthUsd: 1245900,
-        settledUnderHttp402: true
+        paymentStatus: isLiveConfirmed ? 'CONFIRMED' : 'NOT_SUBMITTED'
       }, null, 2),
     };
   }
 
   if (url.includes('scrape') || url.includes('news') || agent.includes('scraper') || agent.includes('research')) {
     return {
-      title: 'Clean Extracted Full-Text Article',
-      type: 'Scraped Web Article (Markdown)',
-      alternative: 'Replaces $49/mo proxy & web-scraper retainer',
+      title: isLiveConfirmed ? 'Clean Extracted Full-Text Article' : 'Evaluation Article Preview',
+      type: isLiveConfirmed ? 'Scraped Web Article (Markdown)' : 'Sample Provider Response (Markdown)',
+      alternative: 'Example provider response for one request',
       content: JSON.stringify({
-        status: 'EXTRACTED_CLEAN_MARKDOWN',
+        status: isLiveConfirmed ? 'EXTRACTED_CLEAN_MARKDOWN' : 'EVALUATION_PREVIEW',
         sourceUrl: 'https://tech-wire.news/briefs/fed-liquidity-surge',
         headline: 'Fed Open Market Desk Injects $4.2B in Overnight Liquidity Facilities',
         author: 'E. Vance, Senior Financial Correspondent',
@@ -107,11 +112,11 @@ function getDeliveredPayload(traceData: any) {
 
   if (url.includes('python') || url.includes('sandbox') || agent.includes('quant')) {
     return {
-      title: 'Sandboxed Python Container Execution Output',
-      type: 'Monte Carlo & Sharpe Ratio Calculation',
-      alternative: 'Replaces $39/mo cloud container execution tier',
+      title: isLiveConfirmed ? 'Sandboxed Python Container Execution Output' : 'Evaluation Python Output Preview',
+      type: isLiveConfirmed ? 'Monte Carlo & Sharpe Ratio Calculation' : 'Sample Calculation Response',
+      alternative: 'Example provider response for one request',
       content: JSON.stringify({
-        containerStatus: 'TERMINATED_OK',
+        containerStatus: isLiveConfirmed ? 'TERMINATED_OK' : 'EVALUATION_PREVIEW',
         exitCode: 0,
         runtimeMs: 38,
         stdout: [
@@ -129,7 +134,7 @@ function getDeliveredPayload(traceData: any) {
     return {
       title: 'Bilingual Translation Output',
       type: 'Machine Translation Stream',
-      alternative: 'Replaces $25/mo DeepL Pro subscription',
+      alternative: 'Example provider response for one request',
       content: JSON.stringify({
         engine: 'LingoStream Neural v4',
         sourceLanguage: 'ka (Georgian)',
@@ -142,15 +147,15 @@ function getDeliveredPayload(traceData: any) {
   }
 
   return {
-    title: 'Delivered Upstream Machine Payload',
-    type: 'Authenticated Micro-Service Data',
-    alternative: 'Replaces $20–$50/mo dead subscription retainer',
+    title: isLiveConfirmed ? 'Delivered Upstream Machine Payload' : 'Evaluation Response Preview',
+    type: isLiveConfirmed ? 'Authenticated Micro-Service Data' : 'Sample Provider Response',
+    alternative: isLiveConfirmed ? 'Shows the result returned for this paid request' : 'Shows the response shape without claiming a live provider result',
     content: JSON.stringify({
       service: traceData?.serviceUrl || '/api/v1/data/stock-orderbook',
       agent: traceData?.agentName || 'Synapse402 Agent',
       deliveredAt: new Date().toISOString(),
-      amountSettledUsd: Number(traceData?.amountUsd || 0.001),
-      status: 'DELIVERY_CONFIRMED'
+      amountSettledUsd: isLiveConfirmed ? Number(traceData?.amountUsd || 0.001) : 0,
+      status: isLiveConfirmed ? 'DELIVERY_CONFIRMED' : 'EVALUATION_ONLY'
     }, null, 2),
   };
 }
@@ -175,6 +180,9 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
   };
 
   const rawDomainHash = traceData?.domainHash || '';
+  const liveConfirmed = traceData?.executionMode === 'LIVE_TESTNET'
+    && traceData?.status === 'SETTLED'
+    && Boolean(traceData?.txHash?.startsWith('0x'));
   const domainHash = rawDomainHash.startsWith('0x') ? rawDomainHash.slice(2) : rawDomainHash;
   const rawMerkleRoot = traceData?.merkleRoot || '';
   const displayMerkleRoot = rawMerkleRoot ? (rawMerkleRoot.startsWith('0x') ? rawMerkleRoot : `0x${rawMerkleRoot}`) : 'N/A';
@@ -184,6 +192,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
     : [];
 
   const isWhitelisted =
+    liveConfirmed &&
     traceData?.status !== 'BLOCKED' &&
     !traceData?.serviceUrl?.toLowerCase().includes('rogue') &&
     !traceData?.serviceUrl?.toLowerCase().includes('drainer') &&
@@ -226,14 +235,16 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
             </div>
             <div>
               <h3 className="font-semibold text-sm text-[#f5f5f2] flex items-center">
-                <span>Verified Transaction Receipt & Audit Proof</span>
+                <span>{liveConfirmed ? 'Verified Transaction Receipt & Audit Proof' : 'Evaluation Payment Record'}</span>
                 <InfoBadge
                   title="Cryptographic Audit Bundle"
-                  text="Each micro-receipt binds a Merkle tree whitelist proof, EIP-712 session signature, 2D nonce channel, and ISO 20022 tax memo into 1 immutable record."
+                  text={liveConfirmed
+                    ? 'A confirmed receipt binds the Merkle whitelist proof, EIP-712 signature, 2D nonce channel, and ISO 20022 memo into one chain record.'
+                    : 'This evaluation shows the planned proof fields. They become verifiable only after a live wallet returns a confirmed receipt.'}
                 />
               </h3>
               <p className="text-[11px] text-white/50 font-mono">
-                Tempo L1 Instant Settlement Receipt • ISO 20022 GAAP Compliant
+                {liveConfirmed ? 'Tempo L1 settlement receipt • ISO 20022 record' : 'No blockchain transaction submitted in this evaluation'}
               </p>
             </div>
           </div>
@@ -260,7 +271,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
           </div>
 
           <div className="p-2.5 rounded-lg bg-white/[.02] border border-white/[.06]">
-            <span className="text-[10px] text-zinc-400 block font-sans">SETTLED AMOUNT</span>
+            <span className="text-[10px] text-zinc-400 block font-sans">{liveConfirmed ? 'SETTLED AMOUNT' : 'PLANNED AMOUNT'}</span>
             <span className="font-mono font-black text-[#d7ff4f] text-sm">
               ${Number(traceData?.amountUsd || 0.001).toFixed(4)} USD
             </span>
@@ -273,13 +284,13 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>
               &lt;15ms Auth
             </span>
-            <span className="text-[10px] text-zinc-400 block font-mono">L1 Block ~0.5s</span>
+            <span className="text-[10px] text-zinc-400 block font-mono">{liveConfirmed ? 'L1 Block ~0.5s' : 'No chain finality in evaluation'}</span>
           </div>
 
           <div className="p-2.5 rounded-lg bg-white/[.02] border border-white/[.06]">
             <span className="text-[10px] text-zinc-400 block font-sans">RECEIPT STATUS</span>
-            <span className="font-mono font-bold text-emerald-300 text-xs">CONFIRMED (200 OK)</span>
-            <span className="text-[10px] text-zinc-400 block font-mono">Non-repudiable</span>
+            <span className={`font-mono font-bold text-xs ${liveConfirmed ? 'text-emerald-300' : 'text-amber-300'}`}>{liveConfirmed ? 'CONFIRMED (200 OK)' : 'EVALUATION RESPONSE'}</span>
+            <span className="text-[10px] text-zinc-400 block font-mono">{liveConfirmed ? 'Non-repudiable' : 'Not a chain receipt'}</span>
           </div>
         </div>
 
@@ -287,7 +298,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
         <div className="mx-4 my-2.5 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.08] text-[11px] text-zinc-400 flex items-start gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f] mt-1 shrink-0"></span>
           <span>
-            <strong className="text-zinc-200">What this proves:</strong> Verifies that the micropayment was signed and recorded on Tempo L1. It does not independently verify external provider data accuracy.
+            <strong className="text-zinc-200">What this proves:</strong> {liveConfirmed ? 'Verifies that the micropayment was signed and recorded on Tempo L1.' : 'Shows the signed payment plan and provider response; no chain receipt exists yet.'} It does not independently verify external provider data accuracy.
           </span>
         </div>
 
@@ -304,7 +315,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
             <Package className="w-3.5 h-3.5" />
             <span>Unlocked Data Payload</span>
             <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-              REAL DELIVERABLE
+              {liveConfirmed ? 'REAL DELIVERABLE' : 'RESPONSE PREVIEW'}
             </span>
           </button>
           <button
@@ -395,7 +406,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
                     </div>
                     <p className="text-[11px] text-zinc-300 mt-1 flex items-center gap-1">
                       <Zap className="w-3 h-3 text-emerald-400 shrink-0 inline-block" />
-                      <span><strong>Execution Outcome:</strong> Agent dispatched HTTP 402 request and settled on Tempo L1 (&lt;15ms) with cryptographic nonces and delivery verification.</span>
+                      <span><strong>Execution Outcome:</strong> Agent dispatched an HTTP 402 request and {liveConfirmed ? 'settled on Tempo L1 with cryptographic nonces and delivery verification.' : 'completed the evaluation flow; a live wallet is required for a chain receipt.'}</span>
                     </p>
                   </div>
                   <div className="text-right">
@@ -627,7 +638,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
                   </span>
                 </div>
                 <p className="text-[11px] text-zinc-300 leading-relaxed font-sans">
-                  Tempo L1's native TIP-20 standard reserves a 32-byte field in every transfer. Synapse402 injects an ISO 20022 accounting digest directly into the payment, enabling autonomous enterprise bookkeeping.
+                  Tempo L1's native TIP-20 standard reserves a 32-byte field in every transfer. Synapse402 puts a payment reference inside the transfer so the result can be matched to the work.
                 </p>
                 <div className="bg-white/[.04] p-2.5 rounded border border-white/15 space-y-1">
                   <div className="flex justify-between items-center text-[10px] text-white/50">
@@ -676,7 +687,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
                 </div>
                 <div className="flex items-center gap-2 pt-1 text-[11px] text-zinc-300 font-sans">
                   <span className="w-2 h-2 rounded-full bg-[#d7ff4f]"></span>
-                  <span>Accounting Reference: <strong className="text-zinc-100">Structured remittance metadata ready for enterprise export</strong></span>
+                  <span>Payment reference: <strong className="text-zinc-100">Structured receipt ready to export</strong></span>
                 </div>
               </div>
             </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Info } from 'lucide-react';
 
 interface InfoBadgeProps {
@@ -26,13 +26,13 @@ export const InfoBadge: React.FC<InfoBadgeProps> = ({ text, title = 'Why this ma
         <Info className="w-2.5 h-2.5" />
       </button>
       {show && (
-        <span className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 rounded-xl bg-[#0b0d13] border border-white/20 text-zinc-200 text-[11.5px] font-sans shadow-2xl leading-relaxed pointer-events-none text-left backdrop-blur-md">
+        <span className="absolute z-50 top-full left-1/2 -translate-x-1/2 mt-2 w-72 max-w-[min(18rem,calc(100vw-2rem))] p-3 rounded-xl bg-[#0b0d13] border border-white/20 text-zinc-200 text-[11.5px] font-sans shadow-2xl leading-relaxed pointer-events-none text-left backdrop-blur-md">
           <span className="text-[#d7ff4f] font-mono font-bold text-[10px] uppercase tracking-wider block mb-1 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f] animate-pulse"></span>
             {title}
           </span>
           <span className="block text-zinc-300">{text}</span>
-          <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#0b0d13]" />
+          <span className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-[#0b0d13]" />
         </span>
       )}
     </span>

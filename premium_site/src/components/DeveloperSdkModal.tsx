@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { 
   X, 
   Copy, 
@@ -93,6 +93,9 @@ export const DeveloperSdkModal: React.FC<DeveloperSdkModalProps> = ({ isOpen, on
             pricePathUsd: 0.002,
             category: 'SDK Integration Verification',
             allowDynamicWhitelist: true,
+            // This button demonstrates the SDK flow; it must never spend a
+            // real relayer balance just because the testnet is reachable.
+            evaluationOnly: true,
           }),
         });
 
@@ -131,7 +134,7 @@ export const DeveloperSdkModal: React.FC<DeveloperSdkModalProps> = ({ isOpen, on
           }
         ]);
 
-        soundEngine.playSettlementChime();
+        if (isLiveSettlement) soundEngine.playSettlementChime();
       } else {
         // Direct response fallback
         setTestSteps([
@@ -194,7 +197,7 @@ const app = express();
 // Protect any route with HTTP 402 Machine Payments Protocol:
 app.get('/api/v1/market-depth', withTempoMpp({
   priceUsd: 0.001,                                   // Price per call in pathUSD
-  payee: '0x3c42E274FAdd8e371fB84f97203CC2F2125c8775', // Your payout address
+  payee: '0xYourWallet', // Replace with the provider wallet that should receive payment
   allowSearchCrawlers: true                          // Googlebot passes free for SEO
 }), (req, res) => {
   // Only reached after verified payment authorization:
@@ -207,7 +210,7 @@ app.get('/api/v1/market-depth', withTempoMpp({
 });`,
 
     terminal_cli: `# ============================================================================
-# Standalone Agent CLI Demo (Run from Terminal)
+# Standalone Agent CLI Example (Run from Terminal)
 # File: scripts/agent-demo.ts
 # ============================================================================
 # Run the autonomous AI agent test directly against the live server:
@@ -390,7 +393,7 @@ npx tsx scripts/agent-demo.ts
         <div className="p-5 overflow-y-auto space-y-4 flex-1">
           <div className="flex justify-between items-center text-xs font-mono">
             <span className="text-zinc-300 font-semibold flex items-center gap-1.5">
-              <span>{activeTab === 'ai_side' ? 'Minimal AI Integration' : activeTab === 'provider_side' ? 'Express Middleware Integration' : activeTab === 'terminal_cli' ? 'Standalone Terminal Demo' : 'MCP Tool Protocol Spec'}</span>
+              <span>{activeTab === 'ai_side' ? 'Minimal AI Integration' : activeTab === 'provider_side' ? 'Express Middleware Integration' : activeTab === 'terminal_cli' ? 'Standalone Terminal Example' : 'MCP Tool Protocol Spec'}</span>
             </span>
 
             <button
@@ -415,9 +418,9 @@ npx tsx scripts/agent-demo.ts
               {activeTab === 'mcp' && 'How MCP desktop integration works:'}
             </span>
             <p className="text-[11.5px] leading-relaxed text-zinc-400">
-              {activeTab === 'ai_side' && 'The AI client wraps standard fetch. When an endpoint returns HTTP 402 Payment Required, the client inspects the challenge price against your daily cap, settles via Tempo L1, and retries the request with authorization headers.'}
+              {activeTab === 'ai_side' && 'The AI client wraps standard fetch. When an endpoint returns HTTP 402 Payment Required, the client checks the price against your daily cap and retries with authorization; a live wallet is required for Tempo L1 settlement.'}
               {activeTab === 'provider_side' && 'The withTempoMpp middleware intercepts requests. If no payment proof is attached, it issues an RFC 9110 HTTP 402 challenge. Once payment proof is verified, it yields control to your route handler.'}
-              {activeTab === 'terminal_cli' && 'Runs a live automated scenario: the AI agent discovers a paid route, settles a sub-cent micropayment, and handles a simulated surge pricing condition.'}
+              {activeTab === 'terminal_cli' && 'Runs an automated example: the AI agent discovers a paid route, checks a sub-cent payment against its cap, and handles a sample surge-pricing condition.'}
               {activeTab === 'mcp' && 'Exposes standard JSON-RPC 2.0 tools so autonomous agents in Claude Desktop or Cursor can discover paywalled tools, check remaining allowances, and authorize payments.'}
             </p>
           </div>
@@ -448,7 +451,7 @@ npx tsx scripts/agent-demo.ts
                 ) : (
                   <>
                     <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>Run Live Example</span>
+                    <span>Run Evaluation Example</span>
                   </>
                 )}
               </button>
@@ -504,7 +507,7 @@ npx tsx scripts/agent-demo.ts
           <div className="flex items-center gap-3 text-[11px]">
             <span>Standard: <strong className="text-zinc-200">RFC 9110 / HTTP 402</strong></span>
             <span>Auth: <strong className="text-zinc-200">EIP-712 Session Key</strong></span>
-            <span>Settlement: <strong className="text-[#d7ff4f]">Tempo L1 Type 0x76</strong></span>
+            <span>Settlement: <strong className="text-[#d7ff4f]">Tempo L1 Type 0x76 when live</strong></span>
           </div>
 
           <button

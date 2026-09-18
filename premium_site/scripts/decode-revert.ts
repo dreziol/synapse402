@@ -2,7 +2,11 @@ import { ethers } from 'ethers';
 
 async function main() {
   const provider = new ethers.JsonRpcProvider('https://rpc.moderato.tempo.xyz');
-  const txHash = '0xd780009e15bdc2992cbe89841728e54490f2d9c823387de50e4afa7b606a577e';
+  const txHash = process.argv[2] || process.env.TEMPO_TX_HASH;
+  if (!txHash || !ethers.isHexString(txHash, 32)) {
+    console.error('Usage: tsx scripts/decode-revert.ts <confirmed 0x transaction hash>');
+    return;
+  }
   const tx = await provider.getTransaction(txHash);
   if (!tx) {
     console.log('Tx not found');

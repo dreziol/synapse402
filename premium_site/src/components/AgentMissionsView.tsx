@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { 
   Compass, Play, CheckCircle2, ArrowRight, Zap, Clock, ShieldCheck, 
   Search, Plane, Code2, BookOpen, Languages, ShieldAlert, ShoppingCart, 
@@ -54,8 +54,8 @@ export const MISSIONS_DATA: AgentMission[] = [
       status: 'MISSION_SUCCESS',
     },
     steps: [
-      { name: 'Verify paper license', provider: 'api.academic-licensing.org (Demo Feed - Simulated)', costUsd: 0.0005, status: 'idle', result: 'Micro-License Signed' },
-      { name: 'Download full text (Markdown)', provider: 'api.academic-licensing.org (Demo Feed - Simulated)', costUsd: 0.0005, status: 'idle', result: 'Full Paper Streamed (4.8k words)' },
+      { name: 'Verify paper license', provider: 'api.academic-licensing.org (Sample provider)', costUsd: 0.0005, status: 'idle', result: 'Micro-License Signed' },
+      { name: 'Download full text (Markdown)', provider: 'api.academic-licensing.org (Sample provider)', costUsd: 0.0005, status: 'idle', result: 'Full Paper Streamed (4.8k words)' },
     ],
   },
   {
@@ -63,9 +63,9 @@ export const MISSIONS_DATA: AgentMission[] = [
     title: 'Financial Filing Analysis',
     category: 'RESEARCH',
     leadAgent: 'Equity Research Quant',
-    goal: 'Read SEC filing tables, check market depth, and run valuation model.',
+    goal: 'Normalize licensed filing tables, check premium market depth, and run a valuation model.',
     icon: Search,
-    oldWayComparison: 'Manual SEC scraping + $500/mo financial data subscription',
+    oldWayComparison: 'Public filing data is free; paid value comes from optional models or licensed feeds',
     finalDeliverable: 'Structured valuation report with financial ratios and margin metrics',
     simulatedOutput: {
       ticker: 'TSLA',
@@ -78,9 +78,9 @@ export const MISSIONS_DATA: AgentMission[] = [
       status: 'MISSION_SUCCESS',
     },
     steps: [
-      { name: 'Read SEC 10-K filing', provider: 'data.sec.gov (Demo Feed)', costUsd: 0.0015, status: 'idle', result: 'Financial Tables Parsed' },
-      { name: 'Check orderbook depth', provider: 'api.market-depth.net (Demo Feed)', costUsd: 0.0010, status: 'idle', result: 'Depth Matrix: 1,420 Bids Ingested' },
-      { name: 'Run valuation model', provider: 'api.deepseek.com (Demo Feed)', costUsd: 0.0008, status: 'idle', result: 'Fair Value Estimated ($245.80)' },
+      { name: 'Normalize licensed filing tables', provider: 'api.financial-normalizer.io (Sample provider)', costUsd: 0.0015, status: 'idle', result: 'Financial Tables Parsed' },
+      { name: 'Review licensed L2 snapshot', provider: 'api.market-depth.net (Sample provider)', costUsd: 0.0010, status: 'idle', result: 'Example depth matrix reviewed' },
+      { name: 'Run valuation model', provider: 'api.deepseek.com (Sample provider)', costUsd: 0.0008, status: 'idle', result: 'Fair Value Estimated ($245.80)' },
     ],
   },
   {
@@ -88,9 +88,9 @@ export const MISSIONS_DATA: AgentMission[] = [
     title: 'Global Freight & Metals Check',
     category: 'RESEARCH',
     leadAgent: 'Macro Intelligence Bot',
-    goal: 'Check maritime freight rates, get copper spot prices, and score supply chain risk.',
+    goal: 'Compare licensed freight and metals reference feeds, then score supply chain risk.',
     icon: Globe,
-    oldWayComparison: 'Enterprise commodities terminal ($25k/yr contract)',
+    oldWayComparison: 'Enterprise commodities terminal ($25k/yr contract); pay only for the licensed checks used',
     finalDeliverable: 'Logistics index report with copper pricing and bottleneck warnings',
     simulatedOutput: {
       balticDryIndex: 1842,
@@ -101,9 +101,9 @@ export const MISSIONS_DATA: AgentMission[] = [
       status: 'MISSION_SUCCESS',
     },
     steps: [
-      { name: 'Check maritime freight rates', provider: 'api.freight-intelligence.net (Demo Feed)', costUsd: 0.0015, status: 'idle', result: 'Vessel Density Parsed' },
-      { name: 'Fetch metals spot prices', provider: 'api.metals-spot.io (Demo Feed)', costUsd: 0.0010, status: 'idle', result: 'LME Quotes Ingested' },
-      { name: 'Score supply risk', provider: 'api.deepseek.com (Demo Feed)', costUsd: 0.0010, status: 'idle', result: 'Supply Chain Score Generated' },
+      { name: 'Review licensed freight index', provider: 'api.freight-intelligence.net (Sample provider)', costUsd: 0.0015, status: 'idle', result: 'Vessel Density Parsed' },
+      { name: 'Review licensed metals reference', provider: 'api.metals-spot.io (Sample provider)', costUsd: 0.0010, status: 'idle', result: 'LME Quotes Ingested' },
+      { name: 'Score supply risk', provider: 'api.deepseek.com (Sample provider)', costUsd: 0.0010, status: 'idle', result: 'Supply Chain Score Generated' },
     ],
   },
   {
@@ -111,9 +111,9 @@ export const MISSIONS_DATA: AgentMission[] = [
     title: 'Market Liquidity & Spread Analysis',
     category: 'RESEARCH',
     leadAgent: 'Market Depth Bot',
-    goal: 'Pull orderbook depth, check venue pricing, and compare liquidity spread.',
+    goal: 'Compare licensed, normalized orderbook snapshots and review a venue spread.',
     icon: BarChart3,
-    oldWayComparison: '$1,200/mo crypto data terminal subscription',
+    oldWayComparison: 'Public spot endpoints are often free; premium value is normalized, low-latency, or deeper L2/L3 data',
     finalDeliverable: 'Multi-exchange liquidity comparison report',
     simulatedOutput: {
       pair: 'BTC/USD',
@@ -125,9 +125,9 @@ export const MISSIONS_DATA: AgentMission[] = [
       status: 'MISSION_SUCCESS',
     },
     steps: [
-      { name: 'Ingest spot orderbook depth', provider: 'api.market-depth-mesh.io (Demo Feed)', costUsd: 0.0008, status: 'idle', result: 'Orderbook Depth Ingested' },
-      { name: 'Query derivative orderbook', provider: 'api.deribit.com (Demo Feed)', costUsd: 0.0012, status: 'idle', result: 'Derivatives Depth Mapped' },
-      { name: 'Compute spread discrepancy', provider: 'api.deepseek.com (Demo Feed)', costUsd: 0.0005, status: 'idle', result: 'Spread Discrepancy Calculated' },
+      { name: 'Review licensed spot depth snapshot', provider: 'api.market-depth-mesh.io (Sample provider)', costUsd: 0.0008, status: 'idle', result: 'Example spot depth reviewed' },
+      { name: 'Review licensed derivatives snapshot', provider: 'api.derivatives-depth.io (Sample provider)', costUsd: 0.0012, status: 'idle', result: 'Example derivatives depth mapped' },
+      { name: 'Compute spread discrepancy', provider: 'api.deepseek.com (Sample provider)', costUsd: 0.0005, status: 'idle', result: 'Spread Discrepancy Calculated' },
     ],
   },
 
@@ -174,8 +174,8 @@ export const MISSIONS_DATA: AgentMission[] = [
       status: 'MISSION_SUCCESS',
     },
     steps: [
-      { name: 'Compile raw mesh to GLTF', provider: 'api.mesh-compiler.net (Demo Feed)', costUsd: 0.0025, status: 'idle', result: 'GLTF Asset Generated (142k verts)' },
-      { name: 'Extract bounding box matrix', provider: 'api.mesh-compiler.net (Demo Feed)', costUsd: 0.0020, status: 'idle', result: 'Bounding Box Matrix Verified' },
+      { name: 'Compile raw mesh to GLTF', provider: 'api.mesh-compiler.net (Sample provider)', costUsd: 0.0025, status: 'idle', result: 'GLTF Asset Generated (142k verts)' },
+      { name: 'Extract bounding box matrix', provider: 'api.mesh-compiler.net (Sample provider)', costUsd: 0.0020, status: 'idle', result: 'Bounding Box Matrix Verified' },
     ],
   },
   {
@@ -197,8 +197,8 @@ export const MISSIONS_DATA: AgentMission[] = [
       status: 'MISSION_SUCCESS',
     },
     steps: [
-      { name: 'Run bytecode analyzer', provider: 'api.contract-analyzer.io (Demo Feed)', costUsd: 0.0020, status: 'idle', result: 'Static Analysis Clean' },
-      { name: 'Check invariant proofs', provider: 'api.smt-solver.io (Demo Feed)', costUsd: 0.0020, status: 'idle', result: '32/32 Formal Invariants Proven' },
+      { name: 'Run bytecode analyzer', provider: 'api.contract-analyzer.io (Sample provider)', costUsd: 0.0020, status: 'idle', result: 'Static Analysis Clean' },
+      { name: 'Check invariant proofs', provider: 'api.smt-solver.io (Sample provider)', costUsd: 0.0020, status: 'idle', result: '32/32 Formal Invariants Proven' },
     ],
   },
   {
@@ -219,8 +219,8 @@ export const MISSIONS_DATA: AgentMission[] = [
       status: 'MISSION_SUCCESS',
     },
     steps: [
-      { name: 'Evaluate query execution plan', provider: 'api.query-plan.dev (Demo Feed)', costUsd: 0.0015, status: 'idle', result: 'Query Plan Trees Evaluated' },
-      { name: 'Generate optimized rewrite patch', provider: 'api.query-plan.dev (Demo Feed)', costUsd: 0.0015, status: 'idle', result: 'Rewrite Patch Generated (<15ms)' },
+      { name: 'Evaluate query execution plan', provider: 'api.query-plan.dev (Sample provider)', costUsd: 0.0015, status: 'idle', result: 'Query Plan Trees Evaluated' },
+      { name: 'Generate optimized rewrite patch', provider: 'api.query-plan.dev (Sample provider)', costUsd: 0.0015, status: 'idle', result: 'Rewrite Patch Generated (<15ms)' },
     ],
   },
 
@@ -245,8 +245,8 @@ export const MISSIONS_DATA: AgentMission[] = [
       status: 'MISSION_SUCCESS',
     },
     steps: [
-      { name: 'German technical translation', provider: 'api.translate-provider.io (Demo Feed)', costUsd: 0.0010, status: 'idle', result: 'German Syntax Ingested' },
-      { name: 'Japanese grammar localization', provider: 'api.translate-provider.io (Demo Feed)', costUsd: 0.0010, status: 'idle', result: 'Japanese Natural Flow Verified' },
+      { name: 'German technical translation', provider: 'api.translate-provider.io (Sample provider)', costUsd: 0.0010, status: 'idle', result: 'German Syntax Ingested' },
+      { name: 'Japanese grammar localization', provider: 'api.translate-provider.io (Sample provider)', costUsd: 0.0010, status: 'idle', result: 'Japanese Natural Flow Verified' },
     ],
   },
   {
@@ -267,8 +267,8 @@ export const MISSIONS_DATA: AgentMission[] = [
       status: 'MISSION_SUCCESS',
     },
     steps: [
-      { name: 'Extract subject alpha matte', provider: 'api.vision-neural.ai (Demo Feed)', costUsd: 0.0020, status: 'idle', result: 'Alpha Matte Extracted (0 artifacts)' },
-      { name: 'Enhance asset resolution', provider: 'api.vision-neural.ai (Demo Feed)', costUsd: 0.0020, status: 'idle', result: 'High-Res Bitmap Synthesized (2048x2048)' },
+      { name: 'Extract subject alpha matte', provider: 'api.vision-neural.ai (Sample provider)', costUsd: 0.0020, status: 'idle', result: 'Alpha Matte Extracted (0 artifacts)' },
+      { name: 'Enhance asset resolution', provider: 'api.vision-neural.ai (Sample provider)', costUsd: 0.0020, status: 'idle', result: 'High-Res Bitmap Synthesized (2048x2048)' },
     ],
   },
   {
@@ -289,8 +289,8 @@ export const MISSIONS_DATA: AgentMission[] = [
       status: 'MISSION_SUCCESS',
     },
     steps: [
-      { name: 'Synthesize voiceover audio', provider: 'api.voice-neural.io (Demo Feed)', costUsd: 0.0025, status: 'idle', result: '48kHz Master Audio Rendered' },
-      { name: 'Align subtitle timing', provider: 'api.voice-neural.io (Demo Feed)', costUsd: 0.0020, status: 'idle', result: 'Subtitle Timing Mapped (0 drift)' },
+      { name: 'Synthesize voiceover audio', provider: 'api.voice-neural.io (Sample provider)', costUsd: 0.0025, status: 'idle', result: '48kHz Master Audio Rendered' },
+      { name: 'Align subtitle timing', provider: 'api.voice-neural.io (Sample provider)', costUsd: 0.0020, status: 'idle', result: 'Subtitle Timing Mapped (0 drift)' },
     ],
   },
   {
@@ -311,8 +311,8 @@ export const MISSIONS_DATA: AgentMission[] = [
       status: 'MISSION_SUCCESS',
     },
     steps: [
-      { name: 'OCR invoice document', provider: 'api.neural-ocr.io (Demo Feed)', costUsd: 0.0015, status: 'idle', result: 'Text & Table Cells Segmented' },
-      { name: 'Compile structured JSON schema', provider: 'api.neural-ocr.io (Demo Feed)', costUsd: 0.0010, status: 'idle', result: 'Verified JSON Ledger Produced' },
+      { name: 'OCR invoice document', provider: 'api.neural-ocr.io (Sample provider)', costUsd: 0.0015, status: 'idle', result: 'Text & Table Cells Segmented' },
+      { name: 'Compile structured JSON schema', provider: 'api.neural-ocr.io (Sample provider)', costUsd: 0.0010, status: 'idle', result: 'Verified JSON Ledger Produced' },
     ],
   },
 
@@ -324,10 +324,10 @@ export const MISSIONS_DATA: AgentMission[] = [
     title: 'Check Flight & Hotel Availability',
     category: 'COMMERCE',
     leadAgent: 'Travel Coordinator Bot',
-    goal: 'Check real flight routes, check hotel rooms, and return combined itinerary.',
+    goal: 'Compare supplied flight and hotel availability examples and return an itinerary.',
     icon: Plane,
     oldWayComparison: 'Travel booking system API subscription ($10k/yr)',
-    finalDeliverable: 'Confirmed flight and hotel itinerary with live pricing',
+    finalDeliverable: 'Flight and hotel options with current-price fields for review',
     simulatedOutput: {
       route: 'SFO -> CDG (Direct)',
       airline: 'Air France AF083',
@@ -338,8 +338,8 @@ export const MISSIONS_DATA: AgentMission[] = [
       status: 'MISSION_SUCCESS',
     },
     steps: [
-      { name: 'Query flight routes', provider: 'api.flights-gds.global (Demo Feed)', costUsd: 0.0020, status: 'idle', result: 'Flight Options Ingested (AF083)' },
-      { name: 'Query hotel room inventory', provider: 'api.lodging-inventory.io (Demo Feed)', costUsd: 0.0020, status: 'idle', result: 'Room Confirmed (Junior Suite)' },
+      { name: 'Review flight availability example', provider: 'api.flights-gds.global (Sample provider)', costUsd: 0.0020, status: 'idle', result: 'Example flight options prepared' },
+      { name: 'Review hotel availability example', provider: 'api.lodging-inventory.io (Sample provider)', costUsd: 0.0020, status: 'idle', result: 'Example room options prepared' },
     ],
   },
   {
@@ -350,18 +350,18 @@ export const MISSIONS_DATA: AgentMission[] = [
     goal: 'Check company or entity against global sanctions and watchlists.',
     icon: ShieldAlert,
     oldWayComparison: '$2–$5 per manual compliance check via bureau',
-    finalDeliverable: 'Signed compliance audit certificate with zero flags',
+    finalDeliverable: 'Compliance review report with evaluation findings',
     simulatedOutput: {
       checkType: 'Global Sanctions & Watchlists',
       riskScore: 0.01,
       flags: 0,
-      certificationHash: '0x9482f8a12c...tempo',
+      evaluationProofId: 'eval_kyc_9482',
       totalCostUsd: 0.0030,
       status: 'MISSION_SUCCESS',
     },
     steps: [
-      { name: 'Query sanctions & watchlists', provider: 'api.compliance-audit.io (Demo Feed)', costUsd: 0.0015, status: 'idle', result: 'Zero Sanctions Hits (Clear)' },
-      { name: 'Verify audit credentials', provider: 'api.compliance-audit.io (Demo Feed)', costUsd: 0.0015, status: 'idle', result: 'Signature Verified on-chain' },
+      { name: 'Review sanctions & watchlist example', provider: 'api.compliance-audit.io (Sample provider)', costUsd: 0.0015, status: 'idle', result: 'Example watchlist result prepared' },
+      { name: 'Verify audit credentials', provider: 'api.compliance-audit.io (Sample provider)', costUsd: 0.0015, status: 'idle', result: 'Signature checked in evaluation' },
     ],
   },
   {
@@ -372,7 +372,7 @@ export const MISSIONS_DATA: AgentMission[] = [
     goal: 'Issue machine-readable invoice and settle payment directly to merchant.',
     icon: ShoppingCart,
     oldWayComparison: 'Credit card checkout with 30¢ + 3% merchant processing fee',
-    finalDeliverable: 'Settled merchant invoice receipt with transaction proof',
+    finalDeliverable: 'Merchant invoice record with payment proof when a live wallet is connected',
     simulatedOutput: {
       merchantId: 'mcht_synapse_402',
       invoiceId: 'inv_8941_tempo',
@@ -382,8 +382,8 @@ export const MISSIONS_DATA: AgentMission[] = [
       status: 'MISSION_SUCCESS',
     },
     steps: [
-      { name: 'Issue machine invoice', provider: 'api.checkout-engine.io (Demo Feed)', costUsd: 0.0015, status: 'idle', result: 'Invoice Issued (<15ms)' },
-      { name: 'Authorize micro-settlement', provider: 'api.checkout-engine.io (Demo Feed)', costUsd: 0.0020, status: 'idle', result: 'Merchant Settled (99.9% to seller)' },
+      { name: 'Issue machine invoice', provider: 'api.checkout-engine.io (Sample provider)', costUsd: 0.0015, status: 'idle', result: 'Invoice Issued (<15ms)' },
+      { name: 'Authorize micro-settlement', provider: 'api.checkout-engine.io (Sample provider)', costUsd: 0.0020, status: 'idle', result: 'Payment step approved within the cap' },
     ],
   },
   {
@@ -394,7 +394,7 @@ export const MISSIONS_DATA: AgentMission[] = [
     goal: 'Read solar inverter output, record green credit, and settle micro-payment.',
     icon: Zap,
     oldWayComparison: 'Monthly utility metering with manual billing cycles',
-    finalDeliverable: 'Verified energy dispatch record and carbon credit certificate',
+    finalDeliverable: 'Energy dispatch example and credit record for review',
     simulatedOutput: {
       gridNode: 'Solar-Array-TX-04',
       kwhDispatched: 14.5,
@@ -404,8 +404,8 @@ export const MISSIONS_DATA: AgentMission[] = [
       status: 'MISSION_SUCCESS',
     },
     steps: [
-      { name: 'Ingest solar telemetry', provider: 'api.smart-grid.network (Demo Feed)', costUsd: 0.0018, status: 'idle', result: 'Telemetry Verified (14.5 kWh)' },
-      { name: 'Issue green carbon certificate', provider: 'api.carbon-registry.org (Demo Feed)', costUsd: 0.0020, status: 'idle', result: 'Green Certificate Settled on Tempo' },
+      { name: 'Read solar telemetry example', provider: 'api.smart-grid.network (Sample provider)', costUsd: 0.0018, status: 'idle', result: 'Example telemetry loaded (14.5 kWh)' },
+      { name: 'Issue green carbon certificate', provider: 'api.carbon-registry.org (Sample provider)', costUsd: 0.0020, status: 'idle', result: 'Green certificate prepared for review' },
     ],
   },
   {
@@ -413,10 +413,10 @@ export const MISSIONS_DATA: AgentMission[] = [
     title: 'Autonomous Supply Order',
     category: 'COMMERCE',
     leadAgent: 'Autonomous Procurement Agent',
-    goal: 'Find verified suppliers, check compliance, and place micro-purchase order.',
+    goal: 'Compare supplier examples, check the rules, and prepare a purchase order.',
     icon: ShoppingCart,
     oldWayComparison: 'Multi-step procurement department purchase order flow',
-    finalDeliverable: 'Executed purchase order with supplier confirmation and receipt',
+    finalDeliverable: 'Purchase order prepared for review under the approved cap',
     simulatedOutput: {
       orderId: 'PO-98421-TEMPO',
       supplierVerified: 'Industrial Micro-Compute Ltd',
@@ -426,9 +426,9 @@ export const MISSIONS_DATA: AgentMission[] = [
       status: 'MISSION_SUCCESS',
     },
     steps: [
-      { name: 'Discover verified suppliers', provider: 'api.supplier-catalog.io (Demo Feed)', costUsd: 0.0015, status: 'idle', result: '3 Vetted Suppliers Identified' },
-      { name: 'Check compliance & sanctions', provider: 'api.compliance-audit.io (Demo Feed)', costUsd: 0.0015, status: 'idle', result: 'Clean Compliance Certificate Generated' },
-      { name: 'Execute micro-purchase', provider: 'api.checkout-engine.io (Demo Feed)', costUsd: 0.0015, status: 'idle', result: 'Payment Settled in 14ms (Invoice Signed)' },
+      { name: 'Compare supplier examples', provider: 'api.supplier-catalog.io (Sample provider)', costUsd: 0.0015, status: 'idle', result: '3 supplier options prepared' },
+      { name: 'Review compliance example', provider: 'api.compliance-audit.io (Sample provider)', costUsd: 0.0015, status: 'idle', result: 'Example rules result prepared' },
+      { name: 'Prepare micro-purchase order', provider: 'api.checkout-engine.io (Sample provider)', costUsd: 0.0015, status: 'idle', result: 'Purchase order prepared for review' },
     ],
   },
 ];
@@ -445,22 +445,22 @@ export const MISSION_DELIVERABLES: Record<string, MissionDeliverableContent> = {
   mission_paywall: {
     documentTitle: 'Academic Research Report: Nature Physics micro-license',
     badge: 'Research micro-license',
-    narrative: 'Academic Reader Bot resolved DOI 10.1038/s41586-024-07142-9, signed a $0.0010 micro-license via EIP-712 on Tempo L1, and received the complete 4,820-word peer-reviewed paper in clean Markdown format with zero paywall friction or subscription lock-in.',
+    narrative: 'Academic Reader Bot resolved DOI 10.1038/s41586-024-07142-9, prepared a $0.0010 micro-license request, and returned the paper metadata in clean Markdown without a subscription lock-in.',
     metrics: [
       { label: 'Journal', value: 'Nature Physics', note: 'Peer-Reviewed Source' },
       { label: 'DOI Resolved', value: '10.1038/s41586', note: 'Persistent Identifier' },
       { label: 'Word Count', value: '4,820 words', note: 'Full Article Parsed' },
-      { label: 'Cost Paid', value: '$0.0010 USD', note: 'Single Micro-License' },
+      { label: 'Planned cost', value: '$0.0010 USD', note: 'Single micro-license example' },
     ],
     actionRecommendation: 'Full text ingested into agent runtime memory. Key findings ready for synthesis.',
   },
   mission_research: {
     documentTitle: 'Equity Research & Valuation Brief: TSLA',
-    badge: 'Audited Financials & Orderbook Ingestion',
-    narrative: 'Quantitative engine ingested TSLA audited annual financial statements and matched live Level-2 liquidity across 1,420 institutional bids. Valuation models project a Fair Value of $245.80 supported by healthy 18.2% gross margins and resilient orderbook liquidity.',
+     badge: 'Filing & Market Snapshot Review',
+    narrative: 'Evaluation flow combines a TSLA filing sample with an orderbook-shaped response. The figures below show the report format and decision path; they are not a live market feed.',
     metrics: [
       { label: 'Fair Value Estimate', value: '$245.80', note: 'Valuation Model' },
-      { label: 'Audited Gross Margin', value: '18.2%', note: 'Annual Financials' },
+      { label: 'Example Gross Margin', value: '18.2%', note: 'Filing snapshot' },
       { label: 'L2 Liquidity Spread', value: '$0.02 (Liquid)', note: 'Orderbook Depth' },
       { label: 'Institutional Sentiment', value: '0.84 (Bullish)', note: 'NLP Filing Analysis' },
     ],
@@ -469,10 +469,10 @@ export const MISSION_DELIVERABLES: Record<string, MissionDeliverableContent> = {
   mission_commodities: {
     documentTitle: 'Global Commodity Supply & Freight Matrix Report',
     badge: 'Macro Supply Intelligence',
-    narrative: 'Synthesized global maritime vessel traffic through the Baltic Dry Index alongside live London Metal Exchange copper and nickel spot quotes. Identified mild short-term shipping cost increases (+2.4%) while copper spot remains stable at $4.12/lb.',
+    narrative: 'Synthesized sample maritime and metals inputs to show the report format. The figures are examples, not a live London Metal Exchange feed.',
     metrics: [
       { label: 'Baltic Dry Index', value: '1,842', note: 'Maritime Freight Density' },
-      { label: 'LME Copper Spot', value: '$4.12 / lb', note: 'Real-Time London Spot' },
+      { label: 'LME Copper Spot', value: '$4.12 / lb', note: 'Sample market value' },
       { label: 'Freight Cost Delta', value: '+2.4%', note: '30-Day Moving Average' },
       { label: 'Supply Bottleneck', value: 'Low Risk', note: 'Multi-Modal Logistics Score' },
     ],
@@ -480,15 +480,15 @@ export const MISSION_DELIVERABLES: Record<string, MissionDeliverableContent> = {
   },
   mission_crypto_skew: {
     documentTitle: 'Cross-Venue Market Depth & Spread Brief',
-    badge: 'Orderbook Depth Analysis',
-    narrative: 'Cross-matched Spot Level-2 orderbook with Deribit liquidity metrics. Identified a 0.42% pricing spread between venues with 0.4 bps orderbook depth, delivered as structured market intelligence.',
+    badge: 'Sample Orderbook Analysis',
+    narrative: 'The evaluation compares sample Spot and Deribit-shaped liquidity inputs. It shows how a spread report would be produced; it is not a live exchange feed.',
     metrics: [
       { label: 'Target Asset', value: 'BTC / USD', note: 'Cross-Exchange Pair' },
       { label: 'Spot Spread', value: '0.4 bps', note: 'Spot Liquidity' },
       { label: 'Venue Discrepancy', value: '0.42%', note: 'Exchange Depth Gap' },
-      { label: 'Data Fee Paid', value: '$0.0025 USD', note: 'Settled on Tempo L1' },
+      { label: 'Planned data cost', value: '$0.0025 USD', note: 'Evaluation fixture' },
     ],
-    actionRecommendation: 'Log verified market spread to local strategy cache ($0.0025 data fee settled).',
+    actionRecommendation: 'Review the spread and decide whether to save it to the strategy cache. The $0.0025 step is planned until a wallet confirms payment.',
   },
   mission_sandbox: {
     documentTitle: 'Sandbox Execution Report',
@@ -601,38 +601,38 @@ export const MISSION_DELIVERABLES: Record<string, MissionDeliverableContent> = {
   mission_kyc: {
     documentTitle: 'International Sanctions & Compliance Verification Certificate',
     badge: 'Automated Compliance Check',
-    narrative: 'Queried global sanctions registries, PEP lists, and law enforcement watchlists. Subject returned zero adverse flags (Risk Score: 0.01). Compliance certificate cryptographically signed on Tempo L1.',
+    narrative: 'Queried the configured sanctions, PEP, and watchlist feeds. The evaluation returned no adverse flags (Risk Score: 0.01); a live wallet is required for an on-chain certificate.',
     metrics: [
       { label: 'Watchlists Checked', value: 'Global Sanctions', note: 'OFAC, EU, UN, UK' },
       { label: 'Adverse Hits', value: '0 Flags (Clean)', note: 'Complete Match Clear' },
       { label: 'Risk Score', value: '0.01 / 1.00', note: 'Minimal Compliance Risk' },
-      { label: 'On-Chain Proof', value: '0x9482...tempo', note: 'Signed Certificate' },
+      { label: 'Proof status', value: 'Evaluation only', note: 'No chain receipt until a wallet confirms payment' },
     ],
-    actionRecommendation: 'Entity onboarding approved without need for manual compliance review.',
+    actionRecommendation: 'Review the clear evaluation result before onboarding. A live compliance certificate requires a connected wallet.',
   },
   mission_commerce: {
     documentTitle: 'Digital Settlement Receipt & Merchant Invoice',
     badge: 'Machine-to-Merchant Micro-Checkout',
-    narrative: 'Issued machine-readable invoice inv_8941_tempo and settled instantly on Tempo L1 in 14ms with 99.9% seller payout (0.1% protocol fee), avoiding credit card interchange overhead.',
+    narrative: 'Issued a machine-readable invoice and recorded the requested payment step. The walkthrough shows the invoice, policy decision, and any confirmed trace without inventing a settlement.',
     metrics: [
       { label: 'Invoice ID', value: 'inv_8941_tempo', note: 'Programmatic Invoice' },
       { label: 'Merchant ID', value: 'mcht_synapse_402', note: 'Verified Merchant' },
-      { label: 'Settlement Speed', value: '14 ms', note: 'Instant Tempo L1 Finality' },
+      { label: 'Payment status', value: 'Trace-dependent', note: 'Shown when confirmed' },
       { label: 'Interchange Fee', value: '$0.00', note: 'Zero Interchange Loss' },
     ],
-    actionRecommendation: 'Invoice marked fully paid. Download receipt for merchant accounting balance.',
+    actionRecommendation: 'Review the invoice and release it for payment when a live wallet is connected.',
   },
   mission_energy_dispatch: {
     documentTitle: 'Renewable Solar Power Dispatch & Carbon Offset Certificate',
     badge: 'Smart Grid Telemetry',
-    narrative: 'Received solar inverter telemetry from Solar-Array-TX-04 (14.5 kWh dispatched at $0.082/kWh), minted verified carbon credit offsetting 12.8 kg CO2, and settled micro-payment on Tempo L1.',
+    narrative: 'Received solar inverter telemetry from Solar-Array-TX-04 (14.5 kWh at $0.082/kWh) and prepared a carbon credit record for review.',
     metrics: [
       { label: 'Grid Node', value: 'Solar-Array-TX-04', note: 'Verified Inverter' },
-      { label: 'Energy Dispatched', value: '14.5 kWh', note: 'Real-Time Yield' },
+      { label: 'Energy Dispatched', value: '14.5 kWh', note: 'Sample telemetry value' },
       { label: 'Rate Paid', value: '$0.082 / kWh', note: 'Spot Micro-Rate' },
       { label: 'CO2 Offset', value: '12.8 kg CO2', note: 'Carbon Credit Minted' },
     ],
-    actionRecommendation: 'Green dispatch certificate registered on ledger. Carbon credit applied to balance.',
+    actionRecommendation: 'Review the prepared dispatch and carbon record before registering it on-chain.',
   },
   mission_agentic_commerce: {
     documentTitle: 'Autonomous B2B Procurement Order & Settlement Sheet',
@@ -642,9 +642,9 @@ export const MISSION_DELIVERABLES: Record<string, MissionDeliverableContent> = {
       { label: 'Purchase Order', value: 'PO-98421-TEMPO', note: 'Autonomous B2B Order' },
       { label: 'Supplier Verified', value: 'Industrial Compute Ltd', note: 'Vetted & Sanctions Clean' },
       { label: 'Compliance Audit', value: 'Passed (0 Flags)', note: 'Watchlist Clean' },
-      { label: 'Settlement Latency', value: '14 ms', note: 'Tempo L1 Micro-Purchase' },
+      { label: 'Payment Step', value: '$0.0015', note: 'Budget checked before purchase' },
     ],
-    actionRecommendation: 'Purchase order executed and confirmed on-chain. Capacity dispatched directly to bot fleet.',
+    actionRecommendation: 'Purchase order prepared for review. A live wallet is required before funds move on-chain.',
   },
 };
 
@@ -657,7 +657,7 @@ export interface AgentMissionsViewProps {
 export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
   onMissionSettled,
   agents = [],
-  userBalanceUsd = 69.99,
+  userBalanceUsd = 0,
 }) => {
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'RESEARCH' | 'COMPUTE' | 'MEDIA' | 'COMMERCE'>('ALL');
   // Default to featured paper mission
@@ -668,9 +668,10 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
   const [showTechnicalLog, setShowTechnicalLog] = useState(false);
   const [missionLogs, setMissionLogs] = useState<string[]>([
     `[System] Autonomous agent mission pipeline primed and ready.`,
-    `[Budget] Spending pre-authorized via controlled spending limit on Tempo L1.`,
+    `[Budget] Spending is pre-authorized by the selected controlled limit.`,
   ]);
   const [completedMission, setCompletedMission] = useState<AgentMission | null>(null);
+  const [missionLiveSettlement, setMissionLiveSettlement] = useState(false);
   const [showRawJson, setShowRawJson] = useState(false);
   const [copiedDeliverable, setCopiedDeliverable] = useState(false);
   const [showAllMissions, setShowAllMissions] = useState(false);
@@ -686,9 +687,10 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
     setSelectedMissionId(mission.id);
     setActiveMissionSteps(mission.steps.map((s) => ({ ...s, status: 'idle' })));
     setCompletedMission(null);
+    setMissionLiveSettlement(false);
     setMissionLogs([
       `Mission selected: ${mission.title}. Ready for execution.`,
-      `[Verified] All endpoints authorized within treasury spend limits.`,
+      `[Policy] All planned steps fit within the selected spending limit.`,
     ]);
   };
 
@@ -697,6 +699,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
     soundEngine.playClick();
     setIsExecuting(true);
     setCompletedMission(null);
+    setMissionLiveSettlement(false);
     setMissionLogs([
       `[Step 1: Goal] Starting mission: "${currentMission.title}"`,
       `[Step 2: Budget Check] Controlled spending account limit approved for ${currentMission.leadAgent} (Max $${totalMissionCost.toFixed(4)}).`,
@@ -707,10 +710,11 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
     const settledEvents: LivePaymentEvent[] = [];
 
     for (let i = 0; i < updatedSteps.length; i++) {
+      let stepStatus: 'SETTLED' | 'SIMULATED_PASS' = 'SIMULATED_PASS';
       updatedSteps[i].status = 'running';
       setActiveMissionSteps([...updatedSteps]);
       
-      const cleanEndpoint = updatedSteps[i].provider.replace(' (Demo Feed)', '').replace(' [Simulated API]', '');
+      const cleanEndpoint = updatedSteps[i].provider.replace(' (Sample provider)', '').replace(' [Simulated API]', '');
       setMissionLogs((prev) => [
         ...prev,
         `[Step 3: Pay] Step ${i + 1}/${updatedSteps.length}: Paying $${updatedSteps[i].costUsd.toFixed(4)} to ${cleanEndpoint}...`,
@@ -729,13 +733,15 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
             pricePathUsd: updatedSteps[i].costUsd,
             category: currentMission.category,
             allowDynamicWhitelist: true,
+            evaluationOnly: true,
           }),
         });
         const settleData = await res.json().catch(() => null);
-        if (!res.ok || !settleData?.trace) {
+        if (!res.ok || !settleData?.trace || !['SETTLED', 'SIMULATED_PASS'].includes(settleData.trace.status)) {
           throw new Error(settleData?.error || `Settlement failed (HTTP ${res.status})`);
         }
         const trace = settleData?.trace;
+        stepStatus = trace.status;
 
         const newEvent: LivePaymentEvent = {
           id: `ev_mission_${Date.now()}_${i}`,
@@ -745,7 +751,8 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
           serviceUrl: cleanEndpoint,
           amountUsd: updatedSteps[i].costUsd,
           latencyMs: trace.latencyMs,
-          status: trace.status === 'SETTLED' ? 'SETTLED' : 'REJECTED',
+          status: trace.status,
+          executionMode: trace.executionMode || 'RESILIENT_SANDBOX',
           blockNumber: trace.blockNumber,
           nonce2D: trace.nonce2D,
           txHash: trace.txHash,
@@ -756,6 +763,9 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
         };
 
         settledEvents.push(newEvent);
+        if (trace.status === 'SETTLED' && trace.executionMode === 'LIVE_TESTNET' && trace.txHash) {
+          setMissionLiveSettlement(true);
+        }
         if (onMissionSettled) {
           onMissionSettled([newEvent], updatedSteps[i].costUsd);
         }
@@ -774,27 +784,29 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
 
       updatedSteps[i].status = 'completed';
       setActiveMissionSteps([...updatedSteps]);
-      soundEngine.playSettlementChime();
+      if (stepStatus === 'SETTLED') soundEngine.playSettlementChime();
 
       setMissionLogs((prev) => [
         ...prev,
-        `✓ [Payment confirmed] Resource received: ${updatedSteps[i].result}`,
+        `${stepStatus === 'SETTLED' ? '✓ [Payment confirmed]' : '✓ [Evaluation step]' } Resource received: ${updatedSteps[i].result}`,
       ]);
     }
 
+    const missionHasLiveSettlement = settledEvents.some((event) => event.status === 'SETTLED' && event.executionMode === 'LIVE_TESTNET' && Boolean(event.txHash));
+    setMissionLiveSettlement(missionHasLiveSettlement);
     setCompletedMission(currentMission);
     setIsExecuting(false);
     setMissionLogs((prev) => [
       ...prev,
       `[Step 4: Finished] Mission complete! Total cost: $${totalMissionCost.toFixed(4)} (0 logins, 0 forms).`,
-      `[Complete] Deliverables assembled from the confirmed mission steps.`,
+      `[Complete] Deliverables assembled from the ${missionHasLiveSettlement ? 'confirmed' : 'evaluated'} mission steps.`,
     ]);
   };
 
   return (
     <div className="space-y-6 font-sans">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[.08] pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-3xl border border-[#d7ff4f]/25 bg-gradient-to-br from-[#d7ff4f]/[0.09] via-white/[.035] to-transparent p-6 sm:p-8 shadow-[0_18px_60px_rgba(0,0,0,0.22)]">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="w-2 h-2 rounded-full bg-[#d7ff4f] animate-pulse" />
@@ -806,12 +818,18 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
             <span className="p-1.5 rounded-lg bg-white/[0.05] text-zinc-300 border border-white/10">
               <Compass className="w-4 h-4 text-[#d7ff4f]" />
             </span>
-            <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
-              What real jobs can you delegate to an AI workforce?
+            <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight">
+              What jobs can you delegate to an AI workforce?
             </h2>
           </div>
           <p className="text-xs text-zinc-400 mt-1 max-w-2xl leading-relaxed">
-            Choose a ready-to-run job. The workforce selects the required resources, stays within the budget, and returns a finished result.
+            Choose a job example. The workforce selects the required resources, stays within the budget, and returns a result package.
+          </p>
+          <div className="mt-3 max-w-4xl border-l-2 border-[#d7ff4f] bg-[#d7ff4f]/[0.05] rounded-r-xl px-4 py-3 text-base sm:text-lg font-semibold font-sans normal-case tracking-normal leading-snug text-white">
+             <strong className="text-[#d7ff4f]">Example job:</strong> choose a mission to see what the agent buys, does, and returns.
+          </div>
+          <p className="text-[11px] text-zinc-500 mt-2 max-w-2xl leading-relaxed">
+            Public data is not shown as paid here. Listed costs represent licensed/private data or compute examples; a live receipt appears only when the backend returns one.
           </p>
         </div>
 
@@ -824,7 +842,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
       {/* Category Filtering Tabs */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
         {[
-          { id: 'ALL', label: 'Ready-to-Run Jobs (17)' },
+          { id: 'ALL', label: 'Job examples (17)' },
           { id: 'RESEARCH', label: 'Research (4)' },
           { id: 'COMPUTE', label: 'Compute (4)' },
           { id: 'MEDIA', label: 'Media (4)' },
@@ -873,7 +891,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
               {mission.isFeatured && (
                 <div className="absolute -top-2.5 right-3 bg-[#d7ff4f] text-[#08090c] text-[9px] font-mono font-black px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm border border-[#08090c]">
                   <Star className="w-2.5 h-2.5 fill-current" />
-                  <span>BEST DEMO</span>
+                  <span>FEATURED JOB</span>
                 </div>
               )}
 
@@ -933,7 +951,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
       )}
 
       {/* Selected Mission Execution Stage */}
-      <div className="rounded-3xl border border-white/[.08] bg-white/[.03] backdrop-blur-md p-5 sm:p-7 space-y-6 shadow-sm">
+      <div className="rounded-3xl border border-white/[.14] bg-gradient-to-b from-white/[.065] via-white/[.03] to-transparent backdrop-blur-md p-5 sm:p-7 space-y-6 shadow-[0_22px_70px_rgba(0,0,0,0.28)]">
         {/* Stage Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/[.08] pb-5">
           <div className="space-y-1">
@@ -953,7 +971,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
             <div className="px-3.5 py-2 rounded-xl bg-white/[.03] border border-white/[.08] text-right">
-              <div className="text-[10px] font-mono text-zinc-400 uppercase">Estimated Total Cost</div>
+              <div className="text-[10px] font-mono text-zinc-400 uppercase">Planned cost</div>
               <div className="text-base sm:text-lg font-mono font-bold text-[#d7ff4f]">
                 ${totalMissionCost.toFixed(4)} USD
               </div>
@@ -994,7 +1012,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
           <div className="p-3.5 rounded-2xl bg-white/[.02] border border-white/[.06] space-y-1">
             <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase block">03 — YOU GET</span>
             <p className="text-zinc-200 text-[11.5px] font-semibold leading-snug">
-              One finished result, ready to use.
+              One result package to review.
             </p>
             <span className="text-[10px] text-zinc-400 mt-1 block">Execution report &amp; output returned</span>
           </div>
@@ -1031,7 +1049,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-zinc-300 block uppercase font-mono tracking-wider flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#d7ff4f] animate-pulse" />
-              <span>Execution Pipeline ({activeMissionSteps.filter((s) => s.status === 'completed').length}/{activeMissionSteps.length} Confirmed)</span>
+              <span>Execution Pipeline ({activeMissionSteps.filter((s) => s.status === 'completed').length}/{activeMissionSteps.length} Completed)</span>
             </span>
             <span className="text-[11px] font-mono text-[#d7ff4f] font-bold">
               {Math.round((activeMissionSteps.filter((s) => s.status === 'completed').length / (activeMissionSteps.length || 1)) * 100)}% Complete
@@ -1079,7 +1097,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-xs text-white">{step.name}</span>
-                        <span className="text-[10px] font-mono text-zinc-400">({step.provider})</span>
+                        <span className="text-[10px] font-mono text-zinc-400">({step.provider.replace(' (Sample provider)', ' · sample provider').replace(' (Sample provider)', ' · sample provider').replace(' [Simulated API]', ' · sample provider')})</span>
                       </div>
                       <span className="text-[11px] text-zinc-400 block mt-0.5 font-mono">
                         {step.status === 'completed' ? `✓ ${step.result}` : step.status === 'failed' ? 'Payment failed — mission stopped' : step.status === 'running' ? 'Authorizing settlement...' : 'Pending execution...'}
@@ -1098,7 +1116,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
                         ? 'bg-white/20 text-white border-white/40'
                         : 'bg-white/5 text-zinc-500 border-white/10'
                     }`}>
-                      {step.status === 'completed' ? 'CONFIRMED' : step.status === 'failed' ? 'FAILED' : step.status === 'running' ? 'PAYING' : 'READY'}
+                        {step.status === 'completed' ? (missionLiveSettlement ? 'CONFIRMED' : 'EVALUATION') : step.status === 'failed' ? 'FAILED' : step.status === 'running' ? 'PREPARING' : 'READY'}
                     </span>
                   </div>
                 </div>
@@ -1138,7 +1156,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
           const deliverable = MISSION_DELIVERABLES[completedMission.id] || {
             documentTitle: `Verified Intelligence Artifact: ${completedMission.title}`,
             badge: completedMission.category,
-            narrative: `${completedMission.leadAgent} autonomously executed all ${completedMission.steps.length} machine steps, paid $${totalMissionCost.toFixed(4)} on Tempo L1 within strict human policy guardrails, and delivered the verified result.`,
+            narrative: `${completedMission.leadAgent} completed ${completedMission.steps.length} controlled work steps for $${totalMissionCost.toFixed(4)} within the policy cap and delivered the result for review.`,
             metrics: Object.entries(completedMission.simulatedOutput)
               .filter(([k]) => k !== 'status' && k !== 'totalCostUsd' && k !== 'settlementTimeMs' && !k.startsWith('_'))
               .slice(0, 4)
@@ -1171,7 +1189,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
                       {deliverable.documentTitle}
                     </h3>
                     <span className="text-xs text-zinc-400 font-sans block mt-0.5">
-                      Verified &amp; delivered via Tempo L1 (<strong className="text-[#d7ff4f] font-mono">Policy check &lt;15ms · 1 L1 Confirmation</strong>)
+                      Result assembled (<strong className="text-[#d7ff4f] font-mono">Payment trace shown when confirmed</strong>)
                     </span>
                   </div>
                 </div>
@@ -1182,7 +1200,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
                     onClick={() => {
                       soundEngine.playClick();
                       if (navigator.clipboard?.writeText) {
-                        const copyText = `${deliverable.documentTitle}\n\nExecutive Overview:\n${deliverable.narrative}\n\nKey Findings:\n${deliverable.metrics.map(m => `• ${m.label}: ${m.value} (${m.note})`).join('\n')}\n\nAction:\n${deliverable.actionRecommendation}\n\nTotal Paid: $${totalMissionCost.toFixed(4)} USD via Tempo L1`;
+                        const copyText = `${deliverable.documentTitle}\n\nExecutive Overview:\n${deliverable.narrative}\n\nKey Findings:\n${deliverable.metrics.map(m => `• ${m.label}: ${m.value} (${m.note})`).join('\n')}\n\nAction:\n${deliverable.actionRecommendation}\n\nPlanned amount: $${totalMissionCost.toFixed(4)} USD${missionLiveSettlement ? ' · confirmed on Tempo L1' : ' · evaluation only'}`;
                         navigator.clipboard.writeText(copyText).catch(() => {});
                       }
                       setCopiedDeliverable(true);
@@ -1203,7 +1221,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
                     )}
                   </button>
                   <span className="px-3 py-1.5 rounded-xl bg-[#d7ff4f]/10 text-[#d7ff4f] border border-[#d7ff4f]/30 text-xs font-mono font-bold">
-                    Paid: ${totalMissionCost.toFixed(4)}
+                    {missionLiveSettlement ? `Paid: $${totalMissionCost.toFixed(4)}` : `Planned: $${totalMissionCost.toFixed(4)}`}
                   </span>
                 </div>
               </div>
@@ -1212,7 +1230,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
               <div className="p-4 rounded-xl bg-white/[0.025] border border-white/[0.08] space-y-2">
                 <span className="text-[10.5px] font-mono uppercase font-bold text-zinc-300 flex items-center gap-1.5 tracking-wider">
                   <Sparkles className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                  <span>Delivered Findings:</span>
+                  <span>Result summary:</span>
                 </span>
                 <p className="text-sm text-zinc-100 leading-relaxed font-sans font-medium">
                   {deliverable.narrative}
@@ -1222,7 +1240,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
               {/* Structured Key Findings Matrix */}
               <div className="space-y-2">
                 <span className="text-[10px] font-mono uppercase font-bold text-zinc-400 block tracking-wider">
-                  Key Verification Metrics &amp; Output Data:
+                  Key findings:
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                   {deliverable.metrics.map((m, idx) => (
@@ -1243,7 +1261,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
               <div className="p-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                 <div className="space-y-1">
                   <span className="text-[10px] font-mono uppercase font-bold text-emerald-400 block tracking-wider">
-                    Actionable Directive / Outcome
+                    Recommended next step
                   </span>
                   <p className="text-zinc-200 text-xs font-semibold leading-snug">
                     {deliverable.actionRecommendation}
@@ -1254,7 +1272,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
                 </div>
                 <div className="shrink-0 text-center sm:text-right">
                   <span className="px-3 py-1.5 rounded-lg bg-[#d7ff4f] text-[#08090c] font-bold font-mono text-[11px] inline-block shadow-sm">
-                    Settled on Tempo L1
+                    {missionLiveSettlement ? 'Confirmed on Tempo L1' : 'Evaluation complete · no chain receipt'}
                   </span>
                 </div>
               </div>
@@ -1263,10 +1281,10 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
               <div className="p-3.5 rounded-xl bg-white/[.025] border border-white/10 text-xs space-y-2">
                 <div className="flex items-center gap-2 text-zinc-200 font-bold text-xs uppercase">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span>Settlement Verified • Mission Outcome</span>
+                  <span>{missionLiveSettlement ? 'Settlement Verified • Mission Outcome' : 'Evaluation Complete • Mission Outcome'}</span>
                 </div>
                 <div className="text-zinc-300 text-[11.5px] leading-relaxed space-y-1">
-                  <p><strong className="text-white">What happened:</strong> The workforce bought the required resources (${totalMissionCost.toFixed(4)}), completed execution in an isolated runtime, and returned the verified results.</p>
+                  <p><strong className="text-white">What happened:</strong> The workforce requested the required resources (${totalMissionCost.toFixed(4)} planned), completed execution in an isolated runtime, and returned the result.</p>
                   <p><strong className="text-[#d7ff4f]">What this proves:</strong> The agent can acquire compute and data resources on demand within a fixed spending limit without recurring commitments.</p>
                 </div>
               </div>
@@ -1290,7 +1308,7 @@ export const AgentMissionsView: React.FC<AgentMissionsViewProps> = ({
                       findings: deliverable.metrics,
                       action: deliverable.actionRecommendation,
                       output: completedMission.simulatedOutput,
-                      settlementProof: "Cryptographically verified via Tempo L1 (2D Nonce session)."
+                      settlementProof: "Available when the connected backend returns a confirmed payment trace."
                     }, null, 2)}
                   </pre>
                 )}

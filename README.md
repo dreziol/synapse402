@@ -1,4 +1,4 @@
-# Synapse402 — Budget-Controlled Micropayments for AI Agents on Tempo L1
+﻿# Synapse402 — Budget-Controlled Micropayments for AI Agents on Tempo L1
 
 > **Autonomous AI agents purchase APIs and web data on-demand with strict daily spending limits and sub-cent payments.**  
 > Built for the **Colosseum Crypto World's Fair** (Tempo L1 Track).  
@@ -8,7 +8,7 @@
 [![Security Defense Vectors](https://img.shields.io/badge/Defense%20Vectors-5%2F5%20Passing-brightgreen)](premium_site/scripts/test-defense.ts)
 [![Tempo L1](https://img.shields.io/badge/Network-Tempo%20Moderato%20(42431)-blue)](https://explore.tempo.xyz)
 [![Payment Speed](https://img.shields.io/badge/Payment%20Speed-%3C15ms%20local%20%7C%20~135ms%20on--chain-orange)](#)
-[![Budget Safety](https://img.shields.io/badge/Budget%20Protection-Guaranteed%20%240%20Loss-brightgreen)](#)
+[![Budget Safety](https://img.shields.io/badge/Budget%20Protection-Pre-settlement%20void-brightgreen)](#)
 [![Fee Policy](https://img.shields.io/badge/Fee%20Policy-0.1%25%20Route%20Fee-green)](#)
 
 ---
@@ -26,18 +26,18 @@ npm run test:defense
 
 ---
 
-## 🚀 Live Platform Status & Key Features
+## 🚀 Platform Capabilities and Proof Modes
 
 | System Capability | Architecture / Standard | Realized Performance |
 |:---|:---|:---|
 | **1-Click Interactive Demo** | 6 Production Payment Scenarios | Instant testing of happy path, over-budget caps, Merkle allowlists, signature tampering, provider 500 failure, and idempotency replay. |
-| **AI Workforce** | 20 Participants (1 Lead Agent · 12 Workers · 7 Providers) | Autonomous multi-agent coordination on Tempo L1 with strict spending caps. 7 external provider data feeds settled ($0.0100) and 12 internal work steps completed ($0.0245 total of $0.0500 budget cap). Due Diligence: $0.0270 under $0.0300 cap; DEX Arbitrage: $0.0060 under $0.0100 cap. |
+| **AI Workforce** | 20 Participants (1 Lead Agent · 12 Workers · 7 Providers) | The evaluation flow splits one job into approved work steps and keeps the plan under a hard cap. A connected wallet is required before any step becomes a confirmed Tempo receipt. |
 | **2-Line Publisher SDK** | Express / Node Middleware (`withTempoMpp`) | Websites turn bot scraping into 0.1¢ revenue instead of paying WAFs to return 403 Forbidden. Googlebot passes free. |
 | **2-Line Agent Client SDK** | Lightweight Wrapper (`createSynapseAgent`) | Intercepts HTTP 402, signs via delegated EIP-712 session key, and settles on Tempo L1 in <15ms without human checkout. |
 | **Dynamic Surge Defense** | Anti-DDoS Pricing Middleware | Autonomous 2.5x–6.3x price scaling during scraper floods, protecting servers while maximizing publisher profit. |
 | **Reality Check (403 vs 200)** | Side-by-Side WAF Verification | Live head-to-head proof: Free scraping hits **403 Forbidden** (0 bytes data), while Synapse402 settles in 14ms (**200 OK**). |
-| **Zero-Loss Escrow SLA** | Pre-Settlement Escrow Void | If vendor API returns HTTP 500/crashes, transaction voids before debit (**Guaranteed $0.00 loss**). |
-| **Sub-Cent Micropayments** | Tempo L1 Type 0x76 Native MPP | Sub-cent settlement finalized in **<15ms** at **<$0.00002 network gas**. |
+| **Zero-Loss Escrow Path** | Pre-Settlement Escrow Void | If the upstream returns HTTP 500 before settlement, the gateway voids the payment before debit; the failure path is covered by the automated tests. |
+| **Sub-Cent Micropayments** | Tempo L1 Type 0x76 Native MPP | The UI shows the planned sub-cent step; a connected wallet and reachable Tempo testnet are required for a confirmed receipt and measured latency. |
 | **Defense Evaluation** | Merkle Allowlist + EIP-712 + 2D Nonce | 5/5 automated attack defense vectors verified passing (`npm run test:defense`). |
 | **Anthropic MCP Server** | Model Context Protocol + JSON-RPC 2.0 | Standardized tools (`synapse_call_paid_api`, `synapse_batch_swarm_settle`) for Claude & Cursor. |
 | **Pay-Per-Streamed-Token** | SSE Token Accounting ($0.00002/tok) | Off-chain token tracking with atomic batch settlement upon completion or early client abort. |
@@ -99,9 +99,9 @@ console.log('Unlocked Data:', await liveData.json());
 
 ---
 
-## 3. 1-Click Interactive Demo (6 Production Scenarios)
+## 3. Payment Walkthrough (6 Guardrail Scenarios)
 
-The **1-Click Demo** tab provides live, verifiable testing of how agents, budget controllers, providers, and settlement rails respond under 6 real-world conditions:
+The **Payment walkthrough** tab shows how agents, budget controllers, providers, and settlement rails respond under 6 real-world conditions. It runs in evaluation mode by default; the UI only claims a chain receipt when a live wallet returns one:
 
 ```
 ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
@@ -110,7 +110,7 @@ The **1-Click Demo** tab provides live, verifiable testing of how agents, budget
 └─────────────────┘       └─────────────────┘       └─────────────────┘       └─────────────────┘
 ```
 
-1. **`1. Pay & Receive` (SUCCESS):** AI needs market depth ($0.0010) $\rightarrow$ settles on Tempo L1 in <15ms $\rightarrow$ verified data delivered (**HTTP 200 OK**).
+1. **`1. Pay & Receive` (READY):** AI needs market depth ($0.0010) $\rightarrow$ policy checks the request $\rightarrow$ a live wallet can settle it on Tempo L1 and return the data (**HTTP 200 OK**).
 2. **`2. Over Budget` (BLOCKED):** AI attempts to exceed daily limit ($50 cap) $\rightarrow$ halted off-chain at Step 2 (**$0.00 spent**).
 3. **`3. Unapproved Provider` (BLOCKED):** Prompt injection directs bot to unknown domain outside Merkle allowlist $\rightarrow$ halted off-chain at Step 2 (**$0.00 spent**).
 4. **`4. Invalid Payment` (REJECTED):** Price spoofing or signature tampering detected $\rightarrow$ reverted on-chain at Step 3 (**$0.00 spent**).
@@ -134,7 +134,7 @@ The **1-Click Demo** tab provides live, verifiable testing of how agents, budget
 
 1. **Scoped Session Keys & Spend Limits:** Bots never touch master private keys. Each bot receives an isolated session key with hard daily caps (`totalBudget`) and per-call limits (`maxPerCall`).
 2. **Approved Vendor Lists:** Allowed endpoints are cryptographically registered. If an AI is prompted to send funds to an unauthorized address, the transaction is blocked before any funds move.
-3. **Zero-Loss Protection (SLA Guarantee):** If an upstream API returns an error (4xx or 5xx), the payment is immediately voided. Companies never pay for broken responses.
+3. **Zero-Loss Protection:** If an upstream API fails before settlement, the gateway voids the payment. The tested failure path leaves the amount at $0.
 4. **Non-Blocking Speed:** Independent payment channels allow dozens of bots in a fleet to make payments concurrently without queue bottlenecks.
 
 ---
@@ -151,7 +151,7 @@ npm run dev
 ```
 2. Open `http://localhost:3001` in your browser.
 3. Key features to evaluate:
-   - **1-Click Demo (6 Production Scenarios):** In the **1-Click Demo** tab, click **Run Test** across 6 real-world conditions (Pay & Receive, Over Budget, Unapproved Provider, Invalid Payment, Provider Failure, Duplicate Request) to verify instantaneous settlement and guaranteed $0.00 loss SLA.
+   - **Payment walkthrough (6 scenarios):** In the **Payment walkthrough** tab, run the normal path and guardrails (Pay & Receive, Over Budget, Unapproved Provider, Invalid Payment, Provider Failure, Duplicate Request) and inspect the actual payment status.
    - **AI Workforce (20 Units):** In the **AI Workforce** tab, watch the Lead Agent orchestrate 12 specialized workers and 7 providers with 2D nonces under hard budget caps.
    - **Reality Check (403 vs 200):** In the **Reality Check** sub-view, launch a live head-to-head showdown between a standard web scraper (blocked by Cloudflare WAF with 403 Forbidden and 0 bytes) and a Synapse402 agent (settled in 14ms with clean JSON delivery).
    - **Earn from Bots & Anti-DDoS Surge Defense:** In the **Earn from Bots** tab, review the 2-line Express middleware and click **Simulate High-Traffic Burst (5 Requests)** to see prices autonomously surge from $0.0010 (1x) $\rightarrow$ $0.0025 (2.5x) $\rightarrow$ $0.0063 (6.3x).

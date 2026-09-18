@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Activity, ShieldCheck, Zap, Volume2, VolumeX, Layers, CheckCircle2, Copy, Check, X, ExternalLink } from 'lucide-react';
 import { soundEngine } from '../utils/audioEffects';
 
@@ -12,6 +12,9 @@ export const NetworkTelemetryRibbon: React.FC<NetworkTelemetryRibbonProps> = ({ 
   const [pulseBlock, setPulseBlock] = useState(false);
   const [dynamicLatencyMs, setDynamicLatencyMs] = useState<number>(11);
   const [networkFeeUsd, setNetworkFeeUsd] = useState<string>('0.000018');
+  const [networkMode, setNetworkMode] = useState<'LIVE_TESTNET' | 'RESILIENT_SANDBOX'>('RESILIENT_SANDBOX');
+  const [isOnline, setIsOnline] = useState(false);
+  const [bytecodePresent, setBytecodePresent] = useState(false);
   const [showContractsModal, setShowContractsModal] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -22,6 +25,9 @@ export const NetworkTelemetryRibbon: React.FC<NetworkTelemetryRibbonProps> = ({ 
         const res = await fetch('/api/network/status');
         const json = await res.json().catch(() => null);
         if (isMounted && json) {
+          setIsOnline(json.status === 'ok');
+          setNetworkMode(json.networkMode === 'LIVE_TESTNET' ? 'LIVE_TESTNET' : 'RESILIENT_SANDBOX');
+          setBytecodePresent(Boolean(json.vaultBytecodePresent));
           if (typeof json.rpcLatencyMs === 'number') {
             setDynamicLatencyMs(json.rpcLatencyMs);
           }
@@ -82,8 +88,8 @@ export const NetworkTelemetryRibbon: React.FC<NetworkTelemetryRibbonProps> = ({ 
           
           {/* L1 Block Height */}
           <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full bg-[#d7ff4f] ${pulseBlock ? 'scale-150 transition-transform' : 'animate-pulse'}`}></span>
-            <span>Tempo L1 Block:</span>
+            <span className={`w-2 h-2 rounded-full ${networkMode === 'LIVE_TESTNET' ? 'bg-[#d7ff4f]' : isOnline ? 'bg-amber-300' : 'bg-red-400'} ${pulseBlock ? 'scale-150 transition-transform' : 'animate-pulse'}`}></span>
+            <span>{networkMode === 'LIVE_TESTNET' ? 'Tempo L1 block:' : 'Evaluation block:'}</span>
             <span className="text-[#f5f5f2] font-bold tracking-tight">#{tickingBlock.toLocaleString()}</span>
           </div>
 
@@ -91,13 +97,13 @@ export const NetworkTelemetryRibbon: React.FC<NetworkTelemetryRibbonProps> = ({ 
           <div className="flex items-center gap-1.5">
             <Zap className="w-3.5 h-3.5 text-[#d7ff4f]" />
             <span>Speed:</span>
-            <span className="text-[#d7ff4f] font-semibold">&lt;150ms</span>
+            <span className="text-[#d7ff4f] font-semibold">{dynamicLatencyMs}ms probe</span>
           </div>
 
           {/* Protection */}
           <div className="hidden sm:flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-[#d7ff4f]" />
-            <span className="text-[#f5f5f2]">Session Keys &amp; Daily Limits Active</span>
+            <span className="text-[#f5f5f2]">Scoped keys &amp; spending limits</span>
           </div>
         </div>
 
@@ -128,10 +134,10 @@ export const NetworkTelemetryRibbon: React.FC<NetworkTelemetryRibbonProps> = ({ 
               setShowContractsModal(!showContractsModal);
             }}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#d7ff4f]/[.08] text-[#d7ff4f] hover:bg-[#d7ff4f]/20 border border-[#d7ff4f]/30 text-[10px] transition-all cursor-pointer shadow-sm hover:scale-105"
-            title="Click to view verified smart contract addresses on Tempo L1"
+            title={networkMode === 'LIVE_TESTNET' && bytecodePresent ? 'View verified smart contract addresses on Tempo L1' : 'View configured contract addresses; live bytecode verification is unavailable'}
           >
             <CheckCircle2 className="w-3 h-3 text-[#d7ff4f]" />
-            <span className="font-bold">Tempo Testnet (42431)</span>
+            <span className="font-bold">Tempo testnet (42431)</span>
             <span className="underline opacity-80 text-[9px]">Contracts ↗</span>
           </button>
         </div>
@@ -144,7 +150,7 @@ export const NetworkTelemetryRibbon: React.FC<NetworkTelemetryRibbonProps> = ({ 
           <div className="flex items-center justify-between border-b border-white/10 pb-2">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#d7ff4f]"></span>
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider">Verified On-Chain Contracts</h4>
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider">{networkMode === 'LIVE_TESTNET' && bytecodePresent ? 'Verified on-chain contracts' : 'Configured contract addresses'}</h4>
             </div>
             <button 
               onClick={() => setShowContractsModal(false)}

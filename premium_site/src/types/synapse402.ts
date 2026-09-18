@@ -1,4 +1,4 @@
-export interface AgentAccount {
+﻿export interface AgentAccount {
   id: string;
   name: string;
   role: string;
@@ -8,6 +8,7 @@ export interface AgentAccount {
   sessionKey: string;
   avatarColor: string;
   merkleRoot?: string; // SHA-256 Merkle root of whitelisted endpoints
+  whitelistedDomains?: string[];
 }
 
 export interface LivePaymentEvent {

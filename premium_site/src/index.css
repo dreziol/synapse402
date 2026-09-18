@@ -1,4 +1,4 @@
-@import "tailwindcss";
+﻿@import "tailwindcss";
 
 @theme {
   --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -21,18 +21,18 @@ code, pre, pre *, code * {
     color-scheme: dark;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background: #0b0e14;
+    background: #11161f;
     color: #f3f4f6;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
   }
   * { box-sizing: border-box; }
-  html { background: #0b0e14; scroll-behavior: smooth; }
+  html { background: #11161f; scroll-behavior: smooth; }
   body {
     margin: 0;
     min-width: 320px;
     min-height: 100vh;
-    background: #0b0e14;
+    background: #11161f;
     color: #f3f4f6;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -43,7 +43,7 @@ code, pre, pre *, code * {
   :focus-visible { outline: 2px solid rgba(215, 255, 79, 0.6); outline-offset: 3px; }
 }
 
-#synapse-root { --ink:#f4f4f5; --muted:#94a3b8; --line:rgba(255,255,255,.10); --accent:#ffffff; --emerald:#10b981; position:relative; isolation:isolate; overflow:hidden; background: #0b0e14; }
+#synapse-root { --ink:#f4f4f5; --muted:#94a3b8; --line:rgba(255,255,255,.10); --accent:#ffffff; --emerald:#10b981; position:relative; isolation:isolate; overflow:hidden; background: #11161f; }
 #synapse-root::before { content:''; position:fixed; inset:0; z-index:-2; pointer-events:none; background: radial-gradient(circle at 50% -10%, rgba(56,189,248,.03), transparent 45rem); }
 #synapse-root::after { content:''; position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:.20; background-image: linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px); background-size:48px 48px; mask-image:linear-gradient(to bottom,black,transparent 78%); }
 
@@ -207,4 +207,47 @@ code, pre, pre *, code * {
 
 .animate-marquee-settlement:hover {
   animation-play-state: paused;
+}
+
+/* Make the page's information hierarchy visible without relying on hover. */
+.synapse-app details > summary {
+  position: relative;
+  padding-right: 5.5rem;
+}
+
+.synapse-app details > summary::after {
+  content: 'Open';
+  position: absolute;
+  right: .75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 1px solid rgba(215, 255, 79, .35);
+  border-radius: 999px;
+  padding: .2rem .5rem;
+  color: #d7ff4f;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.synapse-app details[open] > summary::after {
+  content: 'Close';
+  background: rgba(215, 255, 79, .10);
+}
+
+.synapse-app details > summary:focus-visible {
+  outline: 2px solid #d7ff4f;
+  outline-offset: 3px;
+}
+
+.synapse-app #btn-execute-swarm-batch {
+  min-height: 58px;
+  letter-spacing: .04em;
+  box-shadow: 0 8px 28px rgba(215, 255, 79, .20), inset 0 1px 0 rgba(255,255,255,.45);
+}
+
+/* Keep the first screen focused on the few outputs a reviewer needs first. */
+.synapse-app .deliverables-strip > button:nth-child(n + 4) {
+  display: none;
 }

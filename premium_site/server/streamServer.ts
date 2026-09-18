@@ -2,8 +2,8 @@ import { Request, Response } from 'express';
 import { synapseEngine, sha256 } from './synapseCore';
 
 // =======================================================================
-// Server-Sent Events (SSE) AI Inference Stream with Tempo L1 Settlement
-// Off-chain token counter with atomic batch settlement on Tempo L1 upon completion/abort.
+// Server-Sent Events (SSE) AI Inference Stream with budgeted payment tracking.
+// Tokens are counted off-chain and one final payment record is created on completion/abort.
 // Abort-Safe: If client terminates stream, unread tokens are never settled.
 // =======================================================================
 
@@ -19,12 +19,12 @@ const SAMPLE_GENERATIONS: Record<string, string[]> = {
     "Autonomous", " regulatory", " scan", " initialized", " across", " SEC", " EDGAR", " structured", " 10-K", " filings.",
     " Analyzing", " Item", " 1A", " Risk", " Factors", " against", " on-chain", " smart", " contract", " bytecode.",
     " Discovered", " 0", " direct", " sanctions", " overlaps", " under", " OFAC", " sanctions", " compliance", " registry.",
-    " Settlement", " voucher", " minted", " with", " ISO-20022", " pacs.008", " structured", " remittance", " identifier."
+    " Audit", " result", " prepared", " with", " ISO-20022", " remittance", " details", " for", " review."
   ],
   general_ai: [
     "Model", " Context", " Protocol", " (MCP)", " streaming", " inference", " active.", " Real-time", " token", " throughput",
-    " verified", " via", " continuous", " cryptographic", " micro-vouchers.", " Every", " generated", " word", " corresponds",
-    " to", " exact", " compute", " resource", " consumption", " settled", " directly", " in", " pathUSD."
+    " tracked", " against", " the", " configured", " budget.", " A", " final", " payment", " record", " is", " created",
+    " on", " completion", " when", " a", " live", " wallet", " is", " connected."
   ]
 };
 
@@ -33,15 +33,15 @@ function generateDynamicTokens(prompt: string | undefined, topic: string, key: a
     const p = prompt.toLowerCase();
     let text = '';
     if (p.includes('tempo') || p.includes('l1') || p.includes('chain')) {
-      text = `Tempo L1 operates as a purpose-built settlement layer optimized for autonomous machine-to-machine micropayments. By leveraging 2D nonces (ChannelID : SequenceNonce), parallel agent transactions execute without head-of-line blocking. Each payment integrates TIP-20 ISO 20022 metadata, enabling sub-second finality (~135ms) at less than $0.00002 gas overhead per atomic transfer.`;
+      text = `Tempo L1 can provide the settlement layer for autonomous machine-to-machine micropayments. Synapse402 uses 2D nonces (ChannelID : SequenceNonce) to keep agent payment lanes independent. This evaluation counts the work first; a live wallet is required before a chain receipt exists.`;
     } else if (p.includes('guardrail') || p.includes('security') || p.includes('merkle') || p.includes('injection')) {
       text = `Synapse402 enforces cryptographic policy boundaries through scoped EIP-712 session delegations. Authorized API endpoints are anchored to an on-chain Merkle tree. If an adversarial prompt injection instructs an agent to exfiltrate funds to an unwhitelisted destination, SynapseVault.sol mathematically rejects the transaction with EndpointNotWhitelisted, guaranteeing corporate treasury immunity.`;
     } else if (p.includes('deepseek') || p.includes('llm') || p.includes('token') || p.includes('model') || p.includes('ai')) {
-      text = `On-demand LLM token streaming eliminates fixed monthly subscriptions. Through HTTP 402 pay-per-token metering ($0.0008 per inference), autonomous agents stream reasoning tokens directly from inference nodes with per-word micro-vouchers. If client network connectivity drops or the request aborts, compute billing halts immediately with zero balance waste.`;
+      text = `On-demand LLM token streaming avoids fixed monthly commitments. The agent counts generated tokens against its cap and creates one final payment record for the delivered portion. If the client disconnects, counting stops at the last delivered token.`;
     } else if (p.includes('arbitrage') || p.includes('market') || p.includes('trade') || p.includes('quant')) {
-      text = `High-frequency quantitative trading agents execute millisecond cross-venue arbitrage across Tempo L1 orderbooks. Ephemeral market depth feeds are purchased on-demand using atomic Type 0x76 transactions, eliminating multi-thousand dollar monthly exchange terminal retainers.`;
+      text = `Quantitative agents can compare cross-venue market depth and prepare an arbitrage plan. Ephemeral feeds are requested on demand within the session budget; execution requires a separate live wallet and trading integration.`;
     } else {
-      text = `Processing autonomous inquiry "${prompt.trim()}". Synapse402 session key [${key.agentName}] verified on Tempo Moderato (Chain 42431). Synthesized structured machine deliverable across authorized data endpoints with zero human authentication. Settlement channel ${key.channelId} active with 2D nonce sequence.`;
+      text = `Processing autonomous inquiry "${prompt.trim()}". Session key [${key.agentName}] checked against its policy and authorized endpoints. Structured output is assembled for review; channel ${key.channelId} tracks the payment plan.`;
     }
     return text.split(/(\s+)/).filter(Boolean);
   }
@@ -50,7 +50,7 @@ function generateDynamicTokens(prompt: string | undefined, topic: string, key: a
     return SAMPLE_GENERATIONS[topic];
   }
 
-  return `Inference stream activated for topic [${topic}]. Computing cryptographic verification on Tempo L1 with real-time token debit in pathUSD. Settlement channel ${key.channelId} active with 2D nonce sequence.`.split(/(\s+)/).filter(Boolean);
+  return `Inference stream activated for topic [${topic}]. Counting tokens against the pathUSD budget. Payment channel ${key.channelId} is ready for a live receipt when a wallet is connected.`.split(/(\s+)/).filter(Boolean);
 }
 
 export async function handleStreamInference(req: Request, res: Response) {
@@ -69,6 +69,17 @@ export async function handleStreamInference(req: Request, res: Response) {
 
   if (!key) {
     res.write(`data: ${JSON.stringify({ error: 'No active session key available for streaming settlement.' })}\n\n`);
+    res.end();
+    return;
+  }
+
+  if (!Number.isFinite(pricePerToken) || pricePerToken <= 0) {
+    res.write(`data: ${JSON.stringify({ error: 'pricePerToken must be a positive finite number.' })}\n\n`);
+    res.end();
+    return;
+  }
+  if (pricePerToken > key.maxPerCallPathUsd) {
+    res.write(`data: ${JSON.stringify({ error: `pricePerToken exceeds the session per-call limit of $${key.maxPerCallPathUsd.toFixed(6)}.` })}\n\n`);
     res.end();
     return;
   }
@@ -149,6 +160,10 @@ export async function handleStreamInference(req: Request, res: Response) {
       `SSE Stream: ${totalTokensStreamed} tokens`,
       { allowDynamicWhitelist: true, asyncRelay: true }
     );
+    const liveConfirmed = finalTrace.trace.executionMode === 'LIVE_TESTNET'
+      && finalTrace.trace.status === 'SETTLED'
+      && typeof finalTrace.trace.txHash === 'string'
+      && finalTrace.trace.txHash.startsWith('0x');
 
     res.write(`data: ${JSON.stringify({
       event: isAborted ? 'STREAM_ABORTED_BY_CLIENT' : 'STREAM_COMPLETED',
@@ -158,6 +173,9 @@ export async function handleStreamInference(req: Request, res: Response) {
       finalCostPathUsd: Number(totalCostCharged.toFixed(6)),
       leakagePrevented: isAborted ? `Cancelled at token ${totalTokensStreamed}/${tokens.length}. Zero overpayment.` : 'Full stream completed.',
       finalTraceId: finalTrace.trace.id,
+      executionMode: finalTrace.trace.executionMode,
+      paymentStatus: liveConfirmed ? 'SETTLED' : 'EVALUATION_ONLY',
+      txHash: liveConfirmed ? finalTrace.trace.txHash : null,
       blockHeight: finalTrace.blockHeight
     })}\n\n`);
   }

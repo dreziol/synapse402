@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+﻿import React, { useState, useRef } from 'react';
 import { 
   Bot, 
   Layers, 
@@ -230,7 +230,7 @@ const getSubcontractorIcon = (subId: string): React.ComponentType<{ className?: 
       return ({ className }) => <PhEye className={className || "w-4 h-4"} weight="duotone" />;
 
     // FINANCIAL TRADING & RISK PRESET ICONS:
-    case 'sub_a1': // Live Orderbook Reader
+    case 'sub_a1': // Market Data Reader
       return ({ className }) => <BarChart3 className={className || "w-4 h-4"} />;
     case 'sub_a2': // Market Prediction Bot
       return ({ className }) => <TrendUp className={className || "w-4 h-4"} weight="duotone" />;
@@ -245,22 +245,22 @@ const getSubcontractorIcon = (subId: string): React.ComponentType<{ className?: 
 };
 
 const SUBCONTRACTOR_RESULT_PILLS: Record<string, string> = {
-  sub_8: 'Good Standing (LEI Active)',
-  sub_9: 'Clean 10-K (+$12.4M Cash)',
-  sub_10: 'Equity Traced (0 Shells)',
-  sub_11: 'Grade A- (88/100 Credit)',
-  sub_12: '0 Lawsuits / 0 Tax Liens',
-  sub_18: '0 Sanctions (Clean)',
-  sub_19: '0 Negative News',
+  sub_8: 'Example registry snapshot',
+  sub_9: 'Example filing snapshot',
+  sub_10: 'Example ownership snapshot',
+  sub_11: 'Example credit score',
+  sub_12: 'Example legal snapshot',
+  sub_18: 'Example watchlist snapshot',
+  sub_19: 'Example news snapshot',
   sub_5: 'Parent + 2 Branches',
   sub_6: 'Cash 2.4x · Low Debt',
-  sub_7: 'Trade Rules Approved',
+  sub_7: 'Example trade rules result',
   sub_16: '2x Liability Cap Safe',
   sub_17: 'Solvency Safe (4.12 Score)',
   sub_1: '7/7 Feeds Match',
   sub_2: 'Corporate Law Met',
   sub_3: 'Score: 94/100 (Grade A)',
-  sub_4: 'Sealed on Tempo L1',
+  sub_4: 'Proof recorded for review',
   sub_13: 'Dossier Compiled',
   sub_14: '1-Page Memo Ready',
   sub_15: 'EN / DE / ES Briefs',
@@ -283,25 +283,25 @@ const SUBCONTRACTOR_RESULT_PILLS: Record<string, string> = {
   sub_m16: 'Asset Bundle Built',
   sub_m17: '1-Page Launch Brief',
   sub_m18: '$0.0245 Spent (51% Saved)',
-  sub_m19: 'Provenance Sealed on Tempo',
+  sub_m19: 'Provenance proof prepared',
   sub_c1: 'Transparent Cutout Ready',
   sub_c2: 'Visual Asset Rendered',
   sub_c3: 'Voice Audio Generated',
   sub_c4: 'Subtitles Transcribed',
-  sub_a1: 'Orderbook Depth Verified',
+  sub_a1: 'Sample Market Inputs Reviewed',
   sub_a2: 'Momentum Score: +0.84',
   sub_a3: 'Solvency Test Passed',
   sub_a4: '0 Watchlist Flags',
 };
 
 const NODE_HUMAN_JOBS: Record<string, string> = {
-  sub_8: 'Checks official corporate registry for legal active status',
-  sub_9: 'Audits standardized financial filings & verified cash buffer (+$12.4M)',
-  sub_10: 'Traces real company owners (ensures 0 shell companies)',
+  sub_8: 'Reviews a supplied corporate registry snapshot',
+  sub_9: 'Reads a supplied financial filing snapshot',
+  sub_10: 'Summarizes a supplied ownership snapshot',
   sub_11: 'Checks commercial credit rating & on-time payment history (Grade A-)',
-  sub_12: 'Scans compliance records for open commercial lawsuits or tax liens (0 found)',
-  sub_18: 'Screens US, EU & UN international sanctions watchlists (0 hits)',
-  sub_19: 'Scans 1,400+ news wires for corporate controversy or bribery (Clean)',
+  sub_12: 'Summarizes a supplied legal record snapshot',
+  sub_18: 'Reviews a supplied watchlist snapshot',
+  sub_19: 'Reviews supplied news examples for reputation risk',
   sub_5: 'Maps parent company & operating subsidiary hierarchy (0 offshore)',
   sub_6: 'Calculates cash liquidity buffer & debt leverage (2.4x cash)',
   sub_7: 'Audits trade export controls & international hardware tariffs',
@@ -310,14 +310,14 @@ const NODE_HUMAN_JOBS: Record<string, string> = {
   sub_1: 'Cross-checks records across all 7 external feeds for full concordance',
   sub_2: 'Confirms statutory corporate law compliance (DGCL § 101/102)',
   sub_3: 'Computes overall supplier safety score (94/100 · Low Risk)',
-  sub_4: 'Seals cryptographic proof digest on Tempo L1 with Session Key',
-  sub_13: 'Assembles full 5-pillar clearance audit dossier',
-  sub_14: 'Drafts 1-page executive decision memo for Board approval',
+  sub_4: 'Records a cryptographic proof digest for the completed work',
+  sub_13: 'Assembles the supplied evidence into a review pack',
+  sub_14: 'Drafts a 1-page decision memo for human review',
   sub_15: 'Translates clearance brief into German & Spanish summaries',
-  lead_orchestrator: 'Coordinates 19 units, enforces budget cap & approves contract',
-  sub_m1: 'Scans live TikTok sound charts and trending hooks',
-  sub_m2: 'Analyzes Twitter/X conversation sentiment and debate angles',
-  sub_m3: 'Scrapes competitor paid ad library for top converters',
+  lead_orchestrator: 'Coordinates the units, enforces the cap, and prepares a recommendation',
+  sub_m1: 'Reviews example TikTok-style trend inputs and hook patterns',
+  sub_m2: 'Reviews example social signals and debate angles',
+  sub_m3: 'Reviews licensed competitor ad library examples',
   sub_m4: 'Generates visual scene assets and composition tokens',
   sub_m5: 'Synthesizes charismatic neural voiceover audio track',
   sub_m6: 'Licenses royalty-free 128 BPM electronic background beat',
@@ -333,8 +333,8 @@ const NODE_HUMAN_JOBS: Record<string, string> = {
   sub_m16: 'Compiles all 19 media deliverables into export bundle',
   sub_m17: 'Drafts 1-page marketing executive launch brief with multi-platform strategy',
   sub_m18: 'Audits micro-transaction spend against budget cap ($0.0245 total)',
-  sub_m19: 'Seals campaign provenance & rights on Tempo L1',
-  sub_a1: 'Streams real-time orderbook depth and bid-ask spreads',
+  sub_m19: 'Records campaign provenance and rights for review',
+  sub_a1: 'Reviews a sample orderbook depth and bid-ask spread',
   sub_a2: 'Infers market momentum score and volatility probabilities',
   sub_a3: 'Sandboxes financial risk calculations in Python',
   sub_a4: 'Screens entity against AML and international sanctions watchlists',
@@ -343,7 +343,7 @@ const NODE_HUMAN_JOBS: Record<string, string> = {
 const NODE_CAUSAL_DEPENDENCY: Record<string, { waitingFor: string; handoffTo: string }> = {
   lead_orchestrator: {
     waitingFor: 'User mission goal & $0.0500 session budget policy',
-    handoffTo: '7 Paid Media Feeds (Phase 01)'
+    handoffTo: '7 Example Media Inputs (Phase 01)'
   },
   sub_m1: {
     waitingFor: 'Lead Director session authorization ($0.0015)',
@@ -374,7 +374,7 @@ const NODE_CAUSAL_DEPENDENCY: Record<string, { waitingFor: string; handoffTo: st
     handoffTo: 'Unit 13 (Platform Formatter)'
   },
   sub_m8: {
-    waitingFor: 'Live trend feeds from Unit 01 (TikTok) & Unit 02 (Twitter)',
+    waitingFor: 'Example trend inputs from Unit 01 (TikTok-style) & Unit 02 (social pulse)',
     handoffTo: 'Unit 09 (Storyboard Designer)'
   },
   sub_m9: {
@@ -418,8 +418,8 @@ const NODE_CAUSAL_DEPENDENCY: Record<string, { waitingFor: string; handoffTo: st
     handoffTo: 'Unit 19 (Payment & Proof)'
   },
   sub_m19: {
-    waitingFor: 'Final asset bundle hash & spend receipt to seal on Tempo L1',
-    handoffTo: 'Verified On-Chain Attestation (Tempo Moderato #42431)'
+    waitingFor: 'Final asset bundle hash and spend receipt',
+    handoffTo: 'Payment and proof record'
   },
   // Supplier Clearance Presets fallback
   sub_8: { waitingFor: 'Lead Agent request to check official corporate registry', handoffTo: 'Unit 05 (Entity Structure)' },
@@ -437,88 +437,21 @@ const NODE_CAUSAL_DEPENDENCY: Record<string, { waitingFor: string; handoffTo: st
   sub_1: { waitingFor: 'Records across all 7 feeds to verify Tax ID match', handoffTo: 'Unit 03 (Scoring)' },
   sub_2: { waitingFor: 'Corporate filings from Unit 08 to confirm DGCL compliance', handoffTo: 'Unit 14 (Board Memo)' },
   sub_3: { waitingFor: 'Clearance findings from Units 05, 06, 07, 16 & 17 to weight score', handoffTo: 'Unit 14 (Board Memo)' },
-  sub_4: { waitingFor: 'Final composite score from Unit 03 to seal on Tempo L1', handoffTo: 'Tempo L1 Chain (42431)' },
+  sub_4: { waitingFor: 'Final composite score from Unit 03', handoffTo: 'Payment and proof record' },
   sub_13: { waitingFor: 'Clearance inputs from all 19 specialist units to build dossier', handoffTo: 'Unit 14 (Board Memo)' },
   sub_14: { waitingFor: 'Compiled clearance dossier from Unit 13 to draft executive memo', handoffTo: 'Board of Directors' },
   sub_15: { waitingFor: 'Approved memo from Unit 14 to translate into DE & ES', handoffTo: 'Global Executive Brief' },
   sub_a1: { waitingFor: 'Lead AI market session authorization ($0.0010)', handoffTo: 'Unit a2 (Prediction Model)' },
   sub_a4: { waitingFor: 'Lead AI compliance authorization ($0.0010)', handoffTo: 'Unit a3 (Risk Sandbox)' },
-  sub_a2: { waitingFor: 'Live orderbook stream from Unit a1', handoffTo: 'Unit a3 (Risk Sandbox)' },
-  sub_a3: { waitingFor: 'Momentum analysis (Unit a2) & AML check (Unit a4)', handoffTo: 'Settlement Engine on Tempo L1' },
+  sub_a2: { waitingFor: 'Example orderbook snapshot from Unit a1', handoffTo: 'Unit a3 (Risk Sandbox)' },
+  sub_a3: { waitingFor: 'Momentum analysis (Unit a2) & AML check (Unit a4)', handoffTo: 'Settlement engine' },
 };
 
-/* Legacy demo seed list retained only for backwards-compatible data shape; it is never presented as a transaction proof. */
-const ON_CHAIN_TX_SEEDS: Array<{ hash: string; block: number; latency: number; nonce: string }> = [];
-/*
-  { hash: '0x7a3f4e8b2c91a052b61f8d927c3e5a1b4d08e2f9c7a1b3d5e8f0a2c4e6b8d1f3', block: 4198203, latency: 12, nonce: '0x01:01' },
-  { hash: '0x8b4c5d6e7f01a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7', block: 4198204, latency: 14, nonce: '0x01:02' },
-  { hash: '0x9c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d', block: 4198204, latency: 15, nonce: '0x01:03' },
-  { hash: '0x0d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6', block: 4198205, latency: 18, nonce: '0x01:04' },
-  { hash: '0x1e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7', block: 4198205, latency: 13, nonce: '0x01:05' },
-  { hash: '0x2f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8', block: 4198206, latency: 11, nonce: '0x01:06' },
-  { hash: '0x3a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9', block: 4198206, latency: 12, nonce: '0x01:07' },
-  { hash: '0x4b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0', block: 4198207, latency: 14, nonce: '0x01:08' },
-  { hash: '0x5c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1', block: 4198207, latency: 16, nonce: '0x01:09' },
-  { hash: '0x6d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2', block: 4198208, latency: 13, nonce: '0x01:0a' },
-  { hash: '0x7e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3', block: 4198208, latency: 15, nonce: '0x01:0b' },
-  { hash: '0x8f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4', block: 4198209, latency: 17, nonce: '0x01:0c' },
-  { hash: '0x905b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5', block: 4198209, latency: 12, nonce: '0x01:0d' },
-  { hash: '0xa16c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6', block: 4198210, latency: 14, nonce: '0x01:0e' },
-  { hash: '0xb27d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7', block: 4198210, latency: 13, nonce: '0x01:0f' },
-  { hash: '0xc38e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8', block: 4198211, latency: 15, nonce: '0x01:10' },
-  { hash: '0xd49f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9', block: 4198211, latency: 12, nonce: '0x01:11' },
-  { hash: '0xe5a01b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0', block: 4198212, latency: 14, nonce: '0x01:12' },
-  { hash: '0xf6b12c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1', block: 4198212, latency: 11, nonce: '0x01:13' },
-]; */
 
-const getWorkerWalletAddress = (subId: string): string => {
-  const map: Record<string, string> = {
-    sub_m1: '0x38F9C4d87262fE33C6e4811aC0a1744b8296a241',
-    sub_m2: '0x9a8C7d65B2089fC43818e329B4d32091Eb09257e',
-    sub_m3: '0x5C0b76426C1f855dC1548E12aDe4b9015c3639Fe',
-    sub_m4: '0x1F29cA8f0653B02657d4D97E366Af4D5514E69Ac',
-    sub_m5: '0x71661A28A2f1b8F6C2652B28bEb12cf75e3E106d',
-    sub_m6: '0xdE19Acf0d7eBb59e355D4e18378E2e83162FaDb1',
-    sub_m7: '0x2D543B718Ce409A3Fe42Ec4146aC72C3e1208aB4',
-    sub_m8: '0x8A14Db6259Ce76E846e33C63b2d1E2f9011Ab302',
-    sub_m9: '0x6B9F26a9D9523C63b514571A1c7Fe5D51E06bC81',
-    sub_m10: '0x3F88a914B157d620B309489A9Fe8392176b92aE0',
-    sub_m11: '0x4D6a61B9fE0eC581f1816A91444c9bEf8231c349',
-    sub_m12: '0x9C0E28aE72b509f6E3544C2b0C86386Fe4c3F682',
-    sub_m13: '0x1A6a6358c2B52F2E49c28Ffe76d750172e2938B9',
-    sub_m14: '0x5B6B1c305aD02B6D55c826620C7a4e6fe84a0d92',
-    sub_m15: '0x7a2f1837e2D489bcf2010Ab344795e1F1556C47E',
-    sub_m16: '0x8F54A3B1829e924bcf02611aCb5368aB1578e901',
-    sub_m17: '0x0d8Fe3b4827F20B6081e626e257B96e00Ab782A4',
-    sub_m18: '0x442C5D619c67B142e03B9139F971bE26e7b3A01b',
-    sub_m19: '0x7e8B62fA184D725e2A838634Bf44C609EbA52c50',
-    lead_orchestrator: '0x3c42E274FAdd8e371fB84f97203CC2F2125c8775',
-    sub_8: '0x22A9b7Fe402A8f918C4D8927163bFe01991DaB34',
-    sub_9: '0x77c2B9F4a1b02581628d4E6b91c448aDe2b84F21',
-    sub_10: '0x55d14A389FE4b2a8819076C1e479a0b127993a40',
-    sub_11: '0x41e8c5B0998aE8B799C0637F818a7b98aAc64201',
-    sub_12: '0x892a0b1b72eEb59e355D4e18378E2e83162FaDb1',
-    sub_18: '0x1F29cA8f0653B02657d4D97E366Af4D5514E69Ac',
-    sub_19: '0x3F88a914B157d620B309489A9Fe8392176b92aE0',
-    sub_5: '0x6B9F26a9D9523C63b514571A1c7Fe5D51E06bC81',
-    sub_6: '0x9a8C7d65B2089fC43818e329B4d32091Eb09257e',
-    sub_7: '0x8A14Db6259Ce76E846e33C63b2d1E2f9011Ab302',
-    sub_16: '0x4D6a61B9fE0eC581f1816A91444c9bEf8231c349',
-    sub_17: '0x9C0E28aE72b509f6E3544C2b0C86386Fe4c3F682',
-    sub_1: '0x38F9C4d87262fE33C6e4811aC0a1744b8296a241',
-    sub_2: '0x5C0b76426C1f855dC1548E12aDe4b9015c3639Fe',
-    sub_3: '0x71661A28A2f1b8F6C2652B28bEb12cf75e3E106d',
-    sub_4: '0x2D543B718Ce409A3Fe42Ec4146aC72C3e1208aB4',
-    sub_13: '0x1A6a6358c2B52F2E49c28Ffe76d750172e2938B9',
-    sub_14: '0x5B6B1c305aD02B6D55c826620C7a4e6fe84a0d92',
-    sub_15: '0x7a2f1837e2D489bcf2010Ab344795e1F1556C47E',
-    sub_a1: '0x9a8C7d65B2089fC43818e329B4d32091Eb09257e',
-    sub_a2: '0x8A14Db6259Ce76E846e33C63b2d1E2f9011Ab302',
-    sub_a3: '0x4D6a61B9fE0eC581f1816A91444c9bEf8231c349',
-    sub_a4: '0x1F29cA8f0653B02657d4D97E366Af4D5514E69Ac',
-  };
-  return map[subId] || `0x${subId.replace(/[^0-9a-f]/gi, '').padEnd(8, '42a1').slice(0, 8)}...${subId.length * 19}`;
-};
+// Worker cards do not own separate wallets. A live run uses the configured
+// session key supplied by the backend; evaluation runs intentionally expose
+// no made-up address.
+const getWorkerWalletAddress = (_subId: string): string => '';
 
 const PRESET_SWARMS = [
   {
@@ -526,11 +459,11 @@ const PRESET_SWARMS = [
     title: 'Viral Ad Campaign',
     missionType: 'Autonomous Ad & Media Studio',
     goal: 'Launch viral multi-platform ad campaign for new product under $0.05 budget.',
-    goalDesc: 'Lead AI coordinates 12 specialist creative workers and buys live data from 7 media providers to analyze trends, generate visual assets, translate scripts to 5 languages, check ad policies, and deliver a ready-to-run marketing package on Tempo L1.',
+    goalDesc: 'Lead AI coordinates 12 specialist creative workers and buys approved data from 7 providers to analyze trends, generate assets, translate scripts to 5 languages, check ad policies, and deliver a ready-to-run marketing package.',
     budgetLimit: '$0.0500 policy cap',
     budgetEst: '$0.0245',
     rules: 'Approved creative feeds · Max $0.0050 per request · Zero subscriptions',
-    description: '1 Lead Agent · 12 Creative Workers · 7 Data Providers',
+    description: '1 Lead Agent · 12 Creative Workers · 7 Example Media Inputs',
     subcontractors: [
       // MISSION ORCHESTRATOR: 1 Lead Agent (Campaign Director)
       { 
@@ -557,27 +490,27 @@ const PRESET_SWARMS = [
         samplePayload: 'Marketing Plan: Multi-platform campaign verified across 20 units: 1 Lead Agent, 12 Workers, 7 Providers. Total spend: $0.0245 / $0.0500 cap.' 
       },
 
-      // PHASE 1: 7 External Media Feeds ($0.0100 total) - External paid resources
+      // PHASE 1: 7 Example Media Inputs ($0.0100 planned)
       { 
         id: 'sub_m1', 
         role: 'TikTok Viral Trends', 
         shortName: 'TikTok Radar', 
         targetUrl: '/api/v1/media/tiktok-trends', 
-        providerLabel: 'TikTok Trend Radar (Demo Provider Feed)', 
+        providerLabel: 'Licensed Trend Feed (Sample provider)', 
         costPathUsd: 0.0015, 
         avatarColor: 'bg-zinc-700', 
         category: 'Market Data', 
         team: 'Data Providers', 
-        savingsVsSubscription: 'Pay $0.0015 per trend scan — zero monthly tier', 
+        savingsVsSubscription: 'Pay per licensed trend scan — no monthly tier', 
         deliverablePreview: 'Top 5 Viral Sounds & Hooks', 
-        currentTask: 'Scanning real-time TikTok sound charts & trending hooks',
+        currentTask: 'Reviewing a sample TikTok trend feed & hooks',
         taskInput: 'Niche: Tech & SaaS Product',
         taskOutput: 'Top 5 trending audio stems & 3 high-velocity hooks',
-        workingAction: 'Fetching live TikTok sound charts & hooks ($0.0015)...', 
+        workingAction: 'Reviewing sample TikTok trend data ($0.0015)...', 
         generatedValueUsd: 0.60, 
         nodeType: 'PROVIDER' as const, 
         waveGroup: 1, 
-        queryPrompt: 'Query live TikTok trending sound stems and viral hashtag velocity',
+        queryPrompt: 'Query example trend data and hashtag velocity',
         verifiedBadge: '✓ 5 Viral Hooks Locked',
         samplePayload: 'TikTok Trend Data: Ingested #AIRevolution and #TechTok trends. Sound stem #84918 viral velocity +340%.' 
       },
@@ -586,21 +519,21 @@ const PRESET_SWARMS = [
         role: 'Twitter / X Topic Pulse', 
         shortName: 'X Pulse', 
         targetUrl: '/api/v1/media/x-trends', 
-        providerLabel: 'Twitter/X Trend API (Demo Provider Feed)', 
+        providerLabel: 'Licensed Social Pulse (Sample provider)', 
         costPathUsd: 0.0010, 
         avatarColor: 'bg-zinc-700', 
         category: 'Market Data', 
         team: 'Data Providers', 
         savingsVsSubscription: 'Pay per query — zero API tier cost', 
         deliverablePreview: 'Viral Discussion Angles', 
-        currentTask: 'Ingesting trending conversational debates and controversy angles',
+        currentTask: 'Reviewing example conversational signals and debate angles',
         taskInput: 'Keywords: Autonomous AI, Future of Work',
         taskOutput: 'High-engagement discussion angles and top sentiment triggers',
         workingAction: 'Analyzing X / Twitter sentiment and controversy angles ($0.0010)...', 
         generatedValueUsd: 0.50, 
         nodeType: 'PROVIDER' as const, 
         waveGroup: 1, 
-        queryPrompt: 'Ingest trending Twitter debate threads for emotional hooks',
+        queryPrompt: 'Query example social signals for discussion angles',
         verifiedBadge: '✓ 3 Engagement Angles',
         samplePayload: 'Twitter Trend Feed: Sentiment analysis highlights user frustration with monthly SaaS subscriptions. Prime angle locked.' 
       },
@@ -609,7 +542,7 @@ const PRESET_SWARMS = [
         role: 'Competitor Ad Library', 
         shortName: 'Ad Spy API', 
         targetUrl: '/api/v1/media/competitor-ads', 
-        providerLabel: 'Meta & Google Ad Spy (Demo Provider Feed)', 
+        providerLabel: 'Licensed Competitor Ad Library (Sample provider)', 
         costPathUsd: 0.0015, 
         avatarColor: 'bg-zinc-700', 
         category: 'Competitive Intelligence', 
@@ -619,11 +552,11 @@ const PRESET_SWARMS = [
         currentTask: 'Extracting top-spending competitor ad formats and CTA structures',
         taskInput: 'Target competitors: Ramp, Brex, OpenAI Enterprise',
         taskOutput: 'Top 3 converting ad structures: Problem-Agitate-Solve video format',
-        workingAction: 'Scraping competitor paid ad library for top converters ($0.0015)...', 
+        workingAction: 'Reviewing licensed competitor ad examples ($0.0015 planned)...', 
         generatedValueUsd: 0.70, 
         nodeType: 'PROVIDER' as const, 
         waveGroup: 1, 
-        queryPrompt: 'Extract competitor winning ad angles and visual structures',
+        queryPrompt: 'Extract example competitor ad angles and visual structures',
         verifiedBadge: '✓ Winning Formats Scanned',
         samplePayload: 'Competitor Ads: Analyzed 42 active ads. Short vertical UGC-style videos driving 74% of conversions.' 
       },
@@ -632,7 +565,7 @@ const PRESET_SWARMS = [
         role: 'Flux Visual Concept Feed', 
         shortName: 'Flux Visual Engine', 
         targetUrl: '/api/v1/media/flux-render', 
-        providerLabel: 'Visual Asset Cluster (Demo Provider Feed)', 
+        providerLabel: 'Visual Asset Cluster (Sample provider)', 
         costPathUsd: 0.0025, 
         avatarColor: 'bg-zinc-700', 
         category: 'Generative Visuals', 
@@ -655,7 +588,7 @@ const PRESET_SWARMS = [
         role: 'Neural Voiceover Studio', 
         shortName: 'Voice Cloud', 
         targetUrl: '/api/stream/inference', 
-        providerLabel: 'Neural Speech API (Demo Provider Feed)', 
+        providerLabel: 'Neural Speech API (Sample provider)', 
         costPathUsd: 0.0015, 
         avatarColor: 'bg-zinc-700', 
         category: 'Audio Synthesis', 
@@ -678,7 +611,7 @@ const PRESET_SWARMS = [
         role: 'Trending Music Beats', 
         shortName: 'Beat Stems API', 
         targetUrl: '/api/v1/media/music-beats', 
-        providerLabel: 'Royalty-Free Audio Stems (Demo Provider Feed)', 
+        providerLabel: 'Royalty-Free Audio Stems (Sample provider)', 
         costPathUsd: 0.0010, 
         avatarColor: 'bg-zinc-700', 
         category: 'Audio Licensing', 
@@ -701,7 +634,7 @@ const PRESET_SWARMS = [
         role: 'Audience Demographics', 
         shortName: 'Buyer Segments', 
         targetUrl: '/api/v1/media/audience-data', 
-        providerLabel: 'Consumer Graph Registry (Demo Provider Feed)', 
+        providerLabel: 'Consumer Graph Registry (Sample provider)', 
         costPathUsd: 0.0010, 
         avatarColor: 'bg-zinc-700', 
         category: 'Targeting Data', 
@@ -981,23 +914,23 @@ const PRESET_SWARMS = [
         role: 'Payment & Proof', 
         shortName: 'Payment & Proof', 
         targetUrl: '/api/v1/media/blockchain-seal', 
-        providerLabel: 'Recorded on Tempo', 
+        providerLabel: 'Payment & proof record', 
         costPathUsd: 0.0010, 
         avatarColor: 'bg-zinc-700', 
         category: 'Payment Proof', 
         team: 'Packaging & Proof', 
         savingsVsSubscription: 'Proof of asset provenance', 
-        deliverablePreview: 'Recorded on Tempo', 
-        currentTask: 'Recording campaign asset hash with Session Key on Tempo testnet',
+        deliverablePreview: 'Campaign proof record', 
+        currentTask: 'Recording the campaign asset hash for review',
         taskInput: 'Cryptographic hash of 19 media deliverables',
-        taskOutput: 'Proof record (Digest: 0x82a1...99ef)',
-        workingAction: 'Recording media asset provenance on Tempo...', 
+        taskOutput: 'Evaluation record prepared (digest available after a confirmed receipt)',
+        workingAction: 'Recording media asset provenance...', 
         generatedValueUsd: 0.50, 
         nodeType: 'WORKER' as const, 
         waveGroup: 3, 
-        queryPrompt: 'Record campaign asset hash with Session Key on Tempo',
-        verifiedBadge: '✓ Recorded on Tempo',
-        samplePayload: 'Payment Proof: Campaign bundle recorded on Tempo testnet (Chain ID 42431).' 
+        queryPrompt: 'Record the campaign asset hash with the session key',
+        verifiedBadge: '✓ Proof record ready',
+        samplePayload: 'Payment Proof: Campaign bundle record prepared; live wallet required for a chain receipt.' 
       },
     ],
   },
@@ -1006,7 +939,7 @@ const PRESET_SWARMS = [
     title: 'Enterprise Due Diligence',
     missionType: 'Supplier Due Diligence',
     goal: 'Check Apex Foundry before signing a contract.',
-    goalDesc: 'Lead Agent coordinates 12 specialist workers and requests data from 7 external providers to verify registration, financial health, legal risk, solvency, and compile an approved decision memo under the $0.0300 budget cap on Tempo L1.',
+    goalDesc: 'Lead Agent coordinates 12 specialist workers and requests data from 7 external providers to verify registration, financial health, legal risk, and solvency, then compiles an approved decision memo under the $0.0300 budget cap.',
     budgetLimit: '$0.0300 policy cap',
     budgetEst: '$0.0270',
     rules: 'Approved providers only · Max $0.0050 per request · Zero subscriptions',
@@ -1027,17 +960,17 @@ const PRESET_SWARMS = [
         deliverablePreview: 'Operational Work Plan & Decision Memo', 
         currentTask: 'Directing 12 workers & 7 providers under $0.0300 cap',
         taskInput: 'Goal: Check Apex Foundry before contract signing',
-        taskOutput: 'Approved Supplier Decision Memo & Clearance Dossier',
+        taskOutput: 'Supplier Review Memo & Evidence Pack', 
         workingAction: 'Directing 12 workers & 7 providers under budget policy...', 
         generatedValueUsd: 2.50, 
         nodeType: 'ORCHESTRATOR' as const, 
         waveGroup: 0, 
-        queryPrompt: 'Direct 12 workers and 7 providers for supplier clearance',
+        queryPrompt: 'Direct 12 workers and 7 example inputs for supplier review',
         verifiedBadge: '✓ Workforce Dispatched',
-        samplePayload: 'Work Plan: Target "Apex Foundry Ltd" verified across 20 units: 1 Lead Agent, 12 Workers ($0.0150), 7 Providers ($0.0120). Total spend: $0.0270 / $0.0300 cap.' 
+        samplePayload: 'Work Plan: Target "Apex Foundry Ltd" reviewed across 20 evaluation units: 1 Lead Agent, 12 Workers ($0.0150), 7 example inputs ($0.0120). Total planned spend: $0.0270 / $0.0300 cap.' 
       },
 
-      // PHASE 1: 7 External Data Providers ($0.0120 total) - External paid resources
+      // PHASE 1: 7 Example Registry & Data Inputs ($0.0120 planned)
       { 
         id: 'sub_8', 
         role: 'Company Registration', 
@@ -1049,17 +982,17 @@ const PRESET_SWARMS = [
         category: 'Corporate Standing', 
         team: 'Data Providers', 
         savingsVsSubscription: 'Pay $0.0020 per query — zero monthly fee', 
-        deliverablePreview: 'Good Standing (LEI Active)', 
+        deliverablePreview: 'Example Registry Snapshot', 
         currentTask: 'Providing company registration status & good standing data',
         taskInput: 'Target: "Apex Foundry Ltd"',
-        taskOutput: 'Verified Active Corporate Record (LEI 549300... Valid)',
+        taskOutput: 'Example corporate record for review',
         workingAction: 'Checking company registration status ($0.0020)...', 
         generatedValueUsd: 0.55, 
         nodeType: 'PROVIDER' as const, 
         waveGroup: 1, 
-        queryPrompt: 'Check official corporate registration & standing',
-        verifiedBadge: '✓ Verified Active Entity',
-        samplePayload: 'Company Record: "Apex Foundry Ltd" verified active corporate entity. Good standing confirmed.' 
+        queryPrompt: 'Review the supplied corporate registration snapshot',
+        verifiedBadge: '✓ Example record received',
+        samplePayload: 'Company Record: "Apex Foundry Ltd" — example registry snapshot received for review.' 
       },
       { 
         id: 'sub_9', 
@@ -1072,17 +1005,17 @@ const PRESET_SWARMS = [
         category: 'Financial Disclosure', 
         team: 'Data Providers', 
         savingsVsSubscription: 'Pay per filing check — zero annual fee', 
-        deliverablePreview: 'Audited Report (+$12.4M Cash)', 
+        deliverablePreview: 'Example Financial Snapshot', 
         currentTask: 'Providing audited annual filings & balance sheet data',
         taskInput: 'Financial disclosure query: Apex Foundry Ltd',
-        taskOutput: 'Audited annual report (+$12.4M operating cash flow)',
-        workingAction: 'Ingesting audited financial disclosures ($0.0020)...', 
+        taskOutput: 'Example annual filing snapshot (+$12.4M operating cash flow)',
+        workingAction: 'Reading the supplied financial snapshot ($0.0020)...', 
         generatedValueUsd: 0.60, 
         nodeType: 'PROVIDER' as const, 
         waveGroup: 1, 
         queryPrompt: 'Query standardized financial disclosures for annual balance sheets',
-        verifiedBadge: '✓ Clean Audit (+$12.4M)',
-        samplePayload: 'Annual Financial Statement: Audited annual financial report ingested. Clean independent audit opinion. Operating cash flow: +$12.4M.' 
+        verifiedBadge: '✓ Example figures loaded',
+        samplePayload: 'Annual Financial Snapshot: example filing figures loaded. Operating cash flow shown: +$12.4M.' 
       },
       { 
         id: 'sub_10', 
@@ -1095,17 +1028,17 @@ const PRESET_SWARMS = [
         category: 'Ownership Graph', 
         team: 'Data Providers', 
         savingsVsSubscription: 'Pay per search — zero monthly tier', 
-        deliverablePreview: 'Equity Traced (0 Shells)', 
+        deliverablePreview: 'Example Ownership Snapshot', 
         currentTask: 'Providing beneficial ownership & cap table data',
         taskInput: 'Entity beneficial ownership query',
-        taskOutput: 'Cap table: 68% founders, 32% institutional (0 shells)',
+        taskOutput: 'Example cap table: 68% founders, 32% institutional',
         workingAction: 'Tracing beneficial owners & cap table ($0.0015)...', 
         generatedValueUsd: 0.50, 
         nodeType: 'PROVIDER' as const, 
         waveGroup: 1, 
         queryPrompt: 'Trace full cap table & beneficial owners',
-        verifiedBadge: '✓ Equity Traced (0 Shells)',
-        samplePayload: 'Company Ownership: Equity traced to founders (68%) and institutional funds (32%). 0 hidden shell companies.' 
+        verifiedBadge: '✓ Example ownership loaded',
+        samplePayload: 'Company Ownership: example cap table shows founders (68%) and institutional funds (32%).' 
       },
       { 
         id: 'sub_11', 
@@ -1118,7 +1051,7 @@ const PRESET_SWARMS = [
         category: 'Credit Health', 
         team: 'Data Providers', 
         savingsVsSubscription: 'Pay $0.0015 per score — zero bureau tier', 
-        deliverablePreview: 'Credit: Grade A- (88/100)', 
+        deliverablePreview: 'Example Credit Snapshot', 
         currentTask: 'Providing commercial credit score & payment history',
         taskInput: 'Commercial credit index request',
         taskOutput: 'Score: 88/100 (Grade A- · 34-day payment avg)',
@@ -1127,8 +1060,8 @@ const PRESET_SWARMS = [
         nodeType: 'PROVIDER' as const, 
         waveGroup: 1, 
         queryPrompt: 'Request 12-month commercial payment & credit score',
-        verifiedBadge: '✓ Grade A- (88/100)',
-        samplePayload: 'Commercial Credit: 88/100 (Grade A-). Payments on time (34 days avg). 0 recorded defaults.' 
+        verifiedBadge: '✓ Example score loaded',
+        samplePayload: 'Commercial Credit Example: 88/100 (Grade A-). Payments on time (34 days avg).' 
       },
       { 
         id: 'sub_12', 
@@ -1141,17 +1074,17 @@ const PRESET_SWARMS = [
         category: 'Legal Risk', 
         team: 'Data Providers', 
         savingsVsSubscription: 'Pay per search — zero legal retainer', 
-        deliverablePreview: '0 Active Lawsuits / Liens', 
+        deliverablePreview: 'Example Legal Snapshot', 
         currentTask: 'Providing legal compliance, judgments & liens data',
         taskInput: 'Commercial litigation & lien search',
-        taskOutput: '0 active fraud lawsuits · 0 tax liens',
+        taskOutput: 'Example legal record summary',
         workingAction: 'Scanning legal compliance databases ($0.0015)...', 
         generatedValueUsd: 0.45, 
         nodeType: 'PROVIDER' as const, 
         waveGroup: 1, 
         queryPrompt: 'Scan legal compliance records for open lawsuits and liens',
-        verifiedBadge: '✓ 0 Lawsuits / Liens',
-        samplePayload: 'Legal Records: 0 active fraud lawsuits. 0 tax liens. 1 past commercial dispute resolved in 2024.' 
+        verifiedBadge: '✓ Example legal data loaded',
+        samplePayload: 'Legal Records Example: 1 past commercial dispute resolved in 2024; no live legal search was run.' 
       },
       { 
         id: 'sub_18', 
@@ -1164,17 +1097,17 @@ const PRESET_SWARMS = [
         category: 'Compliance & Safety', 
         team: 'Data Providers', 
         savingsVsSubscription: 'Sub-cent check — zero retainer', 
-        deliverablePreview: '0 Sanctions Hits (Clean)', 
+        deliverablePreview: 'Example Watchlist Snapshot', 
         currentTask: 'Providing international sanctions watchlist checks',
         taskInput: 'OFAC, EU, UN sanctions watchlist screening',
-        taskOutput: '0 sanctions matches · Executive team cleared',
+        taskOutput: 'Example watchlist result for review',
         workingAction: 'Checking OFAC, EU, UN global watchlists ($0.0020)...', 
         generatedValueUsd: 0.60, 
         nodeType: 'PROVIDER' as const, 
         waveGroup: 1, 
         queryPrompt: 'Screen company & principals against international sanctions',
-        verifiedBadge: '✓ 0 Sanctions Hits (Clean)',
-        samplePayload: 'Global Sanctions Check: 0 international sanctions hits (US, EU, UN). Executive team cleared.' 
+        verifiedBadge: '✓ Example watchlist loaded',
+        samplePayload: 'Global Watchlist Example: sample result loaded for review; no live screening was run.' 
       },
       { 
         id: 'sub_19', 
@@ -1187,17 +1120,17 @@ const PRESET_SWARMS = [
         category: 'Reputational Risk', 
         team: 'Data Providers', 
         savingsVsSubscription: 'Direct micro-payment — zero subscription', 
-        deliverablePreview: '0 Adverse News Found', 
+        deliverablePreview: 'Example News Snapshot', 
         currentTask: 'Providing 1,400+ news wire scans for media controversy',
         taskInput: 'Global media news wire scan: Apex Foundry',
-        taskOutput: '0 adverse news, bribery, or environmental scandals',
+        taskOutput: 'Example reputation summary',
         workingAction: 'Scanning 1,400+ news wires for controversy ($0.0015)...', 
         generatedValueUsd: 0.45, 
         nodeType: 'PROVIDER' as const, 
         waveGroup: 1, 
         queryPrompt: 'Scan news wires for adverse media & reputational risk',
-        verifiedBadge: '✓ 0 Negative News Found',
-        samplePayload: 'Reputation & News: Scanned 1,400+ news sources. Zero bribery, environmental, or legal controversies found.' 
+        verifiedBadge: '✓ Example news data loaded',
+        samplePayload: 'Reputation & News Example: sample headlines loaded for review; no live news scan was run.' 
       },
 
       // PHASE 2: 5 Risk & Analysis Workers ($0.0080 total) - Specialized AI workers
@@ -1258,17 +1191,17 @@ const PRESET_SWARMS = [
         category: 'Regulatory Audit', 
         team: 'Analysis & Risk', 
         savingsVsSubscription: 'Pay per compliance rule check', 
-        deliverablePreview: 'Trade Clearance Approved', 
+        deliverablePreview: 'Example Trade Rules Result', 
         currentTask: 'Auditing export controls, classifications & tariffs',
         taskInput: 'Sanctions clearance & product hardware catalog',
-        taskOutput: 'Standard hardware supply · 0 export restrictions',
+        taskOutput: 'Example hardware classification for review',
         workingAction: 'Auditing export controls & tariff classifications...', 
         generatedValueUsd: 0.40, 
         nodeType: 'WORKER' as const, 
         waveGroup: 2, 
         queryPrompt: 'Review export controls, hardware categories & licensing',
-        verifiedBadge: '✓ Trade Clearance Approved',
-        samplePayload: 'Trade Compliance: Standard hardware supply approved. No export restrictions apply.' 
+        verifiedBadge: '✓ Example rule result loaded',
+        samplePayload: 'Trade Rules Example: standard hardware classification shown for review; no live clearance was issued.' 
       },
       { 
         id: 'sub_16', 
@@ -1392,23 +1325,23 @@ const PRESET_SWARMS = [
         role: 'Payment & Proof', 
         shortName: 'Payment Proof', 
         targetUrl: '/api/v1/due-diligence/clearance-dossier', 
-        providerLabel: 'Recorded on Tempo', 
+        providerLabel: 'Payment & proof record', 
         costPathUsd: 0.0010, 
         avatarColor: 'bg-zinc-700', 
         category: 'Payment Proof', 
         team: 'Synthesis & Reporting', 
         savingsVsSubscription: 'Digital cryptographic receipt', 
-        deliverablePreview: 'Recorded on Tempo', 
-        currentTask: 'Recording verification digest with Session Key on Tempo L1',
+        deliverablePreview: 'Verification proof record', 
+        currentTask: 'Recording the verification digest for review',
         taskInput: 'Cryptographic digest of 19 verified proofs',
-        taskOutput: 'Payment proof voucher (Digest: 0x94f8...3918)',
-        workingAction: 'Recording verification digest on Tempo L1...', 
+        taskOutput: 'Evaluation proof record (chain digest pending)',
+        workingAction: 'Recording verification digest...', 
         generatedValueUsd: 0.50, 
         nodeType: 'WORKER' as const, 
         waveGroup: 3, 
-        queryPrompt: 'Record verification digest with Session Key on Tempo L1',
-        verifiedBadge: '✓ Authenticated via EIP-712',
-        samplePayload: 'Payment Proof: Scoped session key authorization authenticated on SynapseVault (0x3c42E274...c8775).' 
+        queryPrompt: 'Record the verification digest with the session key',
+        verifiedBadge: '✓ EIP-712 plan prepared',
+        samplePayload: 'Payment Proof: Scoped session key authorization prepared for a live chain receipt.' 
       },
       { 
         id: 'sub_13', 
@@ -1424,14 +1357,14 @@ const PRESET_SWARMS = [
         deliverablePreview: 'Clearance Dossier Ready', 
         currentTask: 'Compiling 19 deliverables into audit-ready executive dossier',
         taskInput: '19 verified deliverable specifications & proof records',
-        taskOutput: 'Executive Supplier Clearance Dossier: Approved for signing',
+        taskOutput: 'Evaluation clearance dossier ready for review',
         workingAction: 'Assembling 19 specialist proofs into executive dossier...', 
         generatedValueUsd: 0.50, 
         nodeType: 'WORKER' as const, 
         waveGroup: 3, 
         queryPrompt: 'Compile 19 deliverables into audit-ready executive dossier',
         verifiedBadge: '✓ Dossier Compiled',
-        samplePayload: 'Executive Supplier Clearance Dossier: "Apex Foundry Ltd" approved for contract signing. All 19 checks passed.' 
+        samplePayload: 'Executive Supplier Clearance Dossier: "Apex Foundry Ltd" — evaluation recommendation prepared for contract review. All 19 sample checks passed.' 
       },
       { 
         id: 'sub_14', 
@@ -1447,14 +1380,14 @@ const PRESET_SWARMS = [
         deliverablePreview: '1-Page Board Decision Memo', 
         currentTask: 'Drafting 1-page C-Suite decision memo with terms & recommendation',
         taskInput: 'Clearance dossier, financial metrics & safety score',
-        taskOutput: '1-Page Executive Memo: Recommendation = APPROVE CONTRACT',
+        taskOutput: '1-Page Executive Memo: Recommendation = REVIEW',
         workingAction: 'Drafting 1-page C-Suite decision memo with terms & recommendation...', 
         generatedValueUsd: 0.45, 
         nodeType: 'WORKER' as const, 
         waveGroup: 3, 
         queryPrompt: 'Synthesize 1-page decision memo with recommendation & terms',
         verifiedBadge: '✓ 1-Page Memo Ready',
-        samplePayload: 'Executive Decision Memo: Recommendation = APPROVE CONTRACT. Financial: Low Risk, Legal: Clean.' 
+        samplePayload: 'Executive Decision Memo: Recommendation = REVIEW. The memo summarizes the supplied example inputs.' 
       },
       { 
         id: 'sub_15', 
@@ -1483,18 +1416,18 @@ const PRESET_SWARMS = [
   },
   {
     id: 'swarm_arbitrage',
-    title: 'Market Trading & Risk',
-    missionType: 'Financial Market Intelligence',
-    goal: 'Analyze live orderbooks, test predictive momentum, and run risk simulations in Python.',
-    goalDesc: 'Lead AI coordinates real-time market feeds, predictive trend modeling, and safe code execution on Tempo L1.',
+    title: 'Market Data Comparison',
+    missionType: 'Premium Market Data Review',
+    goal: 'Compare sample market snapshots, test a prediction model, and run risk checks in Python.',
+    goalDesc: 'Lead AI coordinates example market inputs, a prediction model, and safe code execution within a fixed budget.',
     budgetLimit: '$0.0100 policy cap',
     budgetEst: '$0.0060',
-    rules: 'Approved market feeds · Max $0.0030 per request · Zero subscriptions',
-    description: 'Lead AI coordinates real-time market feeds, predictive trend modeling, and safe code execution on Tempo L1.',
+    rules: 'Approved data examples · Max $0.0030 per request · Zero subscriptions',
+    description: 'Lead AI compares sample market inputs, models the spread, and checks a proposed trade plan within a fixed budget. No trade is sent in this evaluation.',
     subcontractors: [
       { 
         id: 'lead_orchestrator', 
-        role: 'Lead Arbitrage Director', 
+        role: 'Lead Market Comparison Director', 
         shortName: 'Lead Quant AI', 
         targetUrl: '/api/v1/lead-agent', 
         providerLabel: 'Trading Orchestrator', 
@@ -1503,20 +1436,20 @@ const PRESET_SWARMS = [
         category: 'Mission Lead', 
         team: 'Lead Orchestrator', 
         savingsVsSubscription: 'Zero recurring quant management fees', 
-        deliverablePreview: 'Arbitrage Strategy & Execution Plan', 
-        currentTask: 'Coordinating market feeds, prediction model & execution sandbox under $0.0100 cap',
-        taskInput: 'Goal: Detect & settle cross-venue arbitrage under 100ms',
-        taskOutput: 'Real-Time Arbitrage Opportunity Dispatched & Settled on Tempo L1',
-        workingAction: 'Orchestrating market feeds and validating slippage tolerance...', 
+        deliverablePreview: 'Market Comparison & Risk Report', 
+        currentTask: 'Coordinating example market inputs, prediction model & execution sandbox under $0.0100 cap',
+        taskInput: 'Goal: Compare sample market snapshots and review risk',
+        taskOutput: 'Market Comparison Report and Risk Notes',
+        workingAction: 'Orchestrating example inputs and checking slippage tolerance...', 
         generatedValueUsd: 2.00, 
         nodeType: 'ORCHESTRATOR' as const, 
         waveGroup: 0, 
         queryPrompt: 'Coordinate market feeds, prediction model and safe execution sandbox',
         verifiedBadge: '✓ Mission Orchestrated',
-        samplePayload: 'Arbitrage Plan: Target TEMPO/USD spread on Uniswap v3 vs Curve. Max slippage: 0.15%. Budget allocated: $0.0060.' 
+        samplePayload: 'Market Comparison Plan: review the TEMPO/USD sample spread across two example venues. No trade submitted. Budget allocated: $0.0060.' 
       },
-      { id: 'sub_a1', role: 'Live Orderbook Reader', shortName: 'Orderbook', targetUrl: '/api/v1/data/stock-orderbook', providerLabel: 'Live Orderbook Stream API', costPathUsd: 0.001, avatarColor: 'bg-zinc-700', category: 'Market Data', team: 'Financial Trading', savingsVsSubscription: 'Pay-per-query — zero monthly data fee', deliverablePreview: 'Real-Time Orderbook Depth Matrix', workingAction: 'Querying orderbook stream...', generatedValueUsd: 0.80, nodeType: 'PROVIDER', waveGroup: 1 },
-      { id: 'sub_a2', role: 'Market Prediction Bot', shortName: 'Market Prediction', targetUrl: '/api/v1/data/ai-market-analysis', providerLabel: 'Predictive Inference Model API', costPathUsd: 0.002, avatarColor: 'bg-zinc-700', category: 'AI Inferences', team: 'Financial Trading', savingsVsSubscription: 'Sub-cent inference — zero monthly subscription', deliverablePreview: 'Market Momentum Score & Analysis', workingAction: 'Running predictive model...', generatedValueUsd: 2.50, nodeType: 'WORKER', waveGroup: 2 },
+      { id: 'sub_a1', role: 'Market Data Reader', shortName: 'Orderbook', targetUrl: '/api/v1/data/stock-orderbook', providerLabel: 'Example L2 Market Feed', costPathUsd: 0.001, avatarColor: 'bg-zinc-700', category: 'Market Data', team: 'Market Analysis', savingsVsSubscription: 'Evaluation fixture — no live exchange claim', deliverablePreview: 'Sample Orderbook Depth Matrix', workingAction: 'Reviewing market snapshot...', generatedValueUsd: 0.80, nodeType: 'PROVIDER', waveGroup: 1 },
+      { id: 'sub_a2', role: 'Market Prediction Bot', shortName: 'Market Prediction', targetUrl: '/api/v1/data/ai-market-analysis', providerLabel: 'Example Prediction Model', costPathUsd: 0.002, avatarColor: 'bg-zinc-700', category: 'AI Inferences', team: 'Market Analysis', savingsVsSubscription: 'Evaluation fixture — no live model claim', deliverablePreview: 'Market Momentum Score & Analysis', workingAction: 'Running example model...', generatedValueUsd: 2.50, nodeType: 'WORKER', waveGroup: 2 },
       { id: 'sub_a3', role: 'Safe Code Runner Bot', shortName: 'Code Runner', targetUrl: '/api/v1/data/python-sandbox', providerLabel: 'Python Execution Sandbox API', costPathUsd: 0.002, avatarColor: 'bg-zinc-700', category: 'Code Execution', team: 'Security & Code', savingsVsSubscription: 'Ephemeral sandbox — zero idle server cost', deliverablePreview: 'Verified Financial Risk Calculations', workingAction: 'Sandboxing verification script...', generatedValueUsd: 1.50, nodeType: 'WORKER', waveGroup: 3 },
       { id: 'sub_a4', role: 'Sanctions & Fraud Screener', shortName: 'Sanctions Check', targetUrl: '/api/v1/test-provider-data', providerLabel: 'Sanctions Screening API', costPathUsd: 0.001, avatarColor: 'bg-zinc-700', category: 'Compliance & Safety', team: 'Security & Code', savingsVsSubscription: 'Sub-cent check — zero compliance retainer', deliverablePreview: 'Official AML & Sanctions Clearance', workingAction: 'Checking sanctions watchlist...', generatedValueUsd: 1.20, nodeType: 'PROVIDER', waveGroup: 1 },
     ],
@@ -1566,6 +1499,15 @@ export function MultiAgentSwarmView({
   const [swarmViewMode, setSwarmViewMode] = useState<'saas' | 'pipeline' | 'topology' | 'grid'>('saas');
   const [lastBatchResult, setLastBatchResult] = useState<any>(null);
   const batchTxHash = lastBatchResult?.batchExecution?.txHash || '';
+  const evaluationCopy = (value: string, confirmed = Boolean(batchTxHash)) => confirmed ? value : value
+    .replace(/\bpaid\b/gi, 'planned')
+    .replace(/\bdelivered\b/gi, 'prepared')
+    .replace(/\bverified\b/gi, 'reported')
+    .replace(/\bconfirmed\b/gi, 'reported')
+    .replace(/settled on Tempo L1/gi, 'planned for live settlement')
+    .replace(/settling at <15ms latency/gi, 'checked against the payment policy')
+    .replace(/on Tempo L1/gi, 'after a live wallet is connected')
+    .replace(/Tempo L1/gi, 'the live settlement network');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copiedDossier, setCopiedDossier] = useState(false);
   const [copiedMemo, setCopiedMemo] = useState(false);
@@ -1646,6 +1588,12 @@ export function MultiAgentSwarmView({
   const [streamNonce, setStreamNonce] = useState('0x01:0x0001');
   const [streamStatus, setStreamStatus] = useState<string>('IDLE');
   const [streamTraceInfo, setStreamTraceInfo] = useState<any>(null);
+  const streamLiveConfirmed = Boolean(
+    streamTraceInfo?.paymentStatus === 'SETTLED' &&
+    streamTraceInfo?.executionMode === 'LIVE_TESTNET' &&
+    typeof streamTraceInfo?.txHash === 'string' &&
+    streamTraceInfo.txHash.startsWith('0x')
+  );
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // MCP Interactive Tester State
@@ -1714,7 +1662,7 @@ export function MultiAgentSwarmView({
     setIsStreaming(false);
     setExecutionLog((prev) => [
       `[STOP] Emergency Stop engaged. All autonomous nodes halted immediately.`,
-      `[SAFE] All cards frozen on Tempo L1. Zero unverified funds transferred.`,
+      `[SAFE] All payment steps frozen. Zero unverified funds transferred.`,
       ...prev
     ]);
   };
@@ -1787,7 +1735,7 @@ export function MultiAgentSwarmView({
         message: selectedPreset.id === 'swarm_media_creative' 
           ? 'Campaign launched: Producing viral ad bundle for new product. $0.0245 allocated under the $0.0500 budget cap.'
           : selectedPreset.id === 'swarm_arbitrage'
-          ? 'Arbitrage mission launched: Scanning cross-venue liquidity, predicting momentum & executing in sandbox. $0.0060 allocated under the $0.0100 budget cap.'
+          ? 'Market Comparison mission launched: Scanning cross-venue liquidity, predicting momentum & executing in sandbox. $0.0060 allocated under the $0.0100 budget cap.'
           : 'Mission launched: Investigating Apex Foundry Ltd before contract signing. $0.0270 allocated under the $0.0300 budget cap.',
         stepType: 'DIRECTIVE',
         highlightBadge: 'Mission Initialized',
@@ -1801,6 +1749,7 @@ export function MultiAgentSwarmView({
         body: JSON.stringify({
           taskDescription: selectedPreset.title,
           subcontractors: payableSubs,
+          evaluationOnly: true,
         }),
       });
 
@@ -1818,6 +1767,7 @@ export function MultiAgentSwarmView({
       if (!Number.isFinite(confirmedCost) || Math.abs(confirmedCost - requestedCost) > 0.000001) {
         throw new Error('Swarm response cost does not match the requested worker budget.');
       }
+      const liveSettlementConfirmed = data.batchExecution.escrowSettlement === 'ALL_DELIVERABLES_VERIFIED';
 
       const allIds = new Set<string>();
 
@@ -1853,10 +1803,10 @@ export function MultiAgentSwarmView({
         addDialogue({
           fromName: selectedPreset.id === 'swarm_media_creative' ? 'Campaign Director' : 'Lead Orchestrator',
           fromRole: 'Unit 01 (Lead Agent)',
-          toName: selectedPreset.id === 'swarm_media_creative' ? 'Phase 1: 7 Media & Trend Feeds' : 'Phase 1: 7 External Data Feeds',
+          toName: selectedPreset.id === 'swarm_media_creative' ? 'Phase 1: 7 Example Media Inputs' : 'Phase 1: 7 Example Data Inputs',
           message: selectedPreset.id === 'swarm_media_creative'
-            ? 'Requesting live TikTok/X trends, competitor ads, Flux visual assets, voice narration, beats & audience targeting from 7 feeds ($0.0100 total).'
-            : 'Requesting verified company records, SEC filings, shareholders graph, credit score, and sanctions checks from 7 data feeds ($0.0120 total).',
+            ? 'Requesting example trend inputs, licensed media assets, voice, music and audience data from 7 providers ($0.0100 planned).'
+            : 'Requesting example registry, filing, ownership, credit and sanctions inputs from 7 providers ($0.0120 planned).',
           stepType: 'DIRECTIVE',
           highlightBadge: 'Phase 01 Dispatched',
           nodeId: 'lead_orchestrator'
@@ -1867,48 +1817,48 @@ export function MultiAgentSwarmView({
         const waveStages = selectedPreset.id === 'swarm_media_creative' ? [
           {
             stageNum: 1,
-            name: '01 — Ingest Trends, Competitor Ads & Media Feeds ($0.0100)',
+            name: '01 — Prepare Example Trends, Ads & Media Inputs ($0.0100)',
             subConfigs: [
               { 
                 id: 'sub_m1', startDelay: 0, workTime: 2200, 
-                queryMsg: 'Scanning live TikTok sound charts and viral hooks...',
-                responseMsg: '5 viral TikTok sounds and hook angles locked ($0.0015 paid).',
+                queryMsg: 'Reviewing example TikTok-style trend inputs and hook patterns...',
+                responseMsg: '5 example sound patterns and hook angles prepared ($0.0015 planned).',
                 badge: '5 Viral Hooks'
               },
               { 
                 id: 'sub_m2', startDelay: 900, workTime: 2400,
-                queryMsg: 'Analyzing X / Twitter sentiment & debate triggers...',
-                responseMsg: 'Viral conversation hooks and controversy angles extracted ($0.0010 paid).',
+                queryMsg: 'Reviewing example social signals and debate triggers...',
+                responseMsg: 'Example conversation hooks and angles prepared ($0.0010 planned).',
                 badge: '3 Viral Angles'
               },
               { 
                 id: 'sub_m3', startDelay: 1800, workTime: 2400,
-                queryMsg: 'Extracting top-converting competitor ad creatives...',
-                responseMsg: 'Analyzed 42 competitor ads: Short vertical video winning ($0.0015 paid).',
+                queryMsg: 'Comparing an example competitor ad set...',
+                responseMsg: 'Example ad set compared: short vertical video selected ($0.0015 planned).',
                 badge: 'Competitor Ads Scanned'
               },
               { 
                 id: 'sub_m4', startDelay: 2700, workTime: 2800,
                 queryMsg: 'Generating product visual concept assets...',
-                responseMsg: 'Clean dark studio product visual assets generated ($0.0025 paid).',
+                responseMsg: 'Clean product visual assets prepared ($0.0025 planned).',
                 badge: 'Visuals Prepared'
               },
               { 
                 id: 'sub_m5', startDelay: 3500, workTime: 2400,
                 queryMsg: 'Synthesizing charismatic neural voiceover track...',
-                responseMsg: 'Studio 24-bit WAV narration audio mastered ($0.0015 paid).',
+                responseMsg: 'Studio narration audio prepared ($0.0015 planned).',
                 badge: 'Studio Voice Mastered'
               },
               { 
                 id: 'sub_m6', startDelay: 4200, workTime: 2200,
                 queryMsg: 'Licensing royalty-free trending electronic music stem...',
-                responseMsg: 'Commercial 128 BPM electronic beat licensed and synced ($0.0010 paid).',
+                responseMsg: 'Commercial-use music stem licensed and synced ($0.0010 planned).',
                 badge: '128 BPM Beat Licensed'
               },
               { 
                 id: 'sub_m7', startDelay: 5000, workTime: 2400,
                 queryMsg: 'Fetching high-intent buyer demographic lookalikes...',
-                responseMsg: 'High-converting demographic buyer cluster mapped ($0.0010 paid).',
+                responseMsg: 'Example audience segment mapped ($0.0010 planned).',
                 badge: 'Target Audience Mapped'
               },
             ],
@@ -1991,58 +1941,58 @@ export function MultiAgentSwarmView({
               },
               { 
                 id: 'sub_m19', startDelay: 2000, workTime: 4500,
-                queryMsg: 'Recording campaign asset proof on Tempo testnet...',
-                responseMsg: 'Campaign provenance recorded on Tempo testnet (Chain ID 42431).',
-                badge: 'Recorded on Tempo'
+                queryMsg: 'Recording campaign asset proof...',
+                responseMsg: 'Campaign provenance record prepared for review.',
+                badge: 'Proof record ready'
               },
             ],
           }
         ] : [
           {
             stageNum: 1,
-            name: '01 — Ingest Data from 7 Paid Feeds ($0.0120)',
+            name: '01 — Prepare 7 Example Registry Inputs ($0.0120)',
             subConfigs: [
               { 
                 id: 'sub_8', startDelay: 0, workTime: 2200, 
-                queryMsg: 'Checking official corporate registration and good standing...',
-                responseMsg: 'Verified Active Corporate Entity. Good standing confirmed ($0.0020 paid).',
-                badge: 'Active Entity Verified'
+                 queryMsg: 'Reading the supplied corporate registry snapshot...',
+                 responseMsg: 'Example registry result received ($0.0020 planned).',
+                 badge: 'Registry example ready'
               },
               { 
                 id: 'sub_9', startDelay: 900, workTime: 2400,
-                queryMsg: 'Auditing standardized annual filings and operating cash flow...',
-                responseMsg: 'Audited financial report verified: +$12.4M cash flow ($0.0020 paid).',
-                badge: '+$12.4M Cash Flow'
+                 queryMsg: 'Reading the supplied annual filing snapshot...',
+                 responseMsg: 'Example financial result received ($0.0020 planned).',
+                 badge: 'Filing example ready'
               },
               { 
                 id: 'sub_10', startDelay: 1800, workTime: 2400,
-                queryMsg: 'Tracing real company owners and cap table...',
-                responseMsg: 'Owners traced (68% founders, 32% funds · 0 shells) ($0.0015 paid).',
-                badge: 'Equity Traced (0 Shells)'
+                 queryMsg: 'Summarizing the supplied ownership snapshot...',
+                 responseMsg: 'Example ownership result prepared (68% founders, 32% funds) ($0.0015 planned).',
+                 badge: 'Ownership example ready'
               },
               { 
                 id: 'sub_11', startDelay: 2600, workTime: 2200,
                 queryMsg: 'Checking commercial credit rating and payment track record...',
-                responseMsg: 'Grade A- credit score (88/100). On-time payments confirmed ($0.0015 paid).',
-                badge: 'Credit: 88/100 (A-)'
+                responseMsg: 'Evaluation result: Grade A- risk score (88/100) ($0.0015 planned).',
+                badge: 'Risk Score: 88/100'
               },
               { 
                 id: 'sub_12', startDelay: 3500, workTime: 2400,
-                queryMsg: 'Scanning commercial compliance databases for litigation...',
-                responseMsg: 'Clean legal record: 0 active fraud lawsuits, 0 tax liens ($0.0015 paid).',
-                badge: '0 Lawsuits / Liens'
+                 queryMsg: 'Reading the supplied legal record snapshot...',
+                 responseMsg: 'Example legal result prepared for review ($0.0015 planned).',
+                 badge: 'Legal example ready'
               },
               { 
                 id: 'sub_18', startDelay: 4200, workTime: 2400,
-                queryMsg: 'Screening OFAC, EU, UN international sanctions lists...',
-                responseMsg: '0 sanctions hits across OFAC & UN databases ($0.0020 paid).',
-                badge: '0 Sanctions (Clean)'
+                 queryMsg: 'Reading the supplied watchlist snapshot...',
+                 responseMsg: 'Example watchlist result prepared for review ($0.0020 planned).',
+                 badge: 'Watchlist example ready'
               },
               { 
                 id: 'sub_19', startDelay: 5000, workTime: 2200,
-                queryMsg: 'Scanning 1,400+ news wires for controversy or bribery...',
-                responseMsg: '0 negative news, bribery, or scandals found ($0.0015 paid).',
-                badge: '0 Negative News'
+                 queryMsg: 'Reviewing the supplied news examples...',
+                 responseMsg: 'Example reputation result prepared for review ($0.0015 planned).',
+                 badge: 'News example ready'
               },
             ],
           },
@@ -2065,8 +2015,8 @@ export function MultiAgentSwarmView({
               { 
                 id: 'sub_7', startDelay: 2000, workTime: 2400,
                 queryMsg: 'Auditing export controls, classifications & tariffs...',
-                responseMsg: 'Trade cleared: Standard hardware supply, zero export restrictions.',
-                badge: 'Trade Cleared'
+                 responseMsg: 'Example trade-rule result prepared for review.',
+                 badge: 'Trade example ready'
               },
               { 
                 id: 'sub_16', startDelay: 3000, workTime: 2500,
@@ -2106,21 +2056,21 @@ export function MultiAgentSwarmView({
               },
               { 
                 id: 'sub_4', startDelay: 2600, workTime: 2200,
-                queryMsg: 'Signing cryptographic attestation digest on Tempo L1...',
-                responseMsg: 'Attestation sealed on Tempo L1 with cryptographic Session Key.',
-                badge: 'Sealed on Tempo L1'
+                queryMsg: 'Signing cryptographic attestation digest...',
+                responseMsg: 'Attestation record prepared with the scoped session key.',
+                badge: 'Attestation ready'
               },
               { 
                 id: 'sub_13', startDelay: 3500, workTime: 2400,
                 queryMsg: 'Compiling 19 verified specialist proofs into Executive Dossier...',
-                responseMsg: 'Executive Supplier Clearance Dossier assembled: Approved for signing.',
+                responseMsg: 'Evaluation dossier assembled for review.',
                 badge: 'Dossier Compiled'
               },
               { 
                 id: 'sub_14', startDelay: 4200, workTime: 2200,
                 queryMsg: 'Synthesizing 1-page C-Suite decision memo with terms & recommendation...',
-                responseMsg: '1-Page Board Memo ready: Recommendation = APPROVE CONTRACT (Low Risk, Clean).',
-                badge: '1-Page Board Memo'
+                 responseMsg: '1-Page review memo ready: Recommendation = REVIEW.',
+                 badge: 'Review memo ready'
               },
               { 
                 id: 'sub_15', startDelay: 2000, workTime: 4500,
@@ -2147,8 +2097,8 @@ export function MultiAgentSwarmView({
               lead_orchestrator: { 
                 status: 'REQUESTING', 
                 displayNote: selectedPreset.id === 'swarm_media_creative'
-                  ? 'Directing 7 Media & Trend Feeds & funding channels...'
-                  : 'Directing 7 Data Providers & funding micro-channels...' 
+                  ? 'Directing 7 example media inputs and funding rules...'
+                  : 'Directing 7 Example Media Inputs & funding micro-channels...' 
               }
             }));
           } else if (stage.stageNum === 2) {
@@ -2213,10 +2163,10 @@ export function MultiAgentSwarmView({
               if (isEmergencyFrozenRef.current) return;
 
               // Step 3: Transition to PAYING $X.XXXX
-              soundEngine.playSettlementChime();
+              if (liveSettlementConfirmed) soundEngine.playSettlementChime();
               setWorkerLiveStates((prev) => ({
                 ...prev,
-                [cfg.id]: { status: 'PAYING', displayNote: `Settling $${sub.costPathUsd.toFixed(4)} USD on Tempo L1...` }
+                [cfg.id]: { status: 'PAYING', displayNote: `Checking $${sub.costPathUsd.toFixed(4)} USD payment...` }
               }));
               await new Promise((resolve) => setTimeout(resolve, 900));
               if (isEmergencyFrozenRef.current) return;
@@ -2226,19 +2176,19 @@ export function MultiAgentSwarmView({
               setSettledWorkerIds(new Set(allIds));
               setWorkerLiveStates((prev) => ({
                 ...prev,
-                [cfg.id]: { status: 'DONE', displayNote: `✓ Delivered: ${SUBCONTRACTOR_RESULT_PILLS[cfg.id] || sub.deliverablePreview}` }
+                [cfg.id]: { status: 'DONE', displayNote: `${liveSettlementConfirmed ? '✓ Delivered' : '✓ Result prepared'}: ${SUBCONTRACTOR_RESULT_PILLS[cfg.id] || sub.deliverablePreview}` }
               }));
               const wAddr = getWorkerWalletAddress(sub.id);
-              const shortAddr = `${wAddr.slice(0, 6)}...${wAddr.slice(-4)}`;
+              const shortAddr = wAddr ? `${wAddr.slice(0, 6)}...${wAddr.slice(-4)}` : 'evaluation session key';
               const nonceNum = (sub.id.charCodeAt(0) * 17) + 1042;
-              addLog(`  ✓ [${sub.shortName || sub.role}] Paid $${sub.costPathUsd.toFixed(4)} USD ➔ To: ${shortAddr} · Auth: EIP-712 #${nonceNum} (<15ms Gateway) · Delivered: ${SUBCONTRACTOR_RESULT_PILLS[cfg.id] || sub.deliverablePreview}`);
+              addLog(`  ✓ [${sub.shortName || sub.role}] Planned $${sub.costPathUsd.toFixed(4)} USD ➔ ${shortAddr} · Request checked · ${liveSettlementConfirmed ? 'Delivered' : 'Result prepared'}: ${SUBCONTRACTOR_RESULT_PILLS[cfg.id] || sub.deliverablePreview}`);
 
               // Emit response dialogue
               addDialogue({
                 fromName: sub.role,
                 fromRole: sub.nodeType === 'PROVIDER' ? 'Data Agent' : 'Specialist Agent',
                 toName: selectedPreset.id === 'swarm_media_creative' ? 'Campaign Director' : 'Lead Agent',
-                message: cfg.responseMsg,
+                message: evaluationCopy(cfg.responseMsg, liveSettlementConfirmed),
                 stepType: sub.nodeType === 'PROVIDER' ? 'HTTP_402' : 'DATA_PAYLOAD',
                 costUsd: sub.costPathUsd,
                 highlightBadge: cfg.badge,
@@ -2251,22 +2201,22 @@ export function MultiAgentSwarmView({
           // Stage handover pause & message
           if (stage.stageNum === 1) {
             if (selectedPreset.id === 'swarm_media_creative') {
-              addLog(`➔ [HANDOFF] 7 Media Feeds delivered trends, competitor data & visual assets ($0.0100 spent) ➔ Routed to 5 Creative Specialists.`);
+              addLog(`➔ [HANDOFF] 7 Example Media Inputs prepared trends, competitor references & visual assets ($0.0100 planned) ➔ Routed to 5 Creative Specialists.`);
               addDialogue({
                 fromName: 'Campaign Director',
                 fromRole: 'Unit 01 (Lead Agent)',
                 toName: 'Phase 2: 5 Creative & Compliance Specialists',
-                message: 'All 7 trend & visual feeds ingested on Tempo L1 ($0.0100). Relaying to 5 Creative Specialists for copywriting, video sync, and policy clearance.',
+            message: 'All 7 trend and visual inputs received ($0.0100 planned). Relaying to 5 Creative Specialists for copywriting, video sync, and policy clearance.',
                 stepType: 'DATA_PAYLOAD',
                 highlightBadge: '7 Feeds Relayed'
               });
             } else {
-              addLog(`➔ [HANDOFF] 7 Data Agents ingested verified registry, SEC & sanctions records ($0.0120 spent) ➔ Routed to Phase 2 Risk Analysts.`);
+              addLog(`➔ [HANDOFF] 7 Data Agents prepared example registry, filing & sanctions inputs ($0.0120 planned) ➔ Routed to Phase 2 Risk Analysts.`);
               addDialogue({
                 fromName: 'Lead Orchestrator',
                 fromRole: 'Unit 01 (Lead Agent)',
                 toName: 'Phase 2: 5 AI Risk Specialists',
-                message: 'All 7 official records received and paid on Tempo L1 ($0.0120). Relaying to 5 AI Risk Specialists to analyze debt, compliance, and solvency.',
+            message: 'All 7 example registry inputs prepared ($0.0120 planned). Relaying to 5 AI Risk Specialists to analyze debt, compliance, and solvency.',
                 stepType: 'DATA_PAYLOAD',
                 highlightBadge: '7 Datasets Relayed'
               });
@@ -2284,7 +2234,7 @@ export function MultiAgentSwarmView({
                 highlightBadge: 'Creative Cleared'
               });
             } else {
-              addLog(`➔ [HANDOFF] Financial solvency and risk checks passed ($0.0080 spent) ➔ Relaying verified data to Phase 3 Synthesis.`);
+              addLog(`➔ [HANDOFF] Financial solvency and risk evaluation completed ($0.0080 planned) ➔ Relaying the result to Phase 3 Synthesis.`);
               addDialogue({
                 fromName: 'Lead Orchestrator',
                 fromRole: 'Unit 01 (Lead Agent)',
@@ -2313,7 +2263,7 @@ export function MultiAgentSwarmView({
               fromName: 'Campaign Director',
               fromRole: 'Unit 01 (Lead Agent)',
               toName: 'Human Reviewer / Marketing Team',
-              message: 'Mission Complete: Multi-platform ad campaign READY TO LAUNCH. Total spent: $0.0245 ($0.0255 budget saved under $0.0500 limit).',
+              message: 'Mission flow complete: multi-platform campaign plan is ready to review. Planned spend: $0.0245 under the $0.0500 limit.',
               stepType: 'APPROVAL',
               highlightBadge: 'CAMPAIGN READY ($0.0245)',
               costUsd: 0.0245,
@@ -2322,19 +2272,19 @@ export function MultiAgentSwarmView({
           } else {
             setWorkerLiveStates((prev) => ({
               ...prev,
-              lead_orchestrator: { status: 'DONE', displayNote: '✓ Supplier Cleared: Apex Foundry Ltd Approved' }
+              lead_orchestrator: { status: 'DONE', displayNote: '✓ Evaluation recommendation ready: Apex Foundry Ltd' }
             }));
             addLog(`▶ [FINAL SYNTHESIS] Lead Agent compiled all 19 specialist deliverables.`);
-            addLog(`[DECISION] Supplier "Apex Foundry Ltd" APPROVED FOR CONTRACT SIGNING. Composite Safety Score: 94/100 (Low Risk).`);
+            addLog(`[DECISION] Evaluation recommendation ready for "Apex Foundry Ltd" contract review. Composite sample score: 94/100 (Low Risk).`);
             addLog(`[DOSSIER] Executive clearance report, C-Suite decision memo, and trilingual briefs compiled.`);
 
             addDialogue({
               fromName: 'Lead Orchestrator',
               fromRole: 'Unit 01 (Lead Agent)',
               toName: 'Executive Procurement Board',
-              message: 'Mission Complete: Supplier "Apex Foundry Ltd" APPROVED FOR CONTRACT. Safety Score: 94/100 (Grade A). Total spent: $0.0270 ($0.0030 budget saved).',
+              message: 'Mission flow complete: supplier clearance plan is ready to review. Planned spend: $0.0270 under the $0.0300 limit.',
               stepType: 'APPROVAL',
-              highlightBadge: 'SUPPLIER APPROVED (94/100)',
+              highlightBadge: 'REVIEW RECOMMENDED (94/100)',
               costUsd: 0.0270,
               nodeId: 'lead_orchestrator'
             });
@@ -2343,12 +2293,12 @@ export function MultiAgentSwarmView({
         setActiveStageNum(4);
         setPhaseExpanded({ 1: true, 2: true, 3: true });
       } else {
-        // Fallback for smaller swarms (e.g. Market Trading & Risk Arbitrage)
+        // Fallback for smaller swarms (e.g. Market Trading & Risk Market Comparison)
         allIds.add('lead_orchestrator');
         setSettledWorkerIds(new Set(allIds));
         setWorkerLiveStates((prev) => ({
           ...prev,
-          lead_orchestrator: { status: 'DONE', displayNote: '✓ Arbitrage Executed: Trade Settled on Tempo L1' }
+          lead_orchestrator: { status: 'DONE', displayNote: liveSettlementConfirmed ? '✓ Market check settled on Tempo L1' : '✓ Market check completed in evaluation' }
         }));
         for (let i = 0; i < selectedPreset.subcontractors.length; i++) {
           if (isEmergencyFrozenRef.current) break;
@@ -2369,24 +2319,24 @@ export function MultiAgentSwarmView({
           setWorkerLiveStates((prev) => ({ ...prev, [sub.id]: { status: 'REQUESTING', displayNote: 'Requesting...' } }));
           await new Promise((resolve) => setTimeout(resolve, 350));
           if (isEmergencyFrozenRef.current) break;
-          soundEngine.playSettlementChime();
+          if (liveSettlementConfirmed) soundEngine.playSettlementChime();
           setWorkerLiveStates((prev) => ({ ...prev, [sub.id]: { status: 'PAYING', displayNote: `Paying $${sub.costPathUsd.toFixed(4)}` } }));
           await new Promise((resolve) => setTimeout(resolve, 350));
           if (isEmergencyFrozenRef.current) break;
           allIds.add(sub.id);
           setSettledWorkerIds(new Set(allIds));
           setSelectedSubId(sub.id);
-          setWorkerLiveStates((prev) => ({ ...prev, [sub.id]: { status: 'DONE', displayNote: '✓ Delivered' } }));
-          addLog(`  ✓ [${sub.shortName}] Delivered: ${sub.deliverablePreview} • Paid $${sub.costPathUsd.toFixed(4)}`);
+          setWorkerLiveStates((prev) => ({ ...prev, [sub.id]: { status: 'DONE', displayNote: liveSettlementConfirmed ? '✓ Delivered' : '✓ Result prepared' } }));
+          addLog(`  ✓ [${sub.shortName}] ${liveSettlementConfirmed ? 'Delivered' : 'Result prepared'}: ${sub.deliverablePreview} • ${liveSettlementConfirmed ? 'Paid' : 'Planned'} $${sub.costPathUsd.toFixed(4)}`);
 
           addDialogue({
             fromName: sub.shortName,
             fromRole: sub.nodeType === 'PROVIDER' ? 'Data Provider' : 'Worker Bot',
             toName: 'Trading Desk Lead',
-            message: `Delivered output: ${sub.deliverablePreview}. Settled $${sub.costPathUsd.toFixed(4)} USD on Tempo L1.`,
+            message: `${liveSettlementConfirmed ? 'Delivered output' : 'Prepared result preview'}: ${sub.deliverablePreview}. Planned payment: $${sub.costPathUsd.toFixed(4)} USD.`,
             stepType: 'DATA_PAYLOAD',
             costUsd: sub.costPathUsd,
-            highlightBadge: '✓ Delivered',
+            highlightBadge: liveSettlementConfirmed ? '✓ Delivered' : '✓ Prepared',
             nodeId: sub.id
           });
         }
@@ -2394,9 +2344,9 @@ export function MultiAgentSwarmView({
           fromName: 'Trading Desk Lead',
           fromRole: 'Unit 01 (Lead Agent)',
           toName: 'Trading Desk Operator',
-          message: 'Arbitrage cycle complete: Real-time spread executed and verified on Tempo L1. Spent: $0.0060 ($0.0040 budget saved under $0.0100 limit).',
+          message: 'Market check complete: price differences and risk were reviewed. Planned spend: $0.0060 under the $0.0100 limit.',
           stepType: 'APPROVAL',
-          highlightBadge: 'TRADE SETTLED ($0.0060)',
+            highlightBadge: liveSettlementConfirmed ? 'MARKET REPORT READY ($0.0060)' : 'MARKET REVIEW ($0.0060)',
           costUsd: 0.0060,
           nodeId: 'lead_orchestrator'
         });
@@ -2409,11 +2359,11 @@ export function MultiAgentSwarmView({
       const finalSec = Math.max(1.0, Number((elapsedMs / 1000).toFixed(1)));
       setActualExecutionTimeSec(finalSec);
 
-      addLog(`[COMPLETED] All ${selectedPreset.subcontractors.length} deliverables verified and received in ${finalSec}s.`);
-      addLog(`[SETTLEMENT] Total spent: $${totalBatchCost.toFixed(4)} USD across ${selectedPreset.subcontractors.length} nodes on Tempo L1.`);
-      addLog(`[COMPLETE] Executed strictly within approved policy limits. ${selectedPreset.id === 'swarm_media_creative' ? 'Campaign expense receipt' : selectedPreset.id === 'swarm_arbitrage' ? 'Trading execution receipt' : 'Supplier audit receipt'} generated.`);
+      addLog(`[COMPLETED] All ${selectedPreset.subcontractors.length} deliverables ${liveSettlementConfirmed ? 'verified and received' : 'prepared for review'} in ${finalSec}s.`);
+      addLog(`[SETTLEMENT] ${liveSettlementConfirmed ? 'Confirmed' : 'Planned'} $${totalBatchCost.toFixed(4)} USD across ${selectedPreset.subcontractors.length} work steps${liveSettlementConfirmed ? ' on Tempo L1.' : ' in the evaluation flow.'}`);
+      addLog(`[COMPLETE] Executed strictly within approved policy limits. ${selectedPreset.id === 'swarm_media_creative' ? 'Campaign expense receipt' : selectedPreset.id === 'swarm_arbitrage' ? 'Market comparison receipt' : 'Supplier audit receipt'} generated.`);
       setLastBatchResult(data);
-      soundEngine.playSettlementChime();
+      if (liveSettlementConfirmed) soundEngine.playSettlementChime();
       if (onSwarmSettled) onSwarmSettled();
     } catch (err: any) {
       addLog(`[ERR] Execution Stopped: ${err.message}`);
@@ -2466,7 +2416,7 @@ export function MultiAgentSwarmView({
       }
     };
 
-    // 2. Run Synapse402 Agent Settlement (Pays 0.1¢ via Tempo L1)
+    // 2. Run Synapse402 payment flow (live settlement only when a wallet is available)
     const runSynapse = async () => {
       const settleStart = Date.now();
       try {
@@ -2478,18 +2428,22 @@ export function MultiAgentSwarmView({
             pricePathUsd: realityPrice,
             category: 'Market Data & Scraping',
             allowDynamicWhitelist: true,
+            evaluationOnly: true,
           }),
         });
         const settleDuration = Date.now() - settleStart;
         const data = await res.json();
-        if (res.ok && data?.trace?.status === 'SETTLED' && data.trace.txHash) {
-          soundEngine.playSettlementChime();
+        if (res.ok && ['SETTLED', 'SIMULATED_PASS'].includes(data?.trace?.status)) {
+          if (data.trace.status === 'SETTLED') soundEngine.playSettlementChime();
           return {
             status: 200,
             durationMs: data.trace?.latencyMs || Math.max(14, settleDuration),
             txHash: data.trace?.txHash || '',
+            executionMode: data.trace?.executionMode || 'RESILIENT_SANDBOX',
             costUsd: realityPrice,
-            publisherEarned: `$${(realityPrice * 0.999).toFixed(6)} USD (99.9% to seller after 0.1% fee)`,
+            publisherEarned: data.trace.status === 'SETTLED'
+              ? `$${(realityPrice * 0.999).toFixed(6)} USD (99.9% to seller after 0.1% fee)`
+              : `$${(realityPrice * 0.999).toFixed(6)} USD planned (evaluation only)`,
             payload: data.trace.liveProxyPayload || null,
             dataReceivedBytes: data.trace.liveProxyPayload ? JSON.stringify(data.trace.liveProxyPayload).length : 0,
             outcome: 'UNLOCKED'
@@ -2617,6 +2571,9 @@ export function MultiAgentSwarmView({
                   targetUrl: mcpTargetUrl,
                   maxBudgetPathUsd: Number(mcpMaxCost),
                   proofOfExecutionRequired: true,
+                  // The in-app MCP playground is an evaluation surface. Keep it
+                  // from spending a real relayer balance when the RPC is live.
+                  evaluationOnly: true,
                 }
               : mcpToolName === 'synapse_check_agent_budget'
               ? {}
@@ -2663,11 +2620,16 @@ export function MultiAgentSwarmView({
       name: 'Synapse402-Tempo-MPP',
       url: mcpGatewayUrl,
       transport: 'http-jsonrpc',
-      description: 'Autonomous HTTP 402 Paywall Solver & Swarm Micropayments on Tempo L1',
+      description: 'Autonomous HTTP 402 paywall solver with budgeted swarm payments',
     },
     null,
     2
   );
+
+  const plannedCostUsd = selectedPreset.subcontractors.reduce((total, item) => total + item.costPathUsd, 0);
+  const budgetCapUsd = Number(String(selectedPreset.budgetLimit || '').match(/[0-9]+(?:\.[0-9]+)?/)?.[0] || 0.05);
+  const remainingBudgetUsd = Math.max(0, budgetCapUsd - plannedCostUsd);
+  const plannedBudgetPercent = budgetCapUsd > 0 ? Math.round((plannedCostUsd / budgetCapUsd) * 100) : 0;
 
   return (
     <div id="section-swarm-view" className="space-y-6">
@@ -2677,14 +2639,17 @@ export function MultiAgentSwarmView({
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-bold text-[#f5f5f2] flex items-center gap-2">
               <Cpu className="w-5 h-5 text-[#d7ff4f]" />
-              AI Workforce — Live Mission
+              AI Workforce — Mission walkthrough
             </h2>
             <span className="px-2 py-0.5 rounded bg-[#d7ff4f]/15 text-[#d7ff4f] border border-[#d7ff4f]/30 text-[10px] font-mono font-bold">
-              LIVE DEMO
+              EVALUATION
             </span>
           </div>
           <p className="text-xs text-white/50 mt-0.5">
-            One goal. One hard spending cap. 20 mission units execute and deliver under strict human guardrails.
+            One goal. One spending cap. Follow how mission units are coordinated under human guardrails.
+          </p>
+          <p className="text-[11px] text-amber-200/80 mt-1">
+            Evaluation mode: job outputs are examples until a live wallet confirms a receipt.
           </p>
         </div>
 
@@ -2719,7 +2684,7 @@ export function MultiAgentSwarmView({
             }`}
           >
             <ShieldAlert className="w-3.5 h-3.5" />
-            <span>Reality Check (403 vs 200)</span>
+            <span>What gets blocked</span>
           </button>
 
           <button
@@ -2735,10 +2700,10 @@ export function MultiAgentSwarmView({
             }`}
           >
             <Radio className="w-3.5 h-3.5" />
-            <span>Live Token Streaming</span>
+            <span>Payment stream</span>
             <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold ${
               subView === 'stream' ? 'bg-black/25 text-[#08090c]' : 'bg-white/5 text-[#d7ff4f]'
-            }`}>LIVE</span>
+            }`}>FLOW</span>
           </button>
 
           <button
@@ -2754,7 +2719,7 @@ export function MultiAgentSwarmView({
             }`}
           >
             <Terminal className="w-3.5 h-3.5" />
-            <span>MCP Tools Gateway</span>
+            <span>Developer tools</span>
           </button>
         </div>
       </div>
@@ -2763,14 +2728,14 @@ export function MultiAgentSwarmView({
       {subView === 'swarm' && (
         <div className="space-y-6">
           {/* 1. HERO AREA: Mission Objective & Dispatch Panel */}
-          <div className="p-6 sm:p-8 rounded-3xl bg-white/[.03] backdrop-blur-md border border-white/[.08] shadow-sm space-y-6 relative overflow-hidden">
+          <div className="p-5 sm:p-7 rounded-3xl bg-gradient-to-br from-[#d7ff4f]/[0.08] via-white/[.035] to-transparent backdrop-blur-md border border-[#d7ff4f]/25 shadow-[0_22px_70px_rgba(0,0,0,0.26)] space-y-5 relative overflow-hidden">
             
             {/* Top Bar: Eyebrow + Preset Selector */}
             <div className="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-3 border-b border-white/[0.08] pb-4">
               <div className="flex items-center gap-2 shrink-0">
-                <Sparkles className="w-4 h-4 text-[#d7ff4f]" />
+                <span className="w-2 h-2 rounded-full bg-[#d7ff4f] shadow-[0_0_10px_rgba(215,255,79,0.4)]" aria-hidden="true" />
                 <span className="text-[11px] font-mono font-bold tracking-widest text-[#d7ff4f] uppercase">
-                  ONE JOB • ONE BUDGET • ONE FINISHED DELIVERABLE
+                  CHOOSE A JOB • SET A LIMIT • REVIEW THE RESULT
                 </span>
               </div>
 
@@ -2804,7 +2769,7 @@ export function MultiAgentSwarmView({
                       <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold whitespace-nowrap shrink-0 ${
                         isSelected ? 'bg-black/25 text-[#08090c]' : 'bg-white/10 text-zinc-300'
                       }`}>
-                        {preset.budgetEst || '$0.0245'} · {preset.subcontractors.length} Units
+                        {preset.budgetEst || '$0.0245'} · {preset.subcontractors.length} steps
                       </span>
                     </button>
                   );
@@ -2812,7 +2777,7 @@ export function MultiAgentSwarmView({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
               {/* Mission Goal & Sub-info (8 cols) */}
               <div className="lg:col-span-8 space-y-4">
                 <div>
@@ -2820,93 +2785,59 @@ export function MultiAgentSwarmView({
                     <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider bg-[#d7ff4f]/15 text-[#d7ff4f] border border-[#d7ff4f]/30">
                       {selectedPreset.id === 'swarm_media_creative' ? 'SOCIAL AD CAMPAIGN' : selectedPreset.id === 'swarm_arbitrage' ? 'MARKET DEPTH & SPREAD ANALYSIS' : 'ENTERPRISE DUE DILIGENCE'}
                     </span>
-                    <span className="text-xs text-zinc-400 font-mono">
-                      {selectedPreset.subcontractors.length === 20 
-                        ? '1 Lead Agent · 12 Workers · 7 Providers' 
-                        : `${selectedPreset.subcontractors.length} Mission Units`}
-                    </span>
                   </div>
                   <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-[1.08]">
-                    Give your AI a job.<br />
-                    <span className="text-[#d7ff4f]">Give it a budget.</span>
+                     Give an AI agent a job.<br />
+                     <span className="text-[#d7ff4f]">Set the spending limit.</span>
                   </h1>
+                  <div className="mt-3 max-w-4xl border-l-2 border-[#d7ff4f] bg-[#d7ff4f]/[0.05] rounded-r-xl px-4 py-3 text-base sm:text-lg font-semibold font-sans normal-case tracking-normal leading-snug text-white">
+                   <strong className="text-[#d7ff4f]">Example job:</strong> choose a scenario to see one lead agent split the work, control spending, and return the finished result.
+                  </div>
                   <div className="text-xs sm:text-sm text-zinc-300 font-sans leading-relaxed mt-3 max-w-3xl space-y-2">
                     {selectedPreset.id === 'swarm_media_creative' ? (
                       <>
                         <p className="text-white font-medium text-sm sm:text-base leading-snug">
-                          1 Lead Agent coordinates 12 specialized workers and queries trend &amp; media resources from 7 providers under a strict $0.05 budget cap.
+                           This example run uses a $0.05 budget cap so the payment flow is easy to inspect.
                         </p>
                         <p className="text-zinc-400 text-xs sm:text-[13px] leading-relaxed">
-                          You don't manage 20 tools or pay $600/month in SaaS subscriptions. You manage one job — and receive a complete campaign package ready for review for <strong className="text-[#d7ff4f] font-mono">$0.0245</strong>.
+                           The plan estimates <strong className="text-[#d7ff4f] font-mono">$0.0245</strong>. In the connected product, the person sets the budget for the job.
                         </p>
                       </>
                     ) : selectedPreset.id === 'swarm_arbitrage' ? (
                       <>
                         <p className="text-white font-medium text-sm sm:text-base leading-snug">
-                          1 Lead Agent pulls live orderbook depth from 2 exchanges and runs risk simulation in an isolated Python sandbox.
+                            One lead agent compares two example market snapshots and prepares a report.
                         </p>
                         <p className="text-zinc-400 text-xs sm:text-[13px] leading-relaxed">
-                          You set the daily budget. The workforce verifies cross-venue liquidity for <strong className="text-[#d7ff4f] font-mono">$0.0060</strong> without human delay or missed data points.
+                           This example is planned at <strong className="text-[#d7ff4f] font-mono">$0.0060</strong>; the person sets the limit in a real run.
                         </p>
                       </>
                     ) : (
                       <>
                         <p className="text-white font-medium text-sm sm:text-base leading-snug">
-                          1 Lead Agent pulls official corporate filings from 7 registries and coordinates 12 legal &amp; solvency workers into an executive clearance memo.
+                           One lead agent combines supplied records and prepares a review memo.
                         </p>
                         <p className="text-zinc-400 text-xs sm:text-[13px] leading-relaxed">
-                          Zero recurring database retainers. You receive an audited board clearance dossier for <strong className="text-[#d7ff4f] font-mono">$0.0270</strong> under a strict $0.0300 cap.
+                           This example stays under the <strong className="text-[#d7ff4f] font-mono">$0.0300</strong> cap; a real job uses the person’s chosen budget.
                         </p>
                       </>
                     )}
                   </div>
                 </div>
 
-                {/* Benchmark Contrast: SaaS Subscriptions vs Synapse402 on Tempo L1 */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 text-xs font-mono pt-1">
-                  <div className="px-4 py-2.5 rounded-xl bg-white/[0.02] border border-white/10 flex items-center justify-between gap-3 flex-1">
-                    <span className="text-zinc-400">Usage Model:</span>
-                    <span className="text-zinc-200 font-medium">Pay only for resources used in this run</span>
-                  </div>
-                  <div className="px-4 py-2.5 rounded-xl bg-[#d7ff4f]/[0.08] border border-[#d7ff4f]/30 flex items-center justify-between gap-3 flex-1 shadow-[0_0_20px_rgba(215,255,79,0.1)]">
-                    <span className="text-zinc-300">Tempo L1 Settlement:</span>
-                    <span className="text-[#d7ff4f] font-bold whitespace-nowrap">
-                      ${selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD (No recurring subscriptions)
-                    </span>
-                  </div>
-                </div>
-
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-mono text-zinc-300 pt-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-zinc-500 uppercase text-[11px]">Budget Cap:</span>
+                     <span className="text-zinc-500 uppercase text-[11px]">Example budget:</span>
                     <span className="font-bold text-[#d7ff4f]">
                       {selectedPreset.budgetLimit || '$0.0500 USD'}
                     </span>
-                    <span className="text-[10.5px] text-zinc-400">(Zero subscriptions)</span>
+                     <span className="text-[10.5px] text-zinc-400">(set by the person in a real run)</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-zinc-500 uppercase text-[11px]">On-Chain Proof:</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const targetWorker = selectedPreset.subcontractors[0];
-                        if (targetWorker) inspectWorkerCryptoProof(targetWorker);
-                      }}
-                      className="text-zinc-300 hover:text-[#d7ff4f] flex items-center gap-1 font-bold hover:underline cursor-pointer"
-                      title="Inspect Cryptographic Proof for this Swarm"
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                      <span>Inspect Audit Proof</span>
-                    </button>
-                    <a
-                      href="https://explore.tempo.xyz/address/0x3c42E274FAdd8e371fB84f97203CC2F2125c8775"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-zinc-400 hover:text-white flex items-center gap-0.5 text-[10.5px] hover:underline ml-1"
-                      title="View SynapseVault Smart Contract on Tempo L1 Testnet (Chain ID 42431)"
-                    >
-                      <span>(Vault ↗)</span>
-                    </a>
+                     <span className="text-zinc-500 uppercase text-[11px]">Payment:</span>
+                    <span className={`font-bold ${batchTxHash ? 'text-[#d7ff4f]' : 'text-zinc-300'}`}>
+                       {batchTxHash ? 'payment confirmed' : 'evaluation only · no live payment'}
+                    </span>
                   </div>
                 </div>
 
@@ -2917,7 +2848,7 @@ export function MultiAgentSwarmView({
                     value={customDirective}
                     disabled={isExecuting}
                     onChange={(e) => setCustomDirective(e.target.value)}
-                    placeholder="Enter business task for the workforce..."
+                     placeholder="Describe the job the agent should complete..."
                     className="w-full pl-16 pr-3.5 py-2.5 rounded-xl bg-white/[0.04] border border-white/15 focus:border-[#d7ff4f] focus:outline-none text-white text-xs font-sans transition"
                   />
                 </div>
@@ -2929,27 +2860,27 @@ export function MultiAgentSwarmView({
                   id="btn-execute-swarm-batch"
                   onClick={handleRunSwarmBatch}
                   disabled={isExecuting || isEmergencyFrozen}
-                  className="w-full px-6 py-4 rounded-2xl bg-gradient-to-b from-[#d7ff4f] to-[#b8eb1e] hover:from-[#e2ff6b] hover:to-[#c4f228] text-[#08090c] font-black text-sm uppercase tracking-wider flex items-center justify-center gap-3 transition-all shadow-[0_4px_25px_rgba(215,255,79,0.3),inset_0_1px_0_rgba(255,255,255,0.4)] border border-[#d7ff4f] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 cursor-pointer"
+                  className="w-full px-6 py-4 rounded-2xl bg-gradient-to-b from-[#d7ff4f] to-[#b8eb1e] hover:from-[#e2ff6b] hover:to-[#d7ff4f] text-[#08090c] font-black text-sm uppercase tracking-wider flex items-center justify-center gap-3 transition-all shadow-[0_4px_25px_rgba(215,255,79,0.3),inset_0_1px_0_rgba(255,255,255,0.4)] border border-[#d7ff4f] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 cursor-pointer"
                 >
                   {isExecuting ? (
                     <>
                       <RefreshCw className="w-5 h-5 animate-spin text-[#08090c]" />
-                      <span>Building Campaign ({settledWorkerIds.size}/{selectedPreset.subcontractors.length})...</span>
+                         <span>Running job ({settledWorkerIds.size}/{selectedPreset.subcontractors.length})...</span>
                     </>
                   ) : settledWorkerIds.size === selectedPreset.subcontractors.length && settledWorkerIds.size > 0 ? (
                     <>
                       <RefreshCw className="w-5 h-5 text-[#08090c]" />
-                      <span>Re-launch Campaign ↺</span>
+                       <span>Run again ↺</span>
                     </>
                   ) : (
                     <>
                       <Play className="w-5 h-5 fill-current text-[#08090c]" />
                       <span>
                         {selectedPreset.id === 'swarm_media_creative'
-                          ? 'Start Campaign ($0.0245) →'
+                           ? 'Run campaign · $0.0245 →'
                           : selectedPreset.id === 'swarm_arbitrage'
-                          ? 'Execute Flash Arbitrage ($0.0060) →'
-                          : 'Start Mission ($0.0270) →'}
+                           ? 'Run market check · $0.0060 →'
+                           : 'Run due diligence · $0.0270 →'}
                       </span>
                     </>
                   )}
@@ -2964,12 +2895,12 @@ export function MultiAgentSwarmView({
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#d7ff4f] opacity-75" />
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-[#d7ff4f]" />
                         </span>
-                        <span>Settling On-Chain (Tempo L1)</span>
+                        <span>Checking the payment plan</span>
                       </span>
-                      <span className="text-[10px] text-zinc-400 font-sans">&lt;15ms latency</span>
+                      <span className="text-[10px] text-zinc-400 font-sans">processing</span>
                     </div>
                     <div className="flex items-center justify-between text-xs pt-1 border-t border-white/[0.08]">
-                      <span className="text-zinc-400">On-Chain Spend:</span>
+                      <span className="text-zinc-400">Planned spend:</span>
                       <span className="text-white font-bold font-mono">
                         ${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)} USD
                       </span>
@@ -2977,7 +2908,7 @@ export function MultiAgentSwarmView({
                     <div className="flex items-center justify-between text-[10.5px] text-zinc-400">
                       <span>Confirmed Units:</span>
                       <span className="text-[#d7ff4f] font-bold">
-                        {settledWorkerIds.size} / {selectedPreset.subcontractors.length} Units Paid
+                        {settledWorkerIds.size} / {selectedPreset.subcontractors.length} Steps checked
                       </span>
                     </div>
                   </div>
@@ -2986,7 +2917,7 @@ export function MultiAgentSwarmView({
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1.5 text-[11px] font-bold text-[#d7ff4f]">
                         <CheckCircle2 className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                        <span>Settled On-Chain (Tempo L1)</span>
+                        <span>{batchTxHash ? 'Settled On-Chain (Tempo L1)' : 'Completed in evaluation'}</span>
                       </span>
                       <a
                         href={batchTxHash ? `https://explore.tempo.xyz/tx/${batchTxHash}` : undefined}
@@ -2998,15 +2929,9 @@ export function MultiAgentSwarmView({
                       </a>
                     </div>
                     <div className="flex items-center justify-between text-xs pt-1 border-t border-white/[0.08]">
-                      <span className="text-zinc-400">Total Transferred:</span>
+                      <span className="text-zinc-400">{batchTxHash ? 'Total transferred:' : 'Total planned:'}</span>
                       <span className="text-[#d7ff4f] font-bold font-mono">
                         ${selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-[10.5px] text-zinc-400">
-                      <span>Payment Channels:</span>
-                      <span className="text-white font-bold">
-                        {selectedPreset.subcontractors.filter(s => s.costPathUsd > 0).length} / {selectedPreset.subcontractors.filter(s => s.costPathUsd > 0).length} Finalized
                       </span>
                     </div>
                     <button
@@ -3017,14 +2942,14 @@ export function MultiAgentSwarmView({
                           title: selectedPreset.id === 'swarm_media_creative' 
                             ? 'Campaign Launch Dossier & 5 Assets' 
                             : selectedPreset.id === 'swarm_arbitrage'
-                            ? 'Arbitrage Execution Proof & Voucher'
+                            ? 'Market Comparison Report'
                             : 'Board Clearance Dossier & Audit Report',
                           badge: 'MISSION COMPLETE · READY TO DEPLOY',
                           content: selectedPreset.id === 'swarm_media_creative'
-                            ? `EXECUTIVE BRIEF: MULTI-PLATFORM AD CAMPAIGN LAUNCH\nMission: Multi-Platform Organic & Paid Ad Launch Under $0.05 Budget\nStatus: APPROVED & SEALED ON TEMPO L1 (Chain 42431)\nTotal Settle Cost: $0.0245 USD (Saved 51% against $0.0500 policy cap)\n\nKey Deliverables Generated:\n1. 15s Video Storyboard & Timing Spec (Synced 128 BPM audio stem + script cues).\n2. 10 High-CTR Marketing Hooks structured with AIDA value framework.\n3. Visual Concepts & Multi-Platform Cover Specs (9:16 Storyboard Layouts + 1200x628 Banner).\n4. 5-Language Localized Matrix (EN, ES, DE, FR, JA).\n5. Tempo L1 Notary Receipt: Root Batch Hash 0x5747...8538.\n\nSummary:\nZero recurring monthly agency retainers or tool licenses. 19 micro-payments settled on Tempo L1 with $0.00 overdraft.\n* Practical Note: Neural video rendering runs through external GPU providers ($0.50–$2.00). Synapse402 produces the complete validated creative blueprints, copy, and layout parameters under the $0.05 budget.`
+                            ? `EXECUTIVE BRIEF: MULTI-PLATFORM AD CAMPAIGN LAUNCH\nMission: Multi-Platform Organic & Paid Ad Launch Under $0.05 Budget\nStatus: REVIEW READY (ON-CHAIN TRACE DEPENDS ON LIVE WALLET)\nPlanned Cost: $0.0245 under the $0.0500 policy cap\n\nKey Deliverables:\n1. 15s Video Storyboard & Timing Spec.\n2. Marketing hooks and visual concepts.\n3. Multi-platform layout and language variants.\n\nSummary:\nThe evaluation flow coordinates the work and records the planned payment steps. A live wallet is required for a confirmed Tempo L1 receipt.`
                             : selectedPreset.id === 'swarm_arbitrage'
-                            ? `TEMPO L1 ATOMIC EXECUTION VOUCHER:\n\n• Tx Hash: 0x8f2a4b1c9e8d7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a21\n• Block Height: 1,842,914\n• Total Data Spend: $0.0060 USD\n• Gas Paid: 0.000012 TEMPO (<$0.00002 USD)\n• Verified Spread: 0.42% Price Discrepancy across venues\n• Status: ATOMIC SETTLEMENT FINALIZED`
-                            : `EXECUTIVE BOARD CLEARANCE DOSSIER:\n\nTarget Entity: Apex Global Logistics B.V.\nRecommendation: CONTRACT SIGNING APPROVED\nRisk Rating: Grade A (Low Risk Audit)\n\nAudit Trail:\n• 19 independent registry & intelligence calls executed\n• Total Spend: $0.0270 USD on Tempo L1 (under $0.0300 budget cap)\n• Cryptographic Merkle Root Hash: 0x92f8...41e0`
+                            ? `MARKET RISK SUMMARY:\n\n• Planned data cost: $0.0060 USD\n• Example spread: 0.42% price difference across sample venues\n• Status: REVIEW READY${batchTxHash ? ' · ATOMIC SETTLEMENT CONFIRMED' : ' · EVALUATION FLOW'}\n• A live wallet is required for a confirmed Tempo L1 receipt.`
+                            : `EXECUTIVE BOARD CLEARANCE DOSSIER:\n\nTarget Entity: Apex Global Logistics B.V.\nRecommendation: REVIEW RECOMMENDED\nRisk Rating: Grade A (evaluation result)\n\nAudit Trail:\n• 19 registry and intelligence steps planned\n• Planned spend: $0.0270 USD (under the $0.0300 budget cap)\n• Delivery proof is available in this evaluation; a live wallet is required for a Tempo receipt.`
                         });
                       }}
                       className="w-full mt-2 py-2 px-3 rounded-lg bg-[#d7ff4f]/20 hover:bg-[#d7ff4f]/30 border border-[#d7ff4f]/40 text-[#d7ff4f] font-mono text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
@@ -3037,29 +2962,21 @@ export function MultiAgentSwarmView({
                   <div className="p-3 rounded-xl bg-white/[.025] backdrop-blur-md border border-white/10 space-y-1 text-left font-mono">
                     <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#d7ff4f]">
                       <Zap className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                      <span>One Job • One Budget • Zero Subscriptions</span>
+                      <span>What happens</span>
                     </div>
                     <p className="text-[11px] text-zinc-300 font-sans leading-snug">
-                      Pay only for what is used. The workforce gathers data, builds the assets, and delivers the finished result within your spending limit.
+                       The lead agent plans approved steps, checks the limit, and returns the result.
                     </p>
                   </div>
                 )}
 
-                {isEmergencyFrozen ? (
+                {isEmergencyFrozen && (
                   <button
                     onClick={handleUnfreezeSwarm}
                     className="w-full px-3.5 py-2 rounded-xl bg-[#d7ff4f]/20 hover:bg-[#d7ff4f]/30 border border-[#d7ff4f]/40 text-[#d7ff4f] font-semibold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
                   >
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     <span>Resume Operations</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleEmergencyKillSwitch}
-                    className="w-full px-3 py-2 rounded-xl bg-white/[0.02] hover:bg-rose-500/15 border border-white/10 hover:border-rose-500/30 text-zinc-400 hover:text-rose-400 font-medium text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
-                  >
-                    <PowerOff className="w-3.5 h-3.5" />
-                    <span>Emergency Stop</span>
                   </button>
                 )}
               </div>
@@ -3073,9 +2990,9 @@ export function MultiAgentSwarmView({
                   <span className="text-xs font-mono font-bold text-[#d7ff4f]">01</span>
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-white tracking-tight">Agent requests a resource</h4>
+                    <h4 className="text-xs font-bold text-white tracking-tight">1. Agent plans the steps</h4>
                   <p className="text-[11px] text-zinc-400 font-sans mt-0.5 leading-relaxed">
-                    Live market trends, image prompt tokens, voice stems or audience data.
+                     It chooses approved APIs, sites, or other agents for the job.
                   </p>
                 </div>
               </div>
@@ -3086,9 +3003,9 @@ export function MultiAgentSwarmView({
                   <span className="text-xs font-mono font-bold text-[#d7ff4f]">02</span>
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-white tracking-tight">The budget pays micro-cents</h4>
+                    <h4 className="text-xs font-bold text-white tracking-tight">2. Rules check the spend</h4>
                   <p className="text-[11px] text-zinc-400 font-sans mt-0.5 leading-relaxed">
-                    Instant micro-payment approved within hard limit on Tempo L1.
+                     Every step must fit the limit and approved provider list.
                   </p>
                 </div>
               </div>
@@ -3099,36 +3016,20 @@ export function MultiAgentSwarmView({
                   <span className="text-xs font-mono font-bold text-[#d7ff4f]">03</span>
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-white tracking-tight">The work finishes</h4>
+                    <h4 className="text-xs font-bold text-white tracking-tight">3. You review the result</h4>
                   <p className="text-[11px] text-zinc-400 font-sans mt-0.5 leading-relaxed">
-                    Validated assets delivered autonomously with zero subscription overhead.
+                     The finished package comes back to you; a wallet is needed for a live receipt.
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* REAL-WORLD SAFEGUARDS: CALM & PRACTICAL */}
-            <div className="pt-2.5 border-t border-white/[0.06] grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] font-mono">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.02] border border-white/[0.06] text-zinc-300">
-                <ShieldCheck className="w-3.5 h-3.5 text-[#d7ff4f] shrink-0" />
-                <span><strong>Budget Safety Cap:</strong> Hard $0.05 limit enforced by SynapseVault session key policy.</span>
-              </div>
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.02] border border-white/[0.06] text-zinc-300">
-                <Lock className="w-3.5 h-3.5 text-[#d7ff4f] shrink-0" />
-                <span><strong>Fair-Pay Guard:</strong> Budget escrow released upon valid delivery; automatic refund on error.</span>
-              </div>
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.02] border border-white/[0.06] text-zinc-300">
-                <PowerOff className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                <span><strong>Emergency Stop:</strong> Instant human freeze of pending payments in 1 click.</span>
-              </div>
-            </div>
-
             {/* DELIVERABLES PREVIEW BAR */}
-            <div className="pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-2.5 text-xs font-mono">
+            <div className="deliverables-preview-bar pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-2.5 text-xs font-mono">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#d7ff4f]">Finished Deliverables:</span>
               </div>
-              <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-300">
+              <div className="deliverables-strip flex flex-wrap items-center gap-2 text-[11px] text-zinc-300">
                 {selectedPreset.id === 'swarm_media_creative' ? (
                   <>
                     <button
@@ -3138,7 +3039,7 @@ export function MultiAgentSwarmView({
                         setSelectedDeliverablePreview({
                           title: '15s Video Storyboard & Script Specification',
                           badge: 'DELIVERABLE 01 · PRODUCTION BLUEPRINT',
-                          content: `15-SECOND VIDEO TIMELINE & BLUEPRINT SPEC:\n[00:00 - 00:03] HOOK: Visual problem cut showing monthly SaaS burn ($600/mo) vs micro-payments.\n[00:03 - 00:08] CORE: Synapse402 Session Key locking hard $0.05 budget on Tempo L1.\n[00:08 - 00:12] PROOF: 19 micro-payments settling at <15ms latency with zero human friction.\n[00:12 - 00:15] CTA: "Give your AI a budget. Synapse402 on Tempo L1."\n\nSpecs:\n• Target Aspect Ratio: 9:16 Vertical (Reels / TikTok / Shorts)\n• Audio Stem: 128 BPM electronic stem + transcript cues\n• Color Grading: Rec.709 Master Guidelines\n\n* Realistic Note: Dedicated neural video rendering requires external GPU pipelines ($0.50–$2.00). Synapse402 generates the entire validated script, scene graph, and parameters under the $0.05 budget.`
+                          content: `15-SECOND VIDEO TIMELINE & BLUEPRINT SPEC:\n[00:00 - 00:03] HOOK: Visual problem cut showing monthly SaaS burn vs pay-per-request access.\n[00:03 - 00:08] CORE: Synapse402 Session Key enforcing a hard $0.05 budget.\n[00:08 - 00:12] PROOF: 19 payment steps checked before the final package is returned.\n[00:12 - 00:15] CTA: "Give your AI a budget. Let it finish the job."\n\nSpecs:\n• Target Aspect Ratio: 9:16 Vertical (Reels / TikTok / Shorts)\n• Audio Stem: 128 BPM electronic stem + transcript cues\n• Color Grading: Rec.709 Master Guidelines\n\n* Realistic Note: Dedicated neural video rendering requires external GPU pipelines ($0.50–$2.00). Synapse402 generates the validated script, scene graph, and parameters under the $0.05 budget.`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#d7ff4f]/50 hover:bg-white/[0.08] flex items-center gap-1.5 transition cursor-pointer text-left"
@@ -3154,7 +3055,7 @@ export function MultiAgentSwarmView({
                         setSelectedDeliverablePreview({
                           title: '10 Ad Copy Hooks (AIDA Framework)',
                           badge: 'DELIVERABLE 02 · HIGH CONVERSION HOOKS',
-                          content: `10 AD COPY HOOKS FOR HIGH-ENGAGEMENT SOCIAL CHANNELS:\n\n1. "Stop paying $600/month in SaaS subscriptions for tools your team touches once a week."\n2. "What if your AI bot had its own bank card with a strict $0.05 limit?"\n3. "We ran a full competitive audit across 7 registries. Total cost: $0.0245."\n4. "Why SaaS companies hate pay-per-request: they can't charge you for idle seats."\n5. "Autonomous AI is here, but CFOs are terrified of infinite loop billing. Here is the fix."\n6. "1 Lead Agent, 12 workers, 7 data feeds. 14 milliseconds. Settled on Tempo L1."\n7. "Don't give AI an unlimited credit card. Give it a cryptographic session key."\n8. "Every API call signed. Every cent accounted for. Zero overdraft possible."\n9. "The end of monthly subscription bloat: Pay 0.1¢ per request or pay nothing."\n10. "Instant micro-payments on Tempo L1: $0.00002 gas fee. Try doing that on Ethereum."`
+                          content: `10 AD COPY HOOKS FOR HIGH-ENGAGEMENT SOCIAL CHANNELS:\n\n1. "Stop paying $600/month in SaaS subscriptions for tools your team touches once a week."\n2. "What if your AI bot had its own bank card with a strict $0.05 limit?"\n3. "Coordinate a full competitive audit across 7 registries under a $0.05 cap."\n4. "Why SaaS companies hate pay-per-request: they can't charge you for idle seats."\n5. "Autonomous AI is here, but CFOs are terrified of infinite loop billing. Here is the fix."\n6. "1 lead agent, 12 workers, 7 data feeds — one controlled work package."\n7. "Don't give AI an unlimited credit card. Give it a cryptographic session key."\n8. "Every API call signed. Every cent accounted for. Zero overdraft possible."\n9. "The end of monthly subscription bloat: Pay 0.1¢ per request or pay nothing."\n10. "Instant micro-payments on Tempo L1 when a live wallet is connected."`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#d7ff4f]/50 hover:bg-white/[0.08] flex items-center gap-1.5 transition cursor-pointer text-left"
@@ -3201,7 +3102,7 @@ export function MultiAgentSwarmView({
                         setSelectedDeliverablePreview({
                           title: '1-Page Launch Memo & Board Briefing',
                           badge: 'DELIVERABLE 05 · EXECUTIVE MEMO',
-                          content: `EXECUTIVE BRIEF: MULTI-PLATFORM AD CAMPAIGN LAUNCH\nMission: Multi-Platform Organic & Paid Ad Launch Under $0.05 Budget\nStatus: APPROVED & SEALED ON TEMPO L1 (Chain 42431)\nTotal Settle Cost: $0.0245 USD (Saved 51% against $0.0500 policy cap)\n\nKey Deliverables Generated:\n1. 15s Video Storyboard & Neural Narration Prompts.\n2. 10 Ad Hooks structured with AIDA value framework.\n3. Visual Concepts & Multi-Platform Cover Layout Specs.\n4. 5-Language Localized Matrix (EN, ES, DE, FR, JA).\n5. Tempo L1 Notary Receipt: Root Batch Hash 0x5747...8538.\n\n* Practical Note: Neural video rendering runs through external GPU providers ($0.50–$2.00). Synapse402 coordinates the intelligence, copy, and layout architecture under the $0.05 budget.`
+                          content: `EXECUTIVE BRIEF: MULTI-PLATFORM AD CAMPAIGN LAUNCH\nMission: Multi-Platform Organic & Paid Ad Launch Under $0.05 Budget\nStatus: REVIEW READY (ON-CHAIN TRACE DEPENDS ON LIVE WALLET)\nPlanned Cost: $0.0245 under the $0.0500 policy cap\n\nKey Deliverables:\n1. 15s Video Storyboard & Neural Narration Prompts.\n2. Marketing hooks and visual concepts.\n3. Multi-platform layout and language variants.\n\nPractical note: the evaluation flow coordinates the work; a live wallet is required for a confirmed Tempo L1 receipt.`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 hover:bg-[#d7ff4f]/20 hover:border-[#d7ff4f]/60 flex items-center gap-1.5 text-[#d7ff4f] transition cursor-pointer text-left"
@@ -3217,9 +3118,9 @@ export function MultiAgentSwarmView({
                       onClick={() => {
                         soundEngine.playClick();
                         setSelectedDeliverablePreview({
-                          title: 'Real-Time Orderbook Depth Matrix',
-                          badge: 'DELIVERABLE 01 · L2 DATA FEED',
-                          content: `L2 ORDERBOOK DEPTH MATRIX (CROSS-EXCHANGE):\n\n• Venue A (Uniswap v3 TEMPO/USD pool): Depth $420,000 within 0.15% band.\n• Venue B (Curve TEMPO/USD pool): Depth $380,000 within 0.15% band.\n• Spread Detected: +0.48% gross spread across pools.\n• Micro-Payment Fee: $0.0010 paid via Tempo L1 session key.\n• Net Profit Potential: +$14.20 on $3,000 flash route.`
+                          title: 'Sample Orderbook Depth Matrix',
+                          badge: 'DELIVERABLE 01 · EVALUATION INPUT',
+                          content: `SAMPLE L2 ORDERBOOK DEPTH MATRIX (CROSS-EXCHANGE):\n\n• Venue A (Uniswap v3 TEMPO/USD pool): Example depth $420,000 within 0.15% band.\n• Venue B (Curve TEMPO/USD pool): Example depth $380,000 within 0.15% band.\n• Example spread: +0.48% across sample pools.\n• Planned evaluation cost: $0.0010 (requires a live wallet for settlement).\n• This screen demonstrates the report format; it is not a live trading signal.`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#d7ff4f]/50 hover:bg-white/[0.08] flex items-center gap-1.5 transition cursor-pointer text-left"
@@ -3235,7 +3136,7 @@ export function MultiAgentSwarmView({
                         setSelectedDeliverablePreview({
                           title: 'Market Momentum & Risk Score',
                           badge: 'DELIVERABLE 02 · QUANT MODEL',
-                          content: `MOMENTUM & SLIPPAGE TOLERANCE REPORT:\n\n• Momentum Vector: +0.84 (Strong Bullish Continuation)\n• Volatility Skew (15m): 1.12 standard deviations\n• Max Allowed Slippage: 0.15%\n• Execution Safe Window: 42ms\n• Settled Cost: $0.0020 USD on Tempo L1`
+                          content: `MOMENTUM & SLIPPAGE TOLERANCE REPORT:\n\n• Momentum Vector: +0.84 (Strong Bullish Continuation)\n• Volatility Skew (15m): 1.12 standard deviations\n• Max Allowed Slippage: 0.15%\n• Execution Safe Window: 42ms\n• Planned data cost: $0.0020 USD (chain receipt requires a live wallet)`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#d7ff4f]/50 hover:bg-white/[0.08] flex items-center gap-1.5 transition cursor-pointer text-left"
@@ -3266,7 +3167,7 @@ export function MultiAgentSwarmView({
                         setSelectedDeliverablePreview({
                           title: 'AML & Sanctions Screening Digest',
                           badge: 'DELIVERABLE 04 · COMPLIANCE CLEARANCE',
-                          content: `SANCTIONS & FRAUD SCREENING DIGEST:\n\n• Target Pools: 0x3c42...8775 and 0x7f4a...92e1\n• OFAC / EU Sanctions Hits: 0 (CLEAN)\n• Tornado Cash / Mixer Intersections: 0.00%\n• Counterparty Risk Grade: AAA (Fully Cleared)\n• Verified via Tempo L1 Notary Voucher`
+                          content: `SANCTIONS & FRAUD SCREENING DIGEST:\n\n• Target: configured counterparty records\n• OFAC / EU Sanctions Hits: 0 (evaluation result)\n• Mixer intersection check: no match in the sample response\n• Counterparty Risk Grade: evaluation result\n• Chain proof: available only after a live wallet confirms the run`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#d7ff4f]/50 hover:bg-white/[0.08] flex items-center gap-1.5 transition cursor-pointer text-left"
@@ -3279,15 +3180,15 @@ export function MultiAgentSwarmView({
                       onClick={() => {
                         soundEngine.playClick();
                         setSelectedDeliverablePreview({
-                          title: 'Execution Voucher & Settlement Proof',
-                          badge: 'DELIVERABLE 05 · TEMPO L1 RECEIPT',
-                          content: `TEMPO L1 ATOMIC EXECUTION VOUCHER:\n\n• Tx Hash: 0x8f2a4b1c9e8d7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a21\n• Block Height: 1,842,914\n• Total Spend: $0.0060 USD\n• Gas Paid: 0.000012 TEMPO (<$0.00002 USD)\n• Status: ATOMIC SETTLEMENT FINALIZED`
+                          title: 'Evaluation Payment Record',
+                          badge: 'DELIVERABLE 05 · EVALUATION RECORD',
+                          content: `MARKET COMPARISON PAYMENT RECORD:\n\n• Planned provider spend: $0.0060 USD\n• Status: ${batchTxHash ? 'SETTLEMENT CONFIRMED' : 'EVALUATION FLOW'}\n• No trade was submitted. A live wallet is required for a confirmed Tempo L1 receipt.`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 hover:bg-[#d7ff4f]/20 hover:border-[#d7ff4f]/60 flex items-center gap-1.5 text-[#d7ff4f] transition cursor-pointer text-left"
                     >
                       <FileText className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                      <span className="font-bold">Execution Voucher</span>
+                      <span className="font-bold">Evaluation Record</span>
                     </button>
                   </>
                 ) : (
@@ -3297,48 +3198,48 @@ export function MultiAgentSwarmView({
                       onClick={() => {
                         soundEngine.playClick();
                         setSelectedDeliverablePreview({
-                          title: 'Official Entity Legal Verification',
-                          badge: 'DELIVERABLE 01 · REGISTRY VERIFIED',
-                          content: `GLEIF & REGISTRY VERIFICATION CERTIFICATE:\n\n• Entity Name: Apex Global Logistics B.V.\n• LEI Code: 5493001KJTIIGC8Y1R12 (ACTIVE)\n• Registration Authority: Netherlands Chamber of Commerce (KvK 84920194)\n• Headquarters: Keizersgracht 421, Amsterdam\n• Ultimate Beneficial Owner (UBO): Clean hierarchy traced`
+                          title: 'Example Entity Record',
+                          badge: 'DELIVERABLE 01 · EXAMPLE INPUT',
+                          content: `ENTITY RECORD EXAMPLE:\n\n• Entity Name: Apex Global Logistics B.V.\n• Registry identifier: 5493001KJTIIGC8Y1R12\n• Source: supplied evaluation snapshot\n• Purpose: show what a paid provider can return\n• Live verification: not run in this demo`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#d7ff4f]/50 hover:bg-white/[0.08] flex items-center gap-1.5 transition cursor-pointer text-left"
                     >
                       <ShieldCheck className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                      <span className="font-semibold text-white">Entity Verified</span>
-                      <span className="text-zinc-500">(LEI)</span>
+                      <span className="font-semibold text-white">Example Entity Record</span>
+                      <span className="text-zinc-500">(sample)</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => {
                         soundEngine.playClick();
                         setSelectedDeliverablePreview({
-                          title: 'Audited Financial Statements & Solvency',
-                          badge: 'DELIVERABLE 02 · SEC / FILINGS AUDIT',
-                          content: `AUDITED 10-K & BALANCE SHEET SUMMARY:\n\n• Cash & Equivalents: +$12,450,000 USD (Confirmed)\n• Total Debt / Equity Ratio: 0.42 (Healthy conservative range)\n• Working Capital: +$8.2M USD\n• Auditor Opinion: Unqualified Clean Opinion (Big 4 Audit Firm)\n• Insolvency Risk: <0.01%`
+                          title: 'Example Financial Snapshot',
+                          badge: 'DELIVERABLE 02 · EXAMPLE INPUT',
+                          content: `FINANCIAL SNAPSHOT EXAMPLE:\n\n• Cash & Equivalents: +$12,450,000 USD\n• Total Debt / Equity Ratio: 0.42\n• Working Capital: +$8.2M USD\n• Source: supplied evaluation snapshot\n• Live audit: not run in this demo`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#d7ff4f]/50 hover:bg-white/[0.08] flex items-center gap-1.5 transition cursor-pointer text-left"
                     >
                       <DollarSign className="w-3.5 h-3.5 text-zinc-400" />
                       <span className="font-semibold text-white">+$12.4M Cash</span>
-                      <span className="text-zinc-500">(Audited)</span>
+                      <span className="text-zinc-500">(sample)</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => {
                         soundEngine.playClick();
                         setSelectedDeliverablePreview({
-                          title: 'Global Sanctions & Adverse Media Screener',
-                          badge: 'DELIVERABLE 03 · WATCHLIST CLEARANCE',
-                          content: `GLOBAL WATCHLIST & SANCTIONS CLEARANCE:\n\n• OFAC SDN List: 0 Hits (CLEAN)\n• EU Consolidated Financial Sanctions: 0 Hits (CLEAN)\n• UK HMT Sanctions: 0 Hits (CLEAN)\n• Adverse Media Index: 0 negative news articles or regulatory sanctions`
+                          title: 'Example Watchlist Snapshot',
+                          badge: 'DELIVERABLE 03 · EXAMPLE INPUT',
+                          content: `WATCHLIST EXAMPLE:\n\n• OFAC SDN List: sample result\n• EU Consolidated Financial Sanctions: sample result\n• UK HMT Sanctions: sample result\n• Source: supplied evaluation snapshot\n• Live screening: not run in this demo`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#d7ff4f]/50 hover:bg-white/[0.08] flex items-center gap-1.5 transition cursor-pointer text-left"
                     >
                       <Lock className="w-3.5 h-3.5 text-zinc-400" />
-                      <span className="font-semibold text-white">0 Sanctions Hits</span>
-                      <span className="text-zinc-500">(Clean)</span>
+                      <span className="font-semibold text-white">Example Watchlist</span>
+                      <span className="text-zinc-500">(sample)</span>
                     </button>
                     <button
                       type="button"
@@ -3363,7 +3264,7 @@ export function MultiAgentSwarmView({
                         setSelectedDeliverablePreview({
                           title: '1-Page Board Clearance Dossier',
                           badge: 'DELIVERABLE 05 · BOARD CLEARANCE',
-                          content: `EXECUTIVE BOARD CLEARANCE DOSSIER:\n\nTarget Entity: Apex Global Logistics B.V.\nRecommendation: CONTRACT SIGNING APPROVED\nRisk Rating: Grade A (Low Risk / 94/100 Composite Score)\n\nAudit Trail:\n• 19 independent registry & intelligence calls executed\n• Total Spend: $0.0270 USD on Tempo L1 (under $0.0300 budget cap)\n• Cryptographic Merkle Root Hash: 0x92f8...41e0`
+                          content: `EXECUTIVE BOARD CLEARANCE DOSSIER:\n\nTarget Entity: Apex Global Logistics B.V.\nRecommendation: REVIEW RECOMMENDED\nRisk Rating: Grade A (Low Risk / 94/100 Composite Score)\n\nAudit Trail:\n• 19 independent registry & intelligence calls planned\n• Planned spend: $0.0270 USD under the $0.0300 budget cap\n• Cryptographic proof is produced only for a confirmed live run`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 hover:bg-[#d7ff4f]/20 hover:border-[#d7ff4f]/60 flex items-center gap-1.5 text-[#d7ff4f] transition cursor-pointer text-left"
@@ -3401,16 +3302,16 @@ export function MultiAgentSwarmView({
                 </div>
                 <div className="flex items-center gap-2.5 text-[11px] text-zinc-300 font-mono">
                   <span className="text-zinc-400">Status:</span>
-                  <span className="text-[#d7ff4f] font-bold">
+                        <span className="text-[#d7ff4f] font-bold">
                     {settledWorkerIds.size === selectedPreset.subcontractors.length && settledWorkerIds.size > 0
-                      ? `${selectedPreset.subcontractors.filter(s => s.costPathUsd > 0).length} Payments Settled On-Chain`
+                      ? (batchTxHash ? `${selectedPreset.subcontractors.filter(s => s.costPathUsd > 0).length} payments confirmed on-chain` : `${selectedPreset.subcontractors.filter(s => s.costPathUsd > 0).length} payment steps completed in evaluation`)
                       : isExecuting
-                      ? `${settledWorkerIds.size} Units Settled...`
+                      ? `${settledWorkerIds.size} payment steps completed...`
                       : 'Standby'}
                   </span>
                   <span className="text-zinc-600">•</span>
                   <span className="text-white">
-                    Spent: <strong className="text-[#d7ff4f] font-mono">${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)}</strong> USD
+                    {batchTxHash ? 'Spent' : 'Planned'}: <strong className="text-[#d7ff4f] font-mono">${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)}</strong> USD
                   </span>
                 </div>
               </div>
@@ -3455,13 +3356,13 @@ export function MultiAgentSwarmView({
                           selectedPreset.id === 'swarm_media_creative'
                             ? 'Lead Agent: Planning viral ad campaign and delegating creative tasks...'
                             : selectedPreset.id === 'swarm_arbitrage'
-                            ? 'Lead Agent: Planning flash arbitrage and allocating feed queries...'
+                            ? 'Lead Agent: Planning market comparison and allocating feed queries...'
                             : 'Lead Agent: Planning supplier review and delegating tasks...'
                         ) : activeStageNum === 4 ? (
                           selectedPreset.id === 'swarm_media_creative'
                             ? 'Lead Agent: Packaging ad creatives, videos & 1-page launch memo...'
                             : selectedPreset.id === 'swarm_arbitrage'
-                            ? 'Lead Agent: Verifying execution proof and settlement voucher...'
+                            ? 'Lead Agent: Verifying the evaluation record...'
                             : 'Lead Agent: Compiling deliverables into final clearance memo...'
                         ) : (() => {
                           const activeNode = selectedPreset.subcontractors.find(s => workerLiveStates[s.id]?.status === 'REQUESTING' || workerLiveStates[s.id]?.status === 'PAYING');
@@ -3481,15 +3382,15 @@ export function MultiAgentSwarmView({
                       ) : settledWorkerIds.size === selectedPreset.subcontractors.length && settledWorkerIds.size > 0 ? (
                         selectedPreset.id === 'swarm_media_creative' ? (
                           <span>
-                            Campaign <strong className="text-white">"Multi-Platform Ad Creative Package"</strong> READY • Spend: <strong className="text-white">$0.0245 USD</strong> (19 Payments Settled on Tempo L1)
+                            Campaign <strong className="text-white">"Multi-Platform Ad Creative Package"</strong> {batchTxHash ? 'READY' : 'PLAN READY'} • {batchTxHash ? 'Spent' : 'Planned'}: <strong className="text-white">$0.0245 USD</strong> ({batchTxHash ? '19 payments settled on Tempo L1' : '19 payment steps completed in evaluation'})
                           </span>
                         ) : selectedPreset.id === 'swarm_arbitrage' ? (
                           <span>
-                            Liquidity Audit <strong className="text-white">COMPLETE</strong> • Verified Spread: <strong className="text-white">0.42% Discrepancy</strong> (Data Cost: $0.0060 USD)
+                            Liquidity Audit <strong className="text-white">{batchTxHash ? 'COMPLETE' : 'REVIEW READY'}</strong> • {batchTxHash ? 'Verified spread' : 'Sample spread'}: <strong className="text-white">0.42% Discrepancy</strong> (Data Cost: $0.0060 USD)
                           </span>
                         ) : (
                           <span>
-                            Supplier <strong className="text-white">"Apex Foundry Ltd"</strong> APPROVED • Safety Score: <strong className="text-white">Grade A (Low Risk)</strong>
+                            Supplier <strong className="text-white">"Apex Foundry Ltd"</strong> REVIEW READY • Sample score: <strong className="text-white">Grade A (Low Risk)</strong>
                           </span>
                         )
                       ) : (
@@ -3502,7 +3403,7 @@ export function MultiAgentSwarmView({
                 {/* Spent & Budget Indicator */}
                 <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 text-xs font-mono">
                   <span className="px-3 py-1 rounded-lg bg-black/40 border border-white/10 text-zinc-300">
-                    Spent: <strong className="text-[#d7ff4f]">${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)}</strong> / {selectedPreset.id === 'swarm_media_creative' ? '$0.050 USD' : selectedPreset.id === 'swarm_arbitrage' ? '$0.010 USD' : '$0.030 USD'}
+                    {batchTxHash ? 'Spent' : 'Planned'}: <strong className="text-[#d7ff4f]">${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)}</strong> / {selectedPreset.id === 'swarm_media_creative' ? '$0.050 USD' : selectedPreset.id === 'swarm_arbitrage' ? '$0.010 USD' : '$0.030 USD'}
                   </span>
                 </div>
               </div>
@@ -3603,9 +3504,9 @@ export function MultiAgentSwarmView({
                   {
                     stageNum: 1,
                     title: '01 — GATHER TRENDS & MEDIA FEEDS',
-                    subtitle: '7 Paid Market Data & Media Feeds ($0.0100) · Scans live trends, visual assets & audio',
-                    flowText: '7 trend & media feeds ingested ($0.0100) ➔ Relayed to 5 Creative Specialists',
-                    summaryText: 'TikTok Radar Locked · Twitter Angles Extracted · Competitor Ads Scanned · Visual Assets Built · Studio Voice Mastered · 128 BPM Beat Synced · Audience Mapped',
+                    subtitle: '7 example provider steps ($0.0100) · Uses sample trend, visual and audio inputs',
+                    flowText: '7 provider steps prepared ($0.0100) ➔ Relayed to 5 Creative Specialists',
+                    summaryText: 'Sample trend inputs reviewed · Ad angles drafted · Visual assets prepared · Voice and music examples aligned · Audience notes mapped',
                   },
                   {
                     stageNum: 2,
@@ -3619,29 +3520,29 @@ export function MultiAgentSwarmView({
                     title: '03 — PACKAGE, LOCALIZE & SEAL',
                     subtitle: '7 Packaging, Localization & Tempo L1 Seal Units ($0.0070) · Adapts 4 platforms & translates 5 languages',
                     flowText: 'Campaign package assembled ($0.0070) ➔ Signed ad deployment package delivered',
-                    summaryText: '4 Native Ratios Formatted · 5 Languages Localized · 3 Campaign Covers · Full Asset Bundle · 1-Page Memo Ready · $0.0245 Spent · Notarized on Tempo L1',
+                    summaryText: '4 Native Ratios Formatted · 5 Languages Localized · 3 Campaign Covers · Full Asset Bundle · 1-Page Memo Ready · $0.0245 Planned',
                   },
                 ] : [
                   {
                     stageNum: 1,
                     title: '01 — FIND THE FACTS',
-                    subtitle: '7 Paid Official Registries ($0.0120) · Ingests official filings, credit & sanctions data',
-                    flowText: '7 official records verified ($0.0120) ➔ Relayed to 5 AI Risk Specialists',
-                    summaryText: 'Active Entity Standing · Audited Financials Clean · Owners Traced · Credit 88/100 · 0 Lawsuits · 0 Sanctions · Clean Reputation',
+                    subtitle: '7 example registry steps ($0.0120) · Shows how filings, credit and sanctions checks fit together',
+                    flowText: '7 registry steps prepared ($0.0120) ➔ Relayed to 5 AI Risk Specialists',
+                    summaryText: 'Registry snapshot · Filing snapshot · Ownership summary · Credit example · Legal and watchlist examples',
                   },
                   {
                     stageNum: 2,
                     title: '02 — CHECK THE RISK',
                     subtitle: '5 Specialist AI Analysts ($0.0080) · Audits solvency, debt leverage & contract clauses',
-                    flowText: 'Solvency & contract risks verified ($0.0080) ➔ Relayed to Decision Specialists',
-                    summaryText: 'Parent + 2 Branches · Cash 2.4x & Low Debt · Trade Cleared · 2x Liability Cap · Solvency Safe (Score: 4.12)',
+                    flowText: 'Example risk calculations prepared ($0.0080) ➔ Relayed to decision specialists',
+                    summaryText: 'Structure example · Cash and debt examples · Trade rules example · Contract terms example · Stress-test example',
                   },
                   {
                     stageNum: 3,
                     title: '03 — MAKE THE DECISION',
-                    subtitle: '7 Synthesis Workers & Tempo L1 Seal ($0.0070) · Compiles 1-page memo & signs on Tempo L1',
-                    flowText: 'Clearance memo compiled ($0.0070) ➔ Signed contract clearance delivered',
-                    summaryText: '7/7 Records Match · Corporate Law Met · Safety Score: 94/100 · Cryptographic Seal · Complete Dossier · 1-Page Memo Ready',
+                    subtitle: '7 synthesis workers & optional payment record ($0.0070) · Compiles a 1-page review memo',
+                    flowText: 'Review memo compiled ($0.0070) ➔ Evidence pack returned to the human',
+                    summaryText: 'Inputs compared · Rules summarized · Review score calculated · Evidence pack · 1-page memo ready',
                   },
                 ];
 
@@ -3862,7 +3763,9 @@ export function MultiAgentSwarmView({
                                     isSettled ? 'text-emerald-300 font-medium' : isBusy ? 'text-[#d7ff4f]' : 'text-zinc-300'
                                   }`}>
                                     {isSettled
-                                      ? (sub.verifiedBadge || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview)
+                                       ? (batchTxHash
+                                         ? (sub.verifiedBadge || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview)
+                                         : `Prepared: ${sub.deliverablePreview}`)
                                       : isBusy
                                       ? (liveState?.displayNote || sub.workingAction)
                                       : (NODE_HUMAN_JOBS[sub.id] || sub.deliverablePreview)}
@@ -3885,10 +3788,12 @@ export function MultiAgentSwarmView({
                                     <div className="flex items-center justify-between w-full gap-1">
                                       <span className="text-zinc-300 flex items-center gap-1 shrink-0 font-semibold">
                                         <CheckCircle2 className="w-2.5 h-2.5 text-[#d7ff4f]" />
-                                        <span>Delivered</span>
+                                         <span>{batchTxHash ? 'Delivered' : 'Prepared'}</span>
                                       </span>
                                       <span className="px-1.5 py-0.2 rounded text-[8.5px] font-mono font-bold bg-[#d7ff4f]/15 text-[#d7ff4f] border border-[#d7ff4f]/30 truncate max-w-[140px]" title={sub.verifiedBadge || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}>
-                                        {sub.verifiedBadge || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}
+                                        {batchTxHash
+                                          ? (sub.verifiedBadge || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview)
+                                          : `Sample output · ${sub.deliverablePreview}`}
                                       </span>
                                     </div>
                                   ) : isPending ? (
@@ -3938,7 +3843,7 @@ export function MultiAgentSwarmView({
                     {/* 0. PRIMARY ENTERPRISE SAAS WORKFLOW (CLEAN 3-STAGE B2B BUSINESS BOARD) */}
                     {swarmViewMode === 'saas' ? (
                       <div className="space-y-6">
-                        <div className="rounded-2xl bg-[#040507] border border-white/[0.05] p-5 sm:p-7 shadow-2xl space-y-6">
+                        <div className="rounded-2xl bg-white/[.025] border border-white/[0.09] p-5 sm:p-7 shadow-sm space-y-6">
                           
                           {/* 1. TOP SUMMARY PILL BAR */}
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono pb-3 border-b border-white/[0.06]">
@@ -3969,7 +3874,7 @@ export function MultiAgentSwarmView({
 
                           {/* 2. LEAD AGENT CARD (TOP CENTER) */}
                           <div className="flex justify-center pt-1">
-                            <div className={`w-full max-w-xl p-4 sm:p-5 rounded-2xl bg-[#08090c] border shadow-sm flex items-center justify-between gap-3 relative z-10 transition-all duration-300 ${
+                            <div className={`w-full max-w-xl p-4 sm:p-5 rounded-2xl bg-white/[.04] border shadow-sm flex items-center justify-between gap-3 relative z-10 transition-all duration-300 ${
                               isExecuting
                                 ? 'border-[#d7ff4f]/40 shadow-[0_0_30px_rgba(215,255,79,0.2)] ring-1 ring-[#d7ff4f]/30'
                                 : 'border-white/[0.06] hover:border-white/12'
@@ -3997,7 +3902,7 @@ export function MultiAgentSwarmView({
                                     )}
                                   </span>
                                   <h3 className="text-base font-bold text-white truncate">
-                                    {selectedPreset.id === 'swarm_media_creative' ? 'Campaign Director' : selectedPreset.id === 'swarm_arbitrage' ? 'Trading Desk Orchestrator' : 'Lead Mission Coordinator'}
+                                    {selectedPreset.id === 'swarm_media_creative' ? 'Campaign Director' : selectedPreset.id === 'swarm_arbitrage' ? 'Market Review Orchestrator' : 'Lead Mission Coordinator'}
                                   </h3>
                                   <p className="text-[11px] text-zinc-400 truncate">
                                     {selectedPreset.id === 'swarm_media_creative' 
@@ -4044,7 +3949,7 @@ export function MultiAgentSwarmView({
 
                           {/* DISPATCH FLOW CONNECTOR TO 3 PIPELINE STAGES */}
                           <div className="flex items-center justify-center my-3 relative z-0">
-                            <div className={`flex items-center gap-3 px-4 py-1.5 rounded-full bg-[#08090c] border shadow-sm text-[11px] font-mono transition-all duration-300 ${
+                            <div className={`flex items-center gap-3 px-4 py-1.5 rounded-full bg-white/[.035] border shadow-sm text-[11px] font-mono transition-all duration-300 ${
                               isExecuting ? 'border-[#d7ff4f]/40 ring-1 ring-[#d7ff4f]/20' : 'border-white/[0.06]'
                             }`}>
                               <div className="flex items-center gap-2">
@@ -4079,7 +3984,7 @@ export function MultiAgentSwarmView({
                               <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                                 
                                 {/* COLUMN 1: PHASE 01 · EXTERNAL PROVIDERS */}
-                                <div className={`rounded-2xl bg-[#07080c] border p-4 sm:p-5 flex flex-col justify-between space-y-4 shadow-xl transition-all duration-500 ${
+                                <div className={`rounded-2xl bg-white/[.025] border p-4 sm:p-5 flex flex-col justify-between space-y-4 shadow-sm transition-all duration-500 ${
                                   isExecuting && activeStageNum === 1
                                     ? 'border-[#d7ff4f]/50 shadow-[0_0_30px_rgba(215,255,79,0.15)] ring-1 ring-[#d7ff4f]/30 animate-active-provider'
                                     : 'border-white/[0.06] hover:border-white/10'
@@ -4091,10 +3996,10 @@ export function MultiAgentSwarmView({
                                         <span>01 · GET THE RESOURCES</span>
                                       </div>
                                       <h4 className="text-sm font-bold text-white">
-                                        {selectedPreset.id === 'swarm_media_creative' ? '7 Data Providers' : selectedPreset.id === 'swarm_arbitrage' ? '2 Live Market Feeds' : '7 Official Data Feeds'}
+                                        {selectedPreset.id === 'swarm_media_creative' ? '7 Example Media Inputs' : selectedPreset.id === 'swarm_arbitrage' ? '2 Example Market Inputs' : '7 Example Registry Inputs'}
                                       </h4>
                                       <p className="text-[11px] text-zinc-400 mt-0.5">
-                                        {selectedPreset.id === 'swarm_media_creative' ? '7 providers supply data and media services' : selectedPreset.id === 'swarm_arbitrage' ? '2 feeds supply real-time orderbook depth and volatility skew' : '7 official registries supply entity, legal, and financial data'}
+                                        {selectedPreset.id === 'swarm_media_creative' ? '7 providers supply data and media services' : selectedPreset.id === 'swarm_arbitrage' ? '2 sample feeds provide market-shaped inputs for the evaluation' : '7 example registry inputs cover entity, legal, and financial checks'}
                                       </p>
                                     </div>
 
@@ -4113,7 +4018,7 @@ export function MultiAgentSwarmView({
                                                 ? 'bg-[#d7ff4f]/[0.08] border-[#d7ff4f] ring-2 ring-[#d7ff4f]/30 shadow-[0_0_22px_rgba(215,255,79,0.3)] animate-active-provider scale-[1.015]'
                                                 : isSettled
                                                 ? 'bg-[#d7ff4f]/[0.035] border-[#d7ff4f]/30 hover:border-[#d7ff4f]/50 animate-settled'
-                                                : 'bg-[#040507] border-white/[0.05] hover:bg-[#090b10] hover:border-white/10'
+                                                : 'bg-white/[.018] border-white/[0.08] hover:bg-white/[.035] hover:border-white/15'
                                             }`}
                                           >
                                             <div className="flex items-center justify-between gap-2.5">
@@ -4130,7 +4035,7 @@ export function MultiAgentSwarmView({
                                                 <div className="min-w-0">
                                                   <span className="font-bold text-white block truncate text-[11.5px]">{sub.shortName || sub.role}</span>
                                                   <span className="text-[10px] text-zinc-400 block truncate">
-                                                    {isSettled ? `✓ ${SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}` : sub.providerLabel}
+                                                    {isSettled ? (batchTxHash ? `✓ ${SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}` : `Sample output · ${sub.deliverablePreview}`) : sub.providerLabel}
                                                   </span>
                                                 </div>
                                               </div>
@@ -4138,7 +4043,7 @@ export function MultiAgentSwarmView({
                                               <div className="shrink-0 text-right">
                                                 {isSettled ? (
                                                   <span className="px-2 py-0.5 rounded text-[9.5px] font-mono font-bold bg-[#d7ff4f]/15 text-[#d7ff4f] border border-[#d7ff4f]/30 flex items-center gap-1 shadow-[0_0_10px_rgba(215,255,79,0.15)]">
-                                                    <span>PAID ${sub.costPathUsd.toFixed(4)}</span>
+                                                    <span>{batchTxHash ? 'PAID' : 'STEP DONE'} ${sub.costPathUsd.toFixed(4)}</span>
                                                     <Check className="w-3 h-3 text-[#d7ff4f]" />
                                                   </span>
                                                 ) : isBusy ? (
@@ -4163,15 +4068,15 @@ export function MultiAgentSwarmView({
                                               <div className="mt-1 pt-1.5 border-t border-white/[0.08] flex items-center justify-between text-[9.5px] font-mono">
                                                 <div className="flex items-center gap-1 text-zinc-400 truncate">
                                                   <span className="text-zinc-500">To:</span>
-                                                  <span className="text-zinc-300 font-medium">{workerAddr.slice(0, 6)}...{workerAddr.slice(-4)}</span>
+                                                  <span className="text-zinc-300 font-medium">{workerAddr ? `${workerAddr.slice(0, 6)}...${workerAddr.slice(-4)}` : 'evaluation session key'}</span>
                                                   <span className="text-zinc-600">·</span>
                                                   <span className="text-zinc-500">Auth:</span>
                                                   <span className="text-zinc-300">Payment trace</span>
                                                 </div>
                                                 <span className="text-[#d7ff4f] font-semibold flex items-center gap-1 shrink-0">
                                                   <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f] animate-ping" />
-                                                  <span>Tempo L1</span>
-                                                  <span className="text-zinc-400">(awaiting confirmed trace)</span>
+                                                  <span>{batchTxHash ? 'Tempo L1' : 'Evaluation'}</span>
+                                                  <span className="text-zinc-400">{batchTxHash ? '(trace confirmed)' : '(no chain receipt)'}</span>
                                                 </span>
                                               </div>
                                             )}
@@ -4184,13 +4089,13 @@ export function MultiAgentSwarmView({
                                   <div className="pt-2.5 border-t border-white/[0.08] text-[10.5px] font-mono text-zinc-400 flex items-center justify-between">
                                     <span>{phase1Subs.length} {phase1Subs.length === 1 ? 'provider' : 'providers'}</span>
                                     <span className={`font-bold ${phase1Settled ? 'text-[#d7ff4f]' : 'text-zinc-500'}`}>
-                                      {phase1Settled ? '✓ Delivered' : 'Standby'}
+                                      {phase1Settled ? (batchTxHash ? '✓ Delivered' : '✓ Prepared') : 'Standby'}
                                     </span>
                                   </div>
                                 </div>
 
                                 {/* COLUMN 2: PHASE 02 · SPECIALIST UNITS */}
-                                <div className={`rounded-2xl bg-[#07080c] border p-4 sm:p-5 flex flex-col justify-between space-y-4 shadow-xl transition-all duration-500 ${
+                                <div className={`rounded-2xl bg-white/[.025] border p-4 sm:p-5 flex flex-col justify-between space-y-4 shadow-sm transition-all duration-500 ${
                                   isExecuting && activeStageNum === 2
                                     ? 'border-[#d7ff4f]/50 shadow-[0_0_30px_rgba(215,255,79,0.15)] ring-1 ring-[#d7ff4f]/30 animate-active-specialist'
                                     : 'border-white/[0.06] hover:border-white/10'
@@ -4205,7 +4110,7 @@ export function MultiAgentSwarmView({
                                         {selectedPreset.id === 'swarm_media_creative' ? '5 Creative Workers' : selectedPreset.id === 'swarm_arbitrage' ? '1 Prediction Model' : '5 Risk & Analysis Workers'}
                                       </h4>
                                       <p className="text-[11px] text-zinc-400 mt-0.5">
-                                        {selectedPreset.id === 'swarm_media_creative' ? '5 workers turn inputs into copy, visuals, video and checks' : selectedPreset.id === 'swarm_arbitrage' ? '1 worker calculates momentum and execution probability' : '5 workers analyze financial solvency, ownership and court records'}
+                                        {selectedPreset.id === 'swarm_media_creative' ? '5 workers turn inputs into copy, visuals, video and checks' : selectedPreset.id === 'swarm_arbitrage' ? '1 worker calculates momentum and risk estimate' : '5 workers analyze financial solvency, ownership and court records'}
                                       </p>
                                     </div>
 
@@ -4224,7 +4129,7 @@ export function MultiAgentSwarmView({
                                                 ? 'bg-[#d7ff4f]/[0.08] border-[#d7ff4f] ring-2 ring-[#d7ff4f]/30 shadow-[0_0_22px_rgba(215,255,79,0.3)] animate-active-specialist scale-[1.015]'
                                                 : isSettled
                                                 ? 'bg-[#d7ff4f]/[0.035] border-[#d7ff4f]/30 hover:border-[#d7ff4f]/50 animate-settled'
-                                                : 'bg-[#040507] border-white/[0.05] hover:bg-[#090b10] hover:border-white/10'
+                                                : 'bg-white/[.018] border-white/[0.08] hover:bg-white/[.035] hover:border-white/15'
                                             }`}
                                           >
                                             <div className="flex items-center justify-between gap-2.5">
@@ -4241,7 +4146,7 @@ export function MultiAgentSwarmView({
                                                 <div className="min-w-0">
                                                   <span className="font-bold text-white block truncate text-[11.5px]">{sub.shortName || sub.role}</span>
                                                   <span className="text-[10px] text-zinc-400 block truncate">
-                                                    {isSettled ? `✓ ${SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}` : sub.role}
+                                                    {isSettled ? (batchTxHash ? `✓ ${SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}` : `Sample output · ${sub.deliverablePreview}`) : sub.role}
                                                   </span>
                                                 </div>
                                               </div>
@@ -4249,7 +4154,7 @@ export function MultiAgentSwarmView({
                                               <div className="shrink-0 text-right">
                                                 {isSettled ? (
                                                   <span className="px-2 py-0.5 rounded text-[9.5px] font-mono font-bold bg-[#d7ff4f]/15 text-[#d7ff4f] border border-[#d7ff4f]/30 flex items-center gap-1 shadow-[0_0_10px_rgba(215,255,79,0.15)]">
-                                                    <span>PAID ${sub.costPathUsd.toFixed(4)}</span>
+                                                    <span>{batchTxHash ? 'PAID' : 'STEP DONE'} ${sub.costPathUsd.toFixed(4)}</span>
                                                     <Check className="w-3 h-3 text-[#d7ff4f]" />
                                                   </span>
                                                 ) : isBusy ? (
@@ -4274,7 +4179,7 @@ export function MultiAgentSwarmView({
                                               <div className="mt-1 pt-1.5 border-t border-white/[0.08] flex items-center justify-between text-[9.5px] font-mono">
                                                 <div className="flex items-center gap-1 text-zinc-400 truncate">
                                                   <span className="text-zinc-500">To:</span>
-                                                  <span className="text-zinc-300 font-medium">{workerAddr.slice(0, 6)}...{workerAddr.slice(-4)}</span>
+                                                  <span className="text-zinc-300 font-medium">{workerAddr ? `${workerAddr.slice(0, 6)}...${workerAddr.slice(-4)}` : 'evaluation session key'}</span>
                                                   <span className="text-zinc-600">·</span>
                                                   <span className="text-zinc-500">Auth:</span>
                                                   <span className="text-zinc-300">Payment trace</span>
@@ -4282,7 +4187,7 @@ export function MultiAgentSwarmView({
                                                 <span className="text-[#d7ff4f] font-semibold flex items-center gap-1 shrink-0">
                                                   <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f] animate-ping" />
                                                   <span>Tempo L1</span>
-                                                  <span className="text-zinc-400">(awaiting confirmed trace)</span>
+                                                  <span className="text-zinc-400">(trace pending)</span>
                                                 </span>
                                               </div>
                                             )}
@@ -4295,13 +4200,13 @@ export function MultiAgentSwarmView({
                                   <div className="pt-2.5 border-t border-white/[0.08] text-[10.5px] font-mono text-zinc-400 flex items-center justify-between">
                                     <span>{phase2Subs.length} {phase2Subs.length === 1 ? 'worker' : 'workers'}</span>
                                     <span className={`font-bold ${phase2Settled ? 'text-zinc-200' : 'text-zinc-500'}`}>
-                                      {phase2Settled ? '✓ Delivered' : 'Standby'}
+                                      {phase2Settled ? (batchTxHash ? '✓ Delivered' : '✓ Prepared') : 'Standby'}
                                     </span>
                                   </div>
                                 </div>
 
                                 {/* COLUMN 3: PHASE 03 · WORKER BOTS (LIME ACCENT) */}
-                                <div className={`rounded-2xl bg-[#07080c] border p-4 sm:p-5 flex flex-col justify-between space-y-4 shadow-xl transition-all duration-500 ${
+                                <div className={`rounded-2xl bg-white/[.025] border p-4 sm:p-5 flex flex-col justify-between space-y-4 shadow-sm transition-all duration-500 ${
                                   isExecuting && activeStageNum === 3
                                     ? 'border-[#d7ff4f]/70 shadow-[0_0_30px_rgba(215,255,79,0.2)] ring-1 ring-[#d7ff4f]/40 animate-active-synthesis'
                                     : 'border-[#d7ff4f]/25 hover:border-[#d7ff4f]/40'
@@ -4316,7 +4221,7 @@ export function MultiAgentSwarmView({
                                         {selectedPreset.id === 'swarm_media_creative' ? '7 Packaging Workers' : selectedPreset.id === 'swarm_arbitrage' ? '1 Execution Sandbox' : '7 Synthesis Specialists'}
                                       </h4>
                                       <p className="text-[11px] text-zinc-400 mt-0.5">
-                                        {selectedPreset.id === 'swarm_media_creative' ? '7 workers package, localize and prepare the final campaign' : selectedPreset.id === 'swarm_arbitrage' ? '1 sandbox worker simulates gas safety and executes swap' : '7 workers compile clearance dossier and board sign-off'}
+                                        {selectedPreset.id === 'swarm_media_creative' ? '7 workers package, localize and prepare the final campaign' : selectedPreset.id === 'swarm_arbitrage' ? '1 sandbox worker simulates gas safety and checks execution risk; no trade is sent in this demo' : '7 workers compile clearance dossier and board sign-off'}
                                       </p>
                                     </div>
 
@@ -4335,7 +4240,7 @@ export function MultiAgentSwarmView({
                                                 ? 'bg-[#d7ff4f]/[0.12] border-[#d7ff4f] ring-2 ring-[#d7ff4f]/40 shadow-[0_0_26px_rgba(215,255,79,0.35)] animate-active-synthesis scale-[1.015]'
                                                 : isSettled
                                                 ? 'bg-[#d7ff4f]/[0.035] border-[#d7ff4f]/30 hover:border-[#d7ff4f]/50 animate-settled'
-                                                : 'bg-[#040507] border-white/[0.05] hover:bg-[#090b10] hover:border-white/10'
+                                                : 'bg-white/[.018] border-white/[0.08] hover:bg-white/[.035] hover:border-white/15'
                                             }`}
                                           >
                                             <div className="flex items-center justify-between gap-2.5">
@@ -4352,7 +4257,7 @@ export function MultiAgentSwarmView({
                                                 <div className="min-w-0">
                                                   <span className="font-bold text-white block truncate text-[11.5px]">{sub.shortName || sub.role}</span>
                                                   <span className="text-[10px] text-zinc-400 block truncate">
-                                                    {isSettled ? `✓ ${SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}` : sub.role}
+                                                    {isSettled ? (batchTxHash ? `✓ ${SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}` : `Sample output · ${sub.deliverablePreview}`) : sub.role}
                                                   </span>
                                                 </div>
                                               </div>
@@ -4360,7 +4265,7 @@ export function MultiAgentSwarmView({
                                               <div className="shrink-0 text-right">
                                                 {isSettled ? (
                                                   <span className="px-2 py-0.5 rounded text-[9.5px] font-mono font-bold bg-[#d7ff4f]/15 text-[#d7ff4f] border border-[#d7ff4f]/30 flex items-center gap-1 shadow-[0_0_10px_rgba(215,255,79,0.15)]">
-                                                    <span>PAID ${sub.costPathUsd.toFixed(4)}</span>
+                                                    <span>{batchTxHash ? 'PAID' : 'STEP DONE'} ${sub.costPathUsd.toFixed(4)}</span>
                                                     <Check className="w-3 h-3 text-[#d7ff4f]" />
                                                   </span>
                                                 ) : isBusy ? (
@@ -4385,7 +4290,7 @@ export function MultiAgentSwarmView({
                                               <div className="mt-1 pt-1.5 border-t border-white/[0.08] flex items-center justify-between text-[9.5px] font-mono">
                                                 <div className="flex items-center gap-1 text-zinc-400 truncate">
                                                   <span className="text-zinc-500">To:</span>
-                                                  <span className="text-zinc-300 font-medium">{workerAddr.slice(0, 6)}...{workerAddr.slice(-4)}</span>
+                                                  <span className="text-zinc-300 font-medium">{workerAddr ? `${workerAddr.slice(0, 6)}...${workerAddr.slice(-4)}` : 'evaluation session key'}</span>
                                                   <span className="text-zinc-600">·</span>
                                                   <span className="text-zinc-500">Auth:</span>
                                                   <span className="text-zinc-300">Payment trace</span>
@@ -4393,7 +4298,7 @@ export function MultiAgentSwarmView({
                                                 <span className="text-[#d7ff4f] font-semibold flex items-center gap-1 shrink-0">
                                                   <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f] animate-ping" />
                                                   <span>Tempo L1</span>
-                                                  <span className="text-zinc-400">(awaiting confirmed trace)</span>
+                                                  <span className="text-zinc-400">(trace pending)</span>
                                                 </span>
                                               </div>
                                             )}
@@ -4406,7 +4311,7 @@ export function MultiAgentSwarmView({
                                   <div className="pt-2.5 border-t border-white/[0.08] text-[10.5px] font-mono text-zinc-400 flex items-center justify-between">
                                     <span>{phase3Subs.length} {phase3Subs.length === 1 ? 'worker' : 'workers'}</span>
                                     <span className={`font-bold ${phase3Settled ? 'text-[#d7ff4f]' : 'text-zinc-500'}`}>
-                                      {phase3Settled ? '✓ Delivered' : 'Standby'}
+                                      {phase3Settled ? (batchTxHash ? '✓ Delivered' : '✓ Prepared') : 'Standby'}
                                     </span>
                                   </div>
                                 </div>
@@ -4453,7 +4358,7 @@ export function MultiAgentSwarmView({
                                             ? 'bg-[#d7ff4f]/15 text-[#d7ff4f] border border-[#d7ff4f]/30'
                                             : 'bg-white/5 text-zinc-400 border border-white/10'
                                         }`}>
-                                          {isBusy ? '● Working now' : isSettled ? '✓ Payment step complete' : 'Waiting'}
+                                          {isBusy ? '● Working now' : isSettled ? (batchTxHash ? '✓ Payment confirmed' : 'Step complete') : 'Waiting'}
                                         </span>
                                       </div>
                                       <p className="text-[11px] text-zinc-400 font-mono mt-0.5">
@@ -4508,46 +4413,28 @@ export function MultiAgentSwarmView({
                                   <div className="p-3.5 rounded-xl bg-white/[.025] backdrop-blur-md border border-white/[.08] space-y-2">
                                     <span className="text-zinc-400 font-bold uppercase tracking-wider text-[10px] block flex items-center gap-1.5">
                                       <Activity className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                                      <span>2. HTTP 402 On-Chain Settlement</span>
+                                      <span>2. Payment check</span>
                                     </span>
                                     <div className="space-y-1.5 text-[11px]">
                                       <div className="flex items-center justify-between text-zinc-400">
                                         <span>Status:</span>
                                         <span className={`font-bold ${isSettled ? 'text-[#d7ff4f]' : isBusy ? 'text-[#d7ff4f] animate-pulse' : 'text-zinc-400'}`}>
-                                          {isSettled ? 'HTTP 200 OK (Settled)' : isBusy ? 'HTTP 402 ➔ Signing...' : 'HTTP 402 Standby'}
+                                          {isSettled ? (batchTxHash ? 'Confirmed on Tempo L1' : 'Completed in evaluation') : isBusy ? 'Payment requested...' : 'Waiting for request'}
                                         </span>
                                       </div>
                                       <div className="flex items-center justify-between text-zinc-400">
                                         <span>Recipient (MPP):</span>
-                                        <a
-                                          href="https://explore.tempo.xyz/address/0xfCEb1a2633881c19283836a2E17Ba25E612724A0"
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          title="SynapseMPPReceiver on Tempo L1 (Chain 42431)"
-                                          className="text-[#d7ff4f] hover:underline font-mono text-[10.5px] flex items-center gap-1"
-                                        >
-                                          <span>0xfCEb1a...24A0</span>
-                                          <ExternalLink className="w-2.5 h-2.5 text-zinc-400" />
-                                        </a>
+                                        {batchTxHash ? <span className="text-[#d7ff4f] font-mono text-[10.5px]">0xfCEb1a...24A0</span> : <span className="text-zinc-500">Not connected</span>}
                                       </div>
                                       <div className="flex items-center justify-between text-zinc-400">
                                         <span>Client Vault:</span>
-                                        <a
-                                          href="https://explore.tempo.xyz/address/0x3c42E274FAdd8e371fB84f97203CC2F2125c8775"
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          title="SynapseVault Smart Contract on Tempo L1 (Chain 42431)"
-                                          className="text-zinc-200 hover:underline font-mono text-[10.5px] flex items-center gap-1"
-                                        >
-                                          <span>0x3c42E2...8775</span>
-                                          <ExternalLink className="w-2.5 h-2.5 text-zinc-400" />
-                                        </a>
+                                        {batchTxHash ? <span className="text-zinc-200 font-mono text-[10.5px]">0x3c42E2...8775</span> : <span className="text-zinc-500">Not connected</span>}
                                       </div>
                                       <div className="flex items-center justify-between text-zinc-400">
                                         <span>Paid Amount:</span>
                                         <span className="text-white font-mono">
                                           <strong className="text-[#d7ff4f]">${activeNode.costPathUsd.toFixed(4)} USD</strong>
-                                          <span className="text-zinc-500 text-[9.5px] ml-1">(Gas: $0.000018)</span>
+                                          <span className="text-zinc-500 text-[9.5px] ml-1">({batchTxHash ? 'gas recorded' : 'planned'})</span>
                                         </span>
                                       </div>
                                       <div className="flex items-center justify-between text-zinc-400">
@@ -4556,10 +4443,10 @@ export function MultiAgentSwarmView({
                                           href={batchTxHash ? `https://explore.tempo.xyz/tx/${batchTxHash}` : undefined}
                                           target="_blank"
                                           rel="noopener noreferrer"
-                                          title="Confirmed Transaction on Tempo Moderato (Block 35757712)"
-                                          className="text-[#d7ff4f] hover:underline font-mono text-[10.5px] flex items-center gap-1"
+                                          title={batchTxHash ? 'Confirmed transaction on Tempo Moderato' : 'No confirmed transaction returned'}
+                                          className={`${batchTxHash ? 'text-[#d7ff4f] hover:underline cursor-pointer' : 'text-amber-300 cursor-default'} font-mono text-[10.5px] flex items-center gap-1`}
                                         >
-                                          <span>0x8fb50a...14d5 ↗</span>
+                                          <span>{batchTxHash ? `${batchTxHash.slice(0, 8)}...${batchTxHash.slice(-6)} ↗` : 'No transaction returned'}</span>
                                         </a>
                                       </div>
                                     </div>
@@ -4573,7 +4460,7 @@ export function MultiAgentSwarmView({
                                     </span>
                                     <p className="text-[#d7ff4f] text-[11.5px] font-sans font-medium leading-relaxed">
                                       {isSettled 
-                                        ? (activeNode.taskOutput || activeNode.samplePayload || activeNode.deliverablePreview)
+                                        ? (batchTxHash ? (activeNode.taskOutput || activeNode.samplePayload || activeNode.deliverablePreview) : `Sample output · ${activeNode.deliverablePreview}`)
                                         : isBusy
                                         ? (activeNode.workingAction || 'Generating output on provider cluster...')
                                         : (activeNode.deliverablePreview || 'Awaiting execution trigger...')}
@@ -4586,8 +4473,7 @@ export function MultiAgentSwarmView({
 
                                 {/* Footer hint */}
                                 <div className="mt-3.5 pt-2.5 border-t border-white/[0.06] flex items-center justify-between text-[10.5px] font-mono text-zinc-500">
-                                  <span>💡 Tip: Click any card in the 3 columns above to wiretap its live data, prompt, and payment proof.</span>
-                                  <span className="text-zinc-400 hidden sm:inline">Node ID: {activeNode.id}</span>
+                                  <span>Tip: Select a card to view its task, output, and payment status.</span>
                                 </div>
                               </div>
                             );
@@ -4617,7 +4503,7 @@ export function MultiAgentSwarmView({
                                 </span>
                               </h3>
                               <p className="text-xs sm:text-[13px] text-zinc-400 mt-1 font-sans leading-relaxed">
-                                {selectedPreset.subcontractors.length} interconnected units. Strict causal handoffs. Micropayments settle on Tempo L1 (Chain 42431) under a hard {selectedPreset.budgetLimit || '$0.0500 cap'} policy cap.
+                                {selectedPreset.subcontractors.length} interconnected units. Strict causal handoffs. Every payment step stays within the hard {selectedPreset.budgetLimit || '$0.0500 cap'} policy cap.
                               </p>
                             </div>
 
@@ -4717,7 +4603,7 @@ export function MultiAgentSwarmView({
                                             ) : isLeadSettled ? (
                                               <span className="text-zinc-300 font-mono flex items-center gap-2">
                                                 <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-[#d7ff4f]" />
-                                                <span>Mission directive executed • {selectedPreset.subcontractors.length === 20 ? '19' : selectedPreset.subcontractors.length - 1} payment steps completed{batchTxHash ? ' and confirmed on Tempo L1' : ' in demo flow'}</span>
+                                <span>Mission directive executed • {selectedPreset.subcontractors.length === 20 ? '19' : selectedPreset.subcontractors.length - 1} payment steps completed{batchTxHash ? ' and confirmed on Tempo L1' : ' in the evaluation flow'}</span>
                                               </span>
                                             ) : (
                                               <span className="text-zinc-500 font-mono flex items-center gap-2">
@@ -4745,9 +4631,9 @@ export function MultiAgentSwarmView({
                                         <div className="flex items-center justify-between text-zinc-400 text-[10px] pb-1.5 border-b border-white/[0.05]">
                                           <div className="flex items-center gap-2">
                                             <span className={`w-1.5 h-1.5 rounded-full ${isLeadActive ? 'bg-[#d7ff4f] animate-pulse' : 'bg-emerald-400/80'}`} />
-                                            <span className="font-bold uppercase tracking-wider text-zinc-300">Live Mission Telemetry • Command Node</span>
+                                            <span className="font-bold uppercase tracking-wider text-zinc-300">Work progress</span>
                                           </div>
-                                          <span className="text-zinc-500">Vault: 0x3c42...8775 (Tempo L1)</span>
+                                          <span className="text-zinc-500">Configured vault: 0x3c42...8775 (Tempo L1)</span>
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10.5px]">
                                           <div className="p-2.5 rounded bg-black/40 border border-white/[0.04]">
@@ -4756,7 +4642,7 @@ export function MultiAgentSwarmView({
                                           </div>
                                           <div className="p-2.5 rounded bg-black/40 border border-white/[0.04]">
                                             <span className="text-zinc-500 font-bold uppercase tracking-wider text-[9.5px] block">Execution Pipeline Flow</span>
-                                            <span className="text-zinc-200 font-medium">{selectedPreset.id === 'swarm_media_creative' ? 'Work Pipeline: Feeds (02-08) ➔ Creative (09-13) ➔ Delivery (14-20)' : selectedPreset.id === 'swarm_arbitrage' ? 'Work Pipeline: Feeds (02-03) ➔ Model (04) ➔ Execution (05)' : 'Work Pipeline: Feeds (02-08) ➔ Analysis (09-13) ➔ Clearance (14-20)'}</span>
+                                            <span className="text-zinc-200 font-medium">{selectedPreset.id === 'swarm_media_creative' ? 'Work Pipeline: Feeds (02-08) ➔ Creative (09-13) ➔ Delivery (14-20)' : selectedPreset.id === 'swarm_arbitrage' ? 'Work Pipeline: Inputs (02-03) ➔ Model (04) ➔ Sandbox Check (05)' : 'Work Pipeline: Feeds (02-08) ➔ Analysis (09-13) ➔ Clearance (14-20)'}</span>
                                           </div>
                                         </div>
                                       </div>
@@ -4773,14 +4659,14 @@ export function MultiAgentSwarmView({
                                   <span className="w-2 h-2 rounded-full bg-[#d7ff4f] shadow-[0_0_8px_#d7ff4f]" />
                                   <span>
                                     {selectedPreset.id === 'swarm_media_creative'
-                                      ? 'Stage 02 • Paid Market Data & Media Feeds (7 Units)'
+                                      ? 'Stage 02 • Example Market & Media Inputs (7 Units)'
                                       : selectedPreset.id === 'swarm_arbitrage'
-                                      ? 'Stage 02 • Live DEX Liquidity & Depth Feeds (2 Units)'
-                                      : 'Stage 02 • Official Registry & Compliance Feeds (7 Units)'}
+                                      ? 'Stage 02 • Sample Market Depth Inputs (2 Units)'
+                                      : 'Stage 02 • Example Registry & Compliance Inputs (7 Units)'}
                                   </span>
                                 </span>
                                 <span className="px-3 py-1 rounded-lg bg-white/5 border border-white/10 text-zinc-300 font-mono text-[11px] font-bold shadow-inner">
-                                  ${selectedPreset.subcontractors.filter(s => s.waveGroup === 1).reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD Settled on Tempo L1
+                                  ${selectedPreset.subcontractors.filter(s => s.waveGroup === 1).reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD {batchTxHash ? 'Settled on Tempo L1' : 'planned in evaluation'}
                                 </span>
                               </div>
 
@@ -4847,12 +4733,12 @@ export function MultiAgentSwarmView({
                                               ) : isPaying ? (
                                                 <span className="text-[#d7ff4f] font-mono flex items-center gap-2 font-bold">
                                                   <Zap className="w-3.5 h-3.5 shrink-0 text-[#d7ff4f] animate-bounce" />
-                                                  <span>Settling micropayment channel on Tempo L1...</span>
+                                                  <span>Checking the payment step...</span>
                                                 </span>
                                               ) : isSettled ? (
                                                 <span className="text-zinc-300 font-mono flex items-center gap-2">
                                                   <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-[#d7ff4f]" />
-                                                  <span>Delivered: <strong className="text-[#d7ff4f] font-medium px-2 py-0.5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/25 text-[11px]">{SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</strong></span>
+                                                  <span>{batchTxHash ? 'Delivered:' : 'Result preview:'} <strong className="text-[#d7ff4f] font-medium px-2 py-0.5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/25 text-[11px]">{SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</strong></span>
                                                 </span>
                                               ) : (
                                                 <span className="text-zinc-500 font-mono flex items-center gap-2">
@@ -4888,7 +4774,7 @@ export function MultiAgentSwarmView({
                                           <div className="flex items-center justify-between text-zinc-400 text-[10px] pb-1.5 border-b border-white/[0.05]">
                                             <div className="flex items-center gap-2">
                                               <span className={`w-1.5 h-1.5 rounded-full ${isBusy ? 'bg-[#d7ff4f] animate-pulse' : isSettled ? 'bg-[#d7ff4f]' : 'bg-zinc-500'}`} />
-                                              <span className="font-bold uppercase tracking-wider text-zinc-300">Live Execution Telemetry • Node {idx + 2 < 10 ? `0${idx + 2}` : idx + 2}</span>
+                                              <span className="font-bold uppercase tracking-wider text-zinc-300">{batchTxHash ? 'Live' : 'Evaluation'} Execution Telemetry • Node {idx + 2 < 10 ? `0${idx + 2}` : idx + 2}</span>
                                             </div>
                                             <span className="text-zinc-500">{sub.targetUrl}</span>
                                           </div>
@@ -4903,14 +4789,14 @@ export function MultiAgentSwarmView({
                                               <span className="text-zinc-300 block truncate">{sub.taskInput || `Ingested dependency from ${dependency?.waitingFor || 'Unit 01'}`}</span>
                                             </div>
                                             <div className="p-2 rounded bg-black/40 border border-white/[0.04] space-y-1">
-                                              <span className="text-zinc-400 font-bold uppercase tracking-wider text-[9.5px] block">Tempo L1 Channel State</span>
+                                              <span className="text-zinc-400 font-bold uppercase tracking-wider text-[9.5px] block">Payment channel state</span>
                                               <span className="text-zinc-300 block truncate">
                                                 {isRequesting ? (
                                                   <span className="text-zinc-300">HTTP 402 • Challenge Received ($0.0000)</span>
                                                 ) : isPaying ? (
                                                   <span className="text-zinc-200">Signing EIP-712 • Channel Active</span>
                                                 ) : isSettled ? (
-                                                  <span className="text-zinc-200">Settled • ${sub.costPathUsd.toFixed(4)} USD Verified</span>
+                                                  <span className="text-zinc-200">{batchTxHash ? 'Settled' : 'Planned'} • ${sub.costPathUsd.toFixed(4)} USD</span>
                                                 ) : (
                                                   <span className="text-zinc-500">Standby Channel (Cap: {selectedPreset.budgetLimit || '$0.0500 cap'})</span>
                                                 )}
@@ -4920,7 +4806,7 @@ export function MultiAgentSwarmView({
 
                                           {isSettled && (
                                             <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06] text-zinc-300 text-[10.5px] flex items-center justify-between animate-glide">
-                                              <div className="truncate"><strong className="text-white font-medium">Output Delivered:</strong> <span className="text-zinc-200 ml-1">{sub.taskOutput || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</span></div>
+                                              <div className="truncate"><strong className="text-white font-medium">{batchTxHash ? 'Output delivered:' : 'Evaluation output:'}</strong> <span className="text-zinc-200 ml-1">{sub.taskOutput || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</span></div>
                                               <span className="text-[9.5px] font-mono text-zinc-400 shrink-0 ml-2">➔ Handed to Stage 03</span>
                                             </div>
                                           )}
@@ -4946,7 +4832,7 @@ export function MultiAgentSwarmView({
                                   </span>
                                 </span>
                                 <span className="px-3 py-1 rounded-lg bg-white/5 border border-white/10 text-zinc-300 font-mono text-[11px] font-bold shadow-inner">
-                                  ${selectedPreset.subcontractors.filter(s => s.waveGroup === 2).reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD Settled on Tempo L1
+                                  ${selectedPreset.subcontractors.filter(s => s.waveGroup === 2).reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD {batchTxHash ? 'Settled on Tempo L1' : 'planned in evaluation'}
                                 </span>
                               </div>
 
@@ -5007,12 +4893,12 @@ export function MultiAgentSwarmView({
                                               ) : isPaying ? (
                                                 <span className="text-[#d7ff4f] font-mono flex items-center gap-2 font-bold">
                                                   <Zap className="w-3.5 h-3.5 shrink-0 text-[#d7ff4f] animate-bounce" />
-                                                  <span>Settling on Tempo L1...</span>
+                                                  <span>Checking the payment step...</span>
                                                 </span>
                                               ) : isSettled ? (
                                                 <span className="text-zinc-300 font-mono flex items-center gap-2">
                                                   <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-                                                  <span>Delivered: <strong className="text-[#d7ff4f] font-medium px-2 py-0.5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/25 text-[11px]">{SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</strong></span>
+                                                  <span>{batchTxHash ? 'Delivered:' : 'Result preview:'} <strong className="text-[#d7ff4f] font-medium px-2 py-0.5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/25 text-[11px]">{SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</strong></span>
                                                 </span>
                                               ) : (
                                                 <span className="text-zinc-500 font-mono flex items-center gap-2">
@@ -5048,7 +4934,7 @@ export function MultiAgentSwarmView({
                                           <div className="flex items-center justify-between text-zinc-400 text-[10px] pb-1.5 border-b border-white/[0.05]">
                                             <div className="flex items-center gap-2">
                                               <span className={`w-1.5 h-1.5 rounded-full ${isBusy ? 'bg-[#d7ff4f] animate-pulse' : isSettled ? 'bg-emerald-400/80' : 'bg-zinc-500'}`} />
-                                              <span className="font-bold uppercase tracking-wider text-zinc-300">Live Execution Telemetry • Node {nodeStr}</span>
+                                              <span className="font-bold uppercase tracking-wider text-zinc-300">{batchTxHash ? 'Live' : 'Evaluation'} Execution Telemetry • Node {nodeStr}</span>
                                             </div>
                                             <span className="text-zinc-500">{sub.targetUrl}</span>
                                           </div>
@@ -5066,7 +4952,7 @@ export function MultiAgentSwarmView({
                                                 ) : isPaying ? (
                                                   <span className="text-zinc-200">Signing EIP-712 • Channel Settlement</span>
                                                 ) : isSettled ? (
-                                                  <span className="text-zinc-200">Channel Settled • ${sub.costPathUsd.toFixed(4)} USD Verified</span>
+                                                  <span className="text-zinc-200">{batchTxHash ? 'Channel settled' : 'Payment planned'} • ${sub.costPathUsd.toFixed(4)} USD{batchTxHash ? ' verified' : ''}</span>
                                                 ) : (
                                                   <span className="text-zinc-500">Standby Channel (Cap: {selectedPreset.budgetLimit || '$0.0500 cap'})</span>
                                                 )}
@@ -5076,7 +4962,7 @@ export function MultiAgentSwarmView({
 
                                           {isSettled && (
                                             <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06] text-zinc-300 text-[10.5px] flex items-center justify-between animate-glide">
-                                              <div className="truncate"><strong className="text-white font-medium">Output Delivered:</strong> <span className="text-zinc-200 ml-1">{sub.taskOutput || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</span></div>
+                                              <div className="truncate"><strong className="text-white font-medium">{batchTxHash ? 'Output delivered:' : 'Evaluation output:'}</strong> <span className="text-zinc-200 ml-1">{sub.taskOutput || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</span></div>
                                               <span className="text-[9.5px] font-mono text-zinc-400 shrink-0 ml-2">➔ Handed to Stage 04</span>
                                             </div>
                                           )}
@@ -5095,14 +4981,14 @@ export function MultiAgentSwarmView({
                                   <span className="w-2 h-2 rounded-full bg-[#d7ff4f] shadow-[0_0_8px_#d7ff4f]" />
                                   <span>
                                     {selectedPreset.id === 'swarm_media_creative'
-                                      ? 'Stage 04 • Multi-Platform Packaging & Tempo L1 Seal (7 Units)'
+                                      ? 'Stage 04 • Multi-Platform Packaging & Proof Record (7 Units)'
                                       : selectedPreset.id === 'swarm_arbitrage'
-                                      ? 'Stage 04 • Atomic Settlement on Tempo L1 (1 Unit)'
-                                      : 'Stage 04 • Executive Synthesis & Tempo L1 Seal (7 Units)'}
+                                      ? 'Stage 04 • Payment Plan (1 Unit)'
+                                      : 'Stage 04 • Executive Synthesis & Proof Record (7 Units)'}
                                   </span>
                                 </span>
                                 <span className="px-3 py-1 rounded-lg bg-[#d7ff4f]/10 border border-[#d7ff4f]/25 text-[#d7ff4f] font-mono text-[11px] font-bold shadow-inner">
-                                  ${selectedPreset.subcontractors.filter(s => s.waveGroup === 3).reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD Settled on Tempo L1
+                                  ${selectedPreset.subcontractors.filter(s => s.waveGroup === 3).reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD {batchTxHash ? 'Settled on Tempo L1' : 'planned in evaluation'}
                                 </span>
                               </div>
 
@@ -5166,17 +5052,17 @@ export function MultiAgentSwarmView({
                                               {isRequesting ? (
                                                 <span className="text-[#d7ff4f] font-mono flex items-center gap-2 font-medium">
                                                   <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0 text-[#d7ff4f]" />
-                                                  <span>Assembling bundle • signing on Tempo L1...</span>
+                                                  <span>Assembling the final bundle...</span>
                                                 </span>
                                               ) : isPaying ? (
                                                 <span className="text-[#d7ff4f] font-mono flex items-center gap-2 font-bold">
                                                   <Zap className="w-3.5 h-3.5 shrink-0 text-[#d7ff4f]" />
-                                                  <span>Sealing Merkle attestation digest on Tempo L1...</span>
+                                                  <span>Recording the delivery check...</span>
                                                 </span>
                                               ) : isSettled ? (
                                                 <span className="text-zinc-300 font-mono flex items-center gap-2">
                                                   <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-[#d7ff4f]" />
-                                                  <span>Delivered: <strong className="text-[#d7ff4f] font-medium px-2 py-0.5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/25 text-[11px]">{SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</strong></span>
+                                                  <span>{batchTxHash ? 'Delivered:' : 'Result preview:'} <strong className="text-[#d7ff4f] font-medium px-2 py-0.5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/25 text-[11px]">{SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</strong></span>
                                                 </span>
                                               ) : (
                                                 <span className="text-zinc-500 font-mono flex items-center gap-2">
@@ -5212,7 +5098,7 @@ export function MultiAgentSwarmView({
                                           <div className="flex items-center justify-between text-zinc-400 text-[10px] pb-1.5 border-b border-white/[0.05]">
                                             <div className="flex items-center gap-2">
                                               <span className={`w-1.5 h-1.5 rounded-full ${isBusy ? 'bg-[#d7ff4f] animate-pulse' : isSettled ? 'bg-emerald-400/80' : 'bg-zinc-500'}`} />
-                                              <span className="font-bold uppercase tracking-wider text-zinc-300">Live Execution Telemetry • Node {nodeStr}</span>
+                                              <span className="font-bold uppercase tracking-wider text-zinc-300">{batchTxHash ? 'Live' : 'Evaluation'} Execution Telemetry • Node {nodeStr}</span>
                                             </div>
                                             <span className="text-zinc-500">{sub.targetUrl}</span>
                                           </div>
@@ -5234,7 +5120,7 @@ export function MultiAgentSwarmView({
                                                 ) : isPaying ? (
                                                   <span className="text-zinc-200">Sealing Merkle Digest • EIP-712 Finalized</span>
                                                 ) : isSettled ? (
-                                                  <span className="text-zinc-200">Settled • ${sub.costPathUsd.toFixed(4)} USD Verified</span>
+                                              <span className="text-zinc-200">{batchTxHash ? 'Settled' : 'Planned'} • ${sub.costPathUsd.toFixed(4)} USD{batchTxHash ? ' verified' : ''}</span>
                                                 ) : (
                                                   <span className="text-zinc-500">Standby Channel (Cap: {selectedPreset.budgetLimit || '$0.0500 cap'})</span>
                                                 )}
@@ -5244,7 +5130,7 @@ export function MultiAgentSwarmView({
 
                                           {isSettled && (
                                             <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06] text-zinc-300 text-[10.5px] flex items-center justify-between animate-glide">
-                                              <div className="truncate"><strong className="text-white font-medium">Output Delivered:</strong> <span className="text-zinc-200 ml-1">{sub.taskOutput || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</span></div>
+                                              <div className="truncate"><strong className="text-white font-medium">{batchTxHash ? 'Output delivered:' : 'Evaluation output:'}</strong> <span className="text-zinc-200 ml-1">{sub.taskOutput || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</span></div>
                                               <span className="text-[9.5px] font-mono text-zinc-400 shrink-0 ml-2">➔ Final Package Locked</span>
                                             </div>
                                           )}
@@ -5330,10 +5216,10 @@ export function MultiAgentSwarmView({
                           <div className="p-3.5 rounded-xl luxury-card border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono">
                             <div className="flex items-center gap-2.5 text-zinc-300">
                               <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f]" />
-                              <span><strong className="text-white">Causality Rule:</strong> Money moves only when an agent needs a paid resource. Zero monthly subscriptions. All payments auditable on Tempo L1.</span>
+                              <span><strong className="text-white">Causality Rule:</strong> Money moves only when an agent needs an approved resource. The cap is checked before each step; a live wallet is required for an on-chain receipt.</span>
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
-                              <span className="text-zinc-400">Total Spent: <strong className="text-white font-bold">${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)}</strong> / {selectedPreset.budgetLimit || '$0.0500 USD'}</span>
+                              <span className="text-zinc-400">{batchTxHash ? 'Total spent' : 'Planned cost'}: <strong className="text-white font-bold">${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)}</strong> / {selectedPreset.budgetLimit || '$0.0500 USD'}</span>
                             </div>
                           </div>
 
@@ -5366,7 +5252,7 @@ export function MultiAgentSwarmView({
                               <div className="flex items-center justify-between gap-2 border-b border-white/[0.08] pb-2.5 mb-2.5">
                                 <span className="px-2.5 py-0.5 rounded-md bg-[#d7ff4f]/15 text-[#d7ff4f] border border-[#d7ff4f]/30 text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
                                   <Bot className="w-3.5 h-3.5" />
-                                  {selectedPreset.id === 'swarm_media_creative' ? 'CAMPAIGN DIRECTOR' : selectedPreset.id === 'swarm_arbitrage' ? 'LEAD ARBITRAGE TRADER' : 'LEAD AGENT'}
+                                  {selectedPreset.id === 'swarm_media_creative' ? 'CAMPAIGN DIRECTOR' : selectedPreset.id === 'swarm_arbitrage' ? 'LEAD MARKET REVIEWER' : 'LEAD AGENT'}
                                 </span>
                                 <span className="text-[11px] font-mono text-zinc-300">
                                   Budget: <strong className="text-[#d7ff4f]">{selectedPreset.budgetLimit || '$0.0500 policy cap'}</strong>
@@ -5383,15 +5269,15 @@ export function MultiAgentSwarmView({
                                     {selectedPreset.id === 'swarm_media_creative' 
                                       ? 'Campaign Director (Unit 01 • Lead AI)' 
                                       : selectedPreset.id === 'swarm_arbitrage'
-                                      ? 'Lead Arbitrage Director (Unit 01 • AI Trader)'
+                                      ? 'Lead Market Comparison Director (Unit 01)'
                                       : 'Lead Orchestrator (Unit 01 • Lead Agent)'}
                                   </h3>
                                   <p className="text-xs text-zinc-300 font-sans mt-0.5">
                                     {selectedPreset.id === 'swarm_media_creative'
                                       ? 'Coordinates 12 workers and 7 providers, enforces $0.050 budget cap, and directs ad campaign'
                                       : selectedPreset.id === 'swarm_arbitrage'
-                                      ? 'Queries 2 live DEX feeds, models spread slippage, and signs atomic execution'
-                                      : 'Coordinates 19 units, enforces $0.030 budget policy, and approves supplier contracts'}
+                                      ? 'Reviews 2 sample market inputs, models spread risk, and prepares a comparison report'
+                                      : 'Coordinates 19 units, enforces the $0.030 cap, and prepares a supplier review'}
                                   </p>
                                   <div className="flex items-center gap-1.5 text-[11px] font-mono mt-2 flex-wrap">
                                     {selectedPreset.id === 'swarm_media_creative' ? (
@@ -5406,11 +5292,11 @@ export function MultiAgentSwarmView({
                                       </>
                                     ) : selectedPreset.id === 'swarm_arbitrage' ? (
                                       <>
-                                        <span className={`px-2 py-0.5 rounded text-[10px] ${activeStageNum === 0 && isExecuting ? 'bg-[#d7ff4f]/20 text-[#d7ff4f] font-bold border border-[#d7ff4f]/40' : 'bg-white/[0.04] text-zinc-400'}`}>1. Plan Swap</span>
+                                        <span className={`px-2 py-0.5 rounded text-[10px] ${activeStageNum === 0 && isExecuting ? 'bg-[#d7ff4f]/20 text-[#d7ff4f] font-bold border border-[#d7ff4f]/40' : 'bg-white/[0.04] text-zinc-400'}`}>1. Plan Comparison</span>
                                         <span className="text-zinc-600">&rarr;</span>
                                         <span className={`px-2 py-0.5 rounded text-[10px] ${activeStageNum === 1 && isExecuting ? 'bg-[#d7ff4f]/20 text-[#d7ff4f] font-bold border border-[#d7ff4f]/40' : 'bg-white/[0.04] text-zinc-400'}`}>2. Depth Feeds</span>
                                         <span className="text-zinc-600">&rarr;</span>
-                                        <span className={`px-2 py-0.5 rounded text-[10px] ${activeStageNum === 2 && isExecuting ? 'bg-[#d7ff4f]/20 text-[#d7ff4f] font-bold border border-[#d7ff4f]/40' : 'bg-white/[0.04] text-zinc-400'}`}>3. Settle Swap</span>
+                                        <span className={`px-2 py-0.5 rounded text-[10px] ${activeStageNum === 2 && isExecuting ? 'bg-[#d7ff4f]/20 text-[#d7ff4f] font-bold border border-[#d7ff4f]/40' : 'bg-white/[0.04] text-zinc-400'}`}>3. Prepare Report</span>
                                       </>
                                     ) : (
                                       <>
@@ -5429,7 +5315,9 @@ export function MultiAgentSwarmView({
                               <div className="mt-2.5 pt-2.5 border-t border-white/[0.06] flex items-center justify-between text-xs font-mono text-zinc-400">
                                 <span>Status: <strong className={isLeadSettled ? 'text-emerald-400 font-bold' : isLeadActive ? 'text-[#d7ff4f] font-bold' : 'text-zinc-300'}>
                                   {isLeadSettled 
-                                    ? (selectedPreset.id === 'swarm_media_creative' ? '✓ Campaign Ready (Brand & Policy Approved)' : selectedPreset.id === 'swarm_arbitrage' ? '✓ Trade Settled (+$14.20 Net)' : '✓ Supplier Approved (Clean Audit Passed)')
+                                    ? (batchTxHash
+                                      ? (selectedPreset.id === 'swarm_media_creative' ? '✓ Campaign Ready (Brand & Policy Approved)' : selectedPreset.id === 'swarm_arbitrage' ? '✓ Market Report Ready' : '✓ Supplier Review Ready (Evaluation)')
+                                      : '✓ Evaluation result ready')
                                     : isLeadActive 
                                     ? '⚡ Coordinating Workforce...' 
                                     : 'Standing by — Ready to Run'}
@@ -5606,21 +5494,21 @@ export function MultiAgentSwarmView({
                                             <span>Monte Carlo Solvency Engine</span>
                                           </div>
                                           <span className="text-[9.5px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">
-                                            10k Cycles
+                                            Example model
                                           </span>
                                         </div>
                                         <div className="grid grid-cols-2 gap-2 text-[10px] pt-1.5 border-t border-white/[0.06]">
                                           <div className="p-2 rounded-lg bg-black/40 border border-white/[0.04]">
                                             <span className="text-zinc-500 block text-[9px] uppercase font-semibold">Default Risk</span>
-                                            <span className="text-emerald-400 font-bold">0.04% (Safe)</span>
+                                            <span className="text-emerald-400 font-bold">0.04% (example)</span>
                                           </div>
                                           <div className="p-2 rounded-lg bg-black/40 border border-white/[0.04]">
                                             <span className="text-zinc-500 block text-[9px] uppercase font-semibold">Solvency Score</span>
-                                            <span className="text-white font-bold">4.12 / 5.00</span>
+                                            <span className="text-white font-bold">4.12 / 5.00 (example)</span>
                                           </div>
                                         </div>
                                         <div className="text-[9.5px] text-zinc-400 font-sans leading-relaxed">
-                                          10,000 Monte Carlo stress cycles executed via Python. Solvency verified • Zero budget overdraft.
+                                          Example risk model with 10,000 simulated cycles. Review the assumptions before relying on the score.
                                         </div>
                                       </div>
                                     )}
@@ -5630,7 +5518,7 @@ export function MultiAgentSwarmView({
                                   <div className="pt-2.5 mt-3 border-t border-white/[0.06] flex items-center justify-between text-[10px] font-mono text-zinc-400">
                                     <span>{stageSubs.length} Autonomous Nodes</span>
                                     <span className={allStageSettled ? 'text-emerald-400 font-bold' : isStageActive ? 'text-[#d7ff4f] font-bold animate-pulse' : 'text-zinc-500'}>
-                                      {allStageSettled ? '✓ All Delivered' : isStageActive ? '⚡ In Flight' : 'Standby'}
+                                      {allStageSettled ? (batchTxHash ? '✓ All Delivered' : '✓ Results prepared') : isStageActive ? '⚡ In Flight' : 'Standby'}
                                     </span>
                                   </div>
                                 </div>
@@ -5676,17 +5564,17 @@ export function MultiAgentSwarmView({
                                     LEAD AGENT (UNIT 01 • CAMPAIGN DIRECTOR)
                                   </span>
                                   <span className="text-xs sm:text-sm font-bold text-white font-mono">
-                                    {selectedPreset.id === 'swarm_media_creative' ? 'Direct Multi-Platform Ad Campaign Launch' : selectedPreset.id === 'swarm_arbitrage' ? 'Execute Cross-DEX Flash Arbitrage' : 'Investigate Apex Foundry before contract approval'}
+                                    {selectedPreset.id === 'swarm_media_creative' ? 'Direct Multi-Platform Ad Campaign Launch' : selectedPreset.id === 'swarm_arbitrage' ? 'Compare Market Snapshots' : 'Investigate Apex Foundry before contract approval'}
                                   </span>
                                 </div>
                                 <p className="text-[11px] text-zinc-300 font-sans mt-0.5">
-                                  {selectedPreset.id === 'swarm_media_creative' ? 'Coordinates 12 workers and 7 providers, enforces $0.050 budget cap, and delivers full ad package' : selectedPreset.id === 'swarm_arbitrage' ? 'Coordinates 4 units and 2 live feeds, enforces $0.010 budget cap, and executes arbitrage' : 'Plans mission, coordinates 19 units, manages $0.030 budget, and approves final contract'}
+                                  {selectedPreset.id === 'swarm_media_creative' ? 'Coordinates 12 workers and 7 providers, enforces $0.050 budget cap, and delivers full ad package' : selectedPreset.id === 'swarm_arbitrage' ? 'Coordinates 4 units and 2 sample feeds, enforces the $0.010 cap, and prepares a market report' : 'Plans mission, coordinates 19 units, manages $0.030 budget, and approves final contract'}
                                 </p>
                               </div>
                             </div>
                             <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
                               <span className="px-2.5 py-1 rounded bg-black/50 border border-white/10 text-zinc-300 text-[11px] font-mono">
-                                Spend: <strong className="text-[#d7ff4f]">{selectedPreset.id === 'swarm_media_creative' ? '$0.0245 USD' : selectedPreset.id === 'swarm_arbitrage' ? '$0.0060 USD' : '$0.0270 USD'}</strong> / {selectedPreset.budgetLimit || '$0.0500 policy cap'}
+                                {batchTxHash ? 'Spent' : 'Planned'}: <strong className="text-[#d7ff4f]">${plannedCostUsd.toFixed(4)} USD</strong> / {selectedPreset.budgetLimit || '$0.0500 policy cap'}
                               </span>
                               <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
                                 isLeadSettled
@@ -5695,13 +5583,21 @@ export function MultiAgentSwarmView({
                                   ? 'bg-[#d7ff4f]/20 text-[#d7ff4f] border border-[#d7ff4f]/40 animate-pulse'
                                   : 'bg-white/5 text-zinc-400 border border-white/10'
                               }`}>
-                                {isLeadSettled ? (selectedPreset.id === 'swarm_media_creative' ? '✓ Campaign Ready to Launch' : selectedPreset.id === 'swarm_arbitrage' ? '✓ Arbitrage Complete' : '✓ Supplier Approved (94/100)') : isLeadActive ? '⚡ Coordinating Workforce...' : 'Ready to Direct'}
+                                {isLeadSettled ? (batchTxHash ? (selectedPreset.id === 'swarm_media_creative' ? '✓ Campaign Ready to Launch' : selectedPreset.id === 'swarm_arbitrage' ? '✓ Market Report Ready' : '✓ Supplier Review Ready (94/100)') : '✓ Evaluation result ready') : isLeadActive ? '⚡ Coordinating Workforce...' : 'Ready to Direct'}
                               </span>
                             </div>
                           </div>
                         </div>
 
-                        {stageElements}
+                        <details className="group mt-4 rounded-2xl border border-white/[.08] bg-white/[.02]">
+                          <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between gap-3 text-xs font-mono text-zinc-300 hover:text-white transition">
+                            <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-zinc-500" /><strong>View 3 phases</strong><span className="text-zinc-500">{selectedPreset.subcontractors.length} units</span></span>
+                            <ChevronDown className="w-4 h-4 text-zinc-400 transition-transform group-open:rotate-180" />
+                          </summary>
+                          <div className="p-3 sm:p-4 border-t border-white/[.06]">
+                            {stageElements}
+                          </div>
+                        </details>
                       </>
                     )}
 
@@ -5712,29 +5608,29 @@ export function MultiAgentSwarmView({
                         <div className="space-y-3">
                           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 text-[#d7ff4f] text-[10px] font-mono font-bold uppercase tracking-widest">
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Mission Complete • {selectedPreset.subcontractors.length} Units Settled</span>
+                            <span>{batchTxHash ? 'Mission complete · payments confirmed' : 'Mission flow complete · payment trace pending'}</span>
                           </div>
                           
                           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight">
                             {selectedPreset.id === 'swarm_media_creative'
                               ? 'Ad Campaign is Ready to Launch'
                               : selectedPreset.id === 'swarm_arbitrage'
-                              ? 'Arbitrage Execution Complete'
-                              : 'Supplier Clearance Dossier Approved'}
+                              ? 'Market Comparison Complete'
+                              : 'Supplier Clearance Dossier Ready for Review'}
                           </h2>
                           
                           <p className="text-xs text-zinc-400 font-mono max-w-xl mx-auto leading-relaxed">
                             {selectedPreset.id === 'swarm_media_creative'
-                              ? `1 Lead Agent coordinated 12 workers and 7 providers. Campaign complete in ${actualExecutionTimeSec}s for $0.0245 under the $0.0500 budget.`
+                              ? `1 Lead Agent coordinated 12 workers and 7 providers. Campaign flow completed in ${actualExecutionTimeSec}s for $0.0245 under the $0.0500 budget.`
                               : selectedPreset.id === 'swarm_arbitrage'
-                              ? `1 Lead Agent coordinated 2 workers and 1 market feed. Flash arbitrage settled in ${actualExecutionTimeSec}s for $0.0060 under $0.0100 budget.`
-                              : `1 Lead Agent coordinated 12 workers and 7 official feeds. Clearance dossier completed in ${actualExecutionTimeSec}s for $0.0270 under $0.0300 budget.`}
+                              ? `1 Lead Agent coordinated 2 workers and sample market inputs. Market analysis flow completed in ${actualExecutionTimeSec}s for $0.0060 under $0.0100 budget.`
+                              : `1 Lead Agent coordinated 12 workers and 7 example registry inputs. Clearance flow completed in ${actualExecutionTimeSec}s for $0.0270 under $0.0300 budget.`}
                           </p>
                         </div>
 
                         {/* 4 Stat Cards */}
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 max-w-4xl mx-auto pt-4 border-t border-white/10 font-mono text-left">
-                          <div className="p-4 rounded-xl bg-black/50 border border-white/10 space-y-1">
+                          <div className="p-4 rounded-xl bg-white/[.035] border border-white/10 space-y-1">
                             <span className="text-[10px] uppercase text-zinc-400 font-bold block">TOTAL SPENT</span>
                             <span className="text-2xl font-black text-white block">
                               ${selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)}
@@ -5747,7 +5643,7 @@ export function MultiAgentSwarmView({
                                 : '$0.0270 spent · $0.0030 unused'}
                             </span>
                           </div>
-                          <div className="p-4 rounded-xl bg-black/50 border border-white/10 space-y-1">
+                          <div className="p-4 rounded-xl bg-white/[.035] border border-white/10 space-y-1">
                             <span className="text-[10px] uppercase text-zinc-400 font-bold block">WORKFORCE</span>
                             <span className="text-2xl font-black text-white block">
                               {selectedPreset.subcontractors.length}
@@ -5756,48 +5652,45 @@ export function MultiAgentSwarmView({
                               {selectedPreset.subcontractors.length === 20 ? '1 Lead · 12 Workers · 7 Providers' : `${selectedPreset.subcontractors.length} Participants`}
                             </span>
                           </div>
-                          <div className="p-4 rounded-xl bg-black/50 border border-white/10 space-y-1">
+                          <div className="p-4 rounded-xl bg-white/[.035] border border-white/10 space-y-1">
                             <span className="text-[10px] uppercase text-zinc-400 font-bold block tracking-wider">PAYMENT ACTIONS</span>
                             <span className="text-2xl font-black text-white block">
                               {selectedPreset.subcontractors.length === 20 ? '19' : `${selectedPreset.subcontractors.length - 1}`}
-                              <span className="text-xs font-normal text-zinc-400 ml-1.5 font-mono">actions · 1 L1 settlement</span>
+                              <span className="text-xs font-normal text-zinc-400 ml-1.5 font-mono">actions · {batchTxHash ? '1 L1 settlement' : 'settlement trace pending'}</span>
                             </span>
                             <span className="text-[10.5px] text-zinc-400 block truncate">
                               {selectedPreset.subcontractors.length === 20 ? '7 Provider Purchases · 12 Worker Payments' : 'Direct Micro-Services'}
                             </span>
                           </div>
-                          <div className="p-4 rounded-xl bg-black/50 border border-white/10 space-y-1">
+                          <div className="p-4 rounded-xl bg-white/[.035] border border-white/10 space-y-1">
                             <span className="text-[10px] uppercase text-zinc-400 font-bold block">BUDGET STATUS</span>
                             <span className="text-2xl font-black text-[#d7ff4f] block">
-                              ${selectedPreset.id === 'swarm_media_creative' ? '0.0255' : selectedPreset.id === 'swarm_arbitrage' ? '0.0040' : '0.0030'}
+                              ${remainingBudgetUsd.toFixed(4)}
                               <span className="text-xs font-normal text-zinc-400 ml-1.5 font-mono">remaining</span>
                             </span>
                             <span className="text-[10.5px] text-zinc-400 block truncate">
-                              $0.0245 spent (49% used · 51% remaining of {selectedPreset.budgetLimit || '$0.0500'} cap)
+                              ${plannedCostUsd.toFixed(4)} planned ({plannedBudgetPercent}% of {selectedPreset.budgetLimit || '$0.0500'} cap)
                             </span>
                           </div>
                         </div>
 
                         {/* 2. ON-CHAIN SETTLEMENT VAULT & PROOF LEDGER */}
                         <div className="pt-2 max-w-4xl mx-auto text-left space-y-4">
-                          <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-[#0c1410] via-[#090d14] to-[#08090c] border border-[#d7ff4f]/40 shadow-[0_0_35px_rgba(215,255,79,0.12)] space-y-4">
+                          <div className="p-5 sm:p-6 rounded-2xl bg-[#171c22] border border-white/10 shadow-sm space-y-4">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#d7ff4f]/20 pb-4">
                               <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-[#d7ff4f]/15 border border-[#d7ff4f]/40 flex items-center justify-center text-[#d7ff4f] shrink-0 shadow-[0_0_15px_rgba(215,255,79,0.25)]">
-                                  <ShieldCheck className="w-6 h-6 text-[#d7ff4f]" />
-                                </div>
                                 <div>
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-black uppercase tracking-wider bg-[#d7ff4f] text-[#08090c]">
-                                      VAULT-SCOPED SESSION SETTLEMENT
+                                    <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-black uppercase tracking-wider bg-[#d7ff4f]/15 text-[#d7ff4f] border border-[#d7ff4f]/30">
+                                      {batchTxHash ? 'PAYMENT CONFIRMED' : 'BUDGET PROTECTED'}
                                     </span>
                                     <span className="text-xs text-zinc-400 font-mono flex items-center gap-1.5">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                      Tempo L1 Testnet (Chain ID 42431)
+                                      <span className={`w-1.5 h-1.5 rounded-full ${batchTxHash ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'}`} />
+                                      {batchTxHash ? 'Receipt ready' : 'Evaluation result · no live payment'}
                                     </span>
                                   </div>
                                   <h3 className="text-base sm:text-lg font-black text-white tracking-tight mt-1 flex items-center gap-2">
-                                    <span>Every Micro-Payment Signed via EIP-712 Voucher</span>
+                                    <span>{batchTxHash ? 'Payment completed' : 'Payment plan ready'}</span>
                                     <span className="text-[#d7ff4f] font-mono">
                                       (${selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD)
                                     </span>
@@ -5805,80 +5698,45 @@ export function MultiAgentSwarmView({
                                 </div>
                               </div>
 
-                              {/* Explorer & Audit Actions */}
-                              <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const targetWorker = selectedPreset.subcontractors.find(x => settledWorkerIds.has(x.id)) || selectedPreset.subcontractors[0];
-                                    if (targetWorker) inspectWorkerCryptoProof(targetWorker);
-                                  }}
-                                  className="px-3.5 py-2 rounded-xl bg-[#d7ff4f]/20 hover:bg-[#d7ff4f]/30 border border-[#d7ff4f]/50 text-[#d7ff4f] hover:text-white font-black text-xs font-mono transition flex items-center gap-1.5 shadow-[0_0_15px_rgba(215,255,79,0.25)] active:scale-95 cursor-pointer"
-                                >
-                                  <ShieldCheck className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                                  <span>Inspect Crypto Proof</span>
-                                </button>
-                                <a
-                                  href="https://explore.tempo.xyz/address/0x3c42E274FAdd8e371fB84f97203CC2F2125c8775"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-3.5 py-2 rounded-xl bg-white/[0.05] hover:bg-white/10 border border-white/10 text-white font-bold text-xs font-mono transition flex items-center gap-1.5 active:scale-95"
-                                >
-                                  <span>Vault Contract (42431)</span>
-                                  <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
+                              {batchTxHash && (
+                                <a href={`https://explore.tempo.xyz/tx/${batchTxHash}`} target="_blank" rel="noopener noreferrer" className="px-3.5 py-2 rounded-xl bg-[#d7ff4f]/15 hover:bg-[#d7ff4f]/25 border border-[#d7ff4f]/35 text-[#d7ff4f] font-bold text-xs transition flex items-center gap-1.5 active:scale-95">
+                                  <span>View receipt</span>
+                                  <ExternalLink className="w-3.5 h-3.5" />
                                 </a>
-                                <button
-                                  type="button"
-                                  onClick={() => copyToClipboard('0x3c42E274FAdd8e371fB84f97203CC2F2125c8775', 'climax_root_hash')}
-                                  className="px-3 py-2 rounded-xl bg-white/[0.05] hover:bg-white/10 border border-white/10 text-xs font-mono text-zinc-200 transition flex items-center gap-1.5 active:scale-95 cursor-pointer"
-                                >
-                                  {copiedKey === 'climax_root_hash' ? (
-                                    <>
-                                      <Check className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                                      <span className="text-[#d7ff4f]">Copied!</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Copy className="w-3.5 h-3.5 text-zinc-400" />
-                                      <span>Copy Vault Contract</span>
-                                    </>
-                                  )}
-                                </button>
-                              </div>
+                              )}
                             </div>
 
                             {/* Crisp Reality Statement */}
                             <p className="text-xs sm:text-sm text-zinc-300 font-sans leading-relaxed">
-                              All <strong className="text-white">{selectedPreset.subcontractors.filter(s => s.costPathUsd > 0).length} agent tool payments</strong> were authorized via EIP-712 session key vouchers tied to the SynapseVault contract (<strong className="text-[#d7ff4f] font-mono">0x3c42E274...c8775</strong>) on Tempo L1 with &lt;15ms gateway finality. No master wallet keys exposed; unspent balance remains in your vault.
+                              {batchTxHash ? (
+                                <>The approved work steps were paid and a receipt is ready to review.</>
+                              ) : (
+                                <>The evaluation plan stayed within the budget. No live payment was sent.</>
+                              )}
                             </p>
 
-                            {/* Root Contract & Performance Strip */}
-                            <div className="p-3 rounded-xl bg-black/60 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-mono">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="text-zinc-500 uppercase text-[10px] font-bold shrink-0">Verified Vault Contract:</span>
-                                <span className="text-[#d7ff4f] font-bold truncate">
-                                  0x3c42E274FAdd8e371fB84f97203CC2F2125c8775
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-3 shrink-0 text-[11px] text-zinc-400">
-                                <span>Status: <strong className="text-emerald-400">Bytecode Verified</strong></span>
-                                <span>•</span>
-                                <span>Gateway Auth: <strong className="text-white">&lt;15ms</strong></span>
-                                <span>•</span>
-                                <span>L1 Block: <strong className="text-[#d7ff4f]">~0.5s</strong></span>
-                                <span>•</span>
-                                <span>Fee: <strong className="text-white">&lt;$0.0001 pathUSD</strong></span>
-                              </div>
+                            <div className="px-3.5 py-3 rounded-xl bg-white/[.035] border border-white/10 text-xs text-zinc-300">
+                              <span className="text-zinc-500 uppercase text-[10px] font-bold mr-2">Status</span>
+                              <strong className={batchTxHash ? 'text-emerald-400' : 'text-zinc-300'}>{batchTxHash ? 'Payment confirmed' : 'Evaluation only · no live payment'}</strong>
                             </div>
 
-                            {/* Interactive 19-Payment Ledger Header & Filter */}
-                            <div className="pt-2 space-y-2.5">
+                            {/* Optional technical detail: keep the main result readable first. */}
+                            <details className="group pt-2">
+                              <summary className="list-none cursor-pointer flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[.025] px-3.5 py-3 text-xs font-mono text-zinc-300 hover:border-[#d7ff4f]/30 transition">
+                                <span className="flex items-center gap-2">
+                                  <Coins className="w-3.5 h-3.5 text-[#d7ff4f]" />
+                                  <span className="font-bold">View payment steps ({selectedPreset.subcontractors.filter(s => s.costPathUsd > 0).length})</span>
+                                  <span className="text-zinc-500 hidden sm:inline">Optional technical details</span>
+                                </span>
+                                <ChevronDown className="w-4 h-4 text-zinc-400 transition-transform group-open:rotate-180" />
+                              </summary>
+                              <div className="mt-3 space-y-2.5">
                               <div className="flex items-center justify-between flex-wrap gap-2 text-xs font-mono">
                                 <span className="text-[11px] font-bold uppercase text-zinc-300 flex items-center gap-1.5">
                                   <Coins className="w-3.5 h-3.5 text-[#d7ff4f]" />
                                   <span>Cryptographic Settlement Ledger ({selectedPreset.subcontractors.filter(s => s.costPathUsd > 0).length} Micro-Transactions)</span>
                                 </span>
-                                <div className="flex items-center gap-1 p-0.5 rounded-lg bg-black/50 border border-white/10 text-[10.5px]">
+                                <div className="flex items-center gap-1 p-0.5 rounded-lg bg-white/[.035] border border-white/10 text-[10.5px]">
                                   <button
                                     type="button"
                                     onClick={() => setSelectedLedgerFilter('all')}
@@ -5929,7 +5787,7 @@ export function MultiAgentSwarmView({
                                     return (
                                       <div
                                         key={sub.id}
-                                        className="p-2.5 rounded-xl bg-black/50 border border-white/[0.08] hover:border-[#d7ff4f]/30 transition flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-mono"
+                                        className="p-2.5 rounded-xl bg-white/[.025] border border-white/[0.08] hover:border-[#d7ff4f]/30 transition flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-mono"
                                       >
                                         <div className="flex items-center gap-2.5 min-w-0">
                                           <span className="w-5 h-5 rounded-md bg-white/5 border border-white/10 flex items-center justify-center text-[10px] text-zinc-400 shrink-0">
@@ -5947,7 +5805,7 @@ export function MultiAgentSwarmView({
                                                <span>•</span>
                                                <span>Nonce: available after settlement</span>
                                                <span>•</span>
-                                               <span>Vault: 0x3c42E274...c8775</span>
+                                               <span>Configured vault: 0x3c42E274...c8775</span>
                                              </div>
                                            </div>
                                          </div>
@@ -5980,22 +5838,28 @@ export function MultiAgentSwarmView({
                                     );
                                   })}
                               </div>
-                            </div>
+                              </div>
+                            </details>
                           </div>
                         </div>
 
                         {/* What the workforce delivered */}
-                        <div className="pt-4 border-t border-white/10 max-w-4xl mx-auto space-y-3 text-left">
+                        <details className="group pt-2 max-w-4xl mx-auto text-left">
+                          <summary className="list-none cursor-pointer flex items-center justify-between gap-3 py-2 text-[10px] font-mono font-bold uppercase tracking-widest text-[#d7ff4f] hover:text-white transition">
+                            <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f]" />Key outputs <span className="text-zinc-500 font-normal tracking-normal normal-case">(optional detail)</span></span>
+                            <ChevronDown className="w-4 h-4 text-zinc-400 transition-transform group-open:rotate-180" />
+                          </summary>
+                        <div className="pt-2 space-y-3">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#d7ff4f] flex items-center gap-1.5">
                               <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f]" />
                               What the workforce delivered
                             </span>
                             <span className="text-[10px] font-mono text-zinc-400">
-                              {selectedPreset.subcontractors.length === 20 ? '19 Transactions' : `${selectedPreset.subcontractors.length - 1} Transactions`} {batchTxHash ? 'confirmed on Tempo L1' : 'processed in demo flow'}
+                              {selectedPreset.subcontractors.length === 20 ? '19 payment steps' : `${selectedPreset.subcontractors.length - 1} payment steps`} {batchTxHash ? 'confirmed on Tempo L1' : 'in evaluation flow'}
                             </span>
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5 text-xs font-mono">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 text-xs font-mono [&_.bg-black\/50]:!bg-[#1f252b]/70 [&>*:nth-child(n+4)]:opacity-65">
                             {selectedPreset.id === 'swarm_media_creative' ? (
                               <>
                                 <div className="p-3.5 rounded-xl bg-black/50 border border-white/10 space-y-2 flex flex-col justify-between">
@@ -6095,11 +5959,11 @@ export function MultiAgentSwarmView({
                                   <div>
                                     <div className="flex items-center justify-between">
                                       <span className="text-[10px] text-[#d7ff4f] font-mono font-bold">05</span>
-                                      <span className="text-[9px] text-zinc-400 uppercase font-mono font-semibold">SETTLED</span>
+                                      <span className="text-[9px] text-zinc-400 uppercase font-mono font-semibold">{batchTxHash ? 'SETTLED' : 'PLANNED'}</span>
                                     </div>
-                                    <h5 className="text-white font-bold block text-[11px] mt-1">Tempo L1 Swap</h5>
+                                    <h5 className="text-white font-bold block text-[11px] mt-1">Market Comparison</h5>
                                   </div>
-                                  <span className="text-[9.5px] text-zinc-400 font-sans block border-t border-white/5 pt-1.5">Settled in 14ms (&lt;$0.00002 gas)</span>
+                                  <span className="text-[9.5px] text-zinc-400 font-sans block border-t border-white/5 pt-1.5">{batchTxHash ? 'Settled in 14ms (&lt;$0.00002 gas)' : 'No network fee in evaluation'}</span>
                                 </div>
                               </>
                             ) : (
@@ -6112,7 +5976,7 @@ export function MultiAgentSwarmView({
                                     </div>
                                     <h5 className="text-white font-bold block text-[11px] mt-1">Active Entity</h5>
                                   </div>
-                                  <span className="text-[9.5px] text-zinc-400 font-sans block border-t border-white/5 pt-1.5">LEI verified active</span>
+                                  <span className="text-[9.5px] text-zinc-400 font-sans block border-t border-white/5 pt-1.5">Registry example supplied</span>
                                 </div>
                                 <div className="p-3.5 rounded-xl bg-black/50 border border-white/10 space-y-2 flex flex-col justify-between">
                                   <div>
@@ -6122,7 +5986,7 @@ export function MultiAgentSwarmView({
                                     </div>
                                     <h5 className="text-white font-bold block text-[11px] mt-1">+$12.4M Cash</h5>
                                   </div>
-                                  <span className="text-[9.5px] text-zinc-400 font-sans block border-t border-white/5 pt-1.5">Audited balance sheet</span>
+                                  <span className="text-[9.5px] text-zinc-400 font-sans block border-t border-white/5 pt-1.5">Filing example supplied</span>
                                 </div>
                                 <div className="p-3.5 rounded-xl bg-black/50 border border-white/10 space-y-2 flex flex-col justify-between">
                                   <div>
@@ -6130,9 +5994,9 @@ export function MultiAgentSwarmView({
                                       <span className="text-[10px] text-[#d7ff4f] font-mono font-bold">03</span>
                                       <span className="text-[9px] text-zinc-400 uppercase font-mono font-semibold">LEGAL</span>
                                     </div>
-                                    <h5 className="text-white font-bold block text-[11px] mt-1">0 Sanctions / Liens</h5>
+                                    <h5 className="text-white font-bold block text-[11px] mt-1">Watchlist example</h5>
                                   </div>
-                                  <span className="text-[9.5px] text-zinc-400 font-sans block border-t border-white/5 pt-1.5">OFAC & UN verified clean</span>
+                                  <span className="text-[9.5px] text-zinc-400 font-sans block border-t border-white/5 pt-1.5">Supplied sample result</span>
                                 </div>
                                 <div className="p-3.5 rounded-xl bg-black/50 border border-white/10 space-y-2 flex flex-col justify-between">
                                   <div>
@@ -6152,12 +6016,13 @@ export function MultiAgentSwarmView({
                                     </div>
                                     <h5 className="text-white font-bold block text-[11px] mt-1">APPROVED (94/100)</h5>
                                   </div>
-                                  <span className="text-[9.5px] text-zinc-400 font-sans block border-t border-white/5 pt-1.5">Execute contract</span>
+                                  <span className="text-[9.5px] text-zinc-400 font-sans block border-t border-white/5 pt-1.5">Prepare contract review</span>
                                 </div>
                               </>
                             )}
                           </div>
                         </div>
+                        </details>
 
                         {/* Action CTA Buttons */}
                         <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
@@ -6195,13 +6060,13 @@ export function MultiAgentSwarmView({
                                 "======================================================="
                               ].join("\n") : selectedPreset.id === 'swarm_arbitrage' ? [
                                 "=======================================================",
-                                "SYNAPSE402 AUTONOMOUS WORKFORCE ARBITRAGE MEMO",
+                                "SYNAPSE402 MARKET COMPARISON MEMO",
                                 "=======================================================",
                                 `Task: ${customDirective || selectedPreset.title}`,
                                 `Target Pair: TEMPO/USD Cross-DEX Orderbook`,
-                                `Captured Spread: +1.42% Net Realized Edge`,
-                                `Gas Incurred: $0.000018 USD (Tempo L1 Native MPP)`,
-                                `Recommendation: SWAP EXECUTED & SETTLED ON-CHAIN`,
+                                `Observed Sample Spread: +1.42% (evaluation input)`,
+                                `Planned payment step: $0.0060 USD (no trade submitted)`,
+                                `Recommendation: REVIEW SAMPLE SPREAD; NO TRADE SENT`,
                                 `Total Spend: $0.0060 USD (Budget Cap: $0.0100)`,
                                 `Unused Budget: $0.0040 USD`,
                                 `Workforce: 1 Lead Agent · 2 Workers · 2 Market Feeds`,
@@ -6214,7 +6079,7 @@ export function MultiAgentSwarmView({
                                 "=======================================================",
                                 `Task: ${customDirective || selectedPreset.title}`,
                                 `Target Supplier: Apex Foundry Ltd (Active Commercial Entity)`,
-                                `Supplier Risk Assessment: Low Risk Approved`,
+                                `Supplier Risk Assessment: Low Risk (Evaluation)`,
                                 `Recommendation: EXECUTE SUPPLIER PROCUREMENT CONTRACT`,
                                 `Total Spend: $0.0270 USD (Budget Cap: $0.0300)`,
                                 `Unused Budget: $0.0030 USD`,
@@ -6243,9 +6108,18 @@ export function MultiAgentSwarmView({
                             type="button"
                             onClick={() => {
                               soundEngine.playClick();
+                              const settlementRecord = batchTxHash ? {
+                                txHash: batchTxHash,
+                                network: 'Tempo Moderato testnet',
+                                settlementLatencyMs: 14.8,
+                                authMechanism: 'EIP-712 Scoped Session Key'
+                              } : {
+                                status: 'NOT_SUBMITTED',
+                                note: 'Evaluation only; a live wallet is required for on-chain settlement.'
+                              };
                               const bundleJson = selectedPreset.id === 'swarm_media_creative' ? {
                                 project: "Synapse402 Autonomous AI Workforce",
-                                protocol: "HTTP 402 Micropayments on Tempo L1 (Chain ID: 42431)",
+                                protocol: "HTTP 402 budgeted payments (Tempo L1 when live; Chain ID: 42431)",
                                 mission: "Multi-Platform Ad Campaign Launch",
                                 status: "DELIVERED_READY_FOR_PUBLISH",
                                 budgetSummary: {
@@ -6255,13 +6129,7 @@ export function MultiAgentSwarmView({
                                   humanRole: "Strategy Directive & Hard Spending Cap Enforced",
                                   executionTimeSec: actualExecutionTimeSec
                                 },
-                                onChainSettlement: {
-                                  vaultAddress: "0x3c42E274FAdd8e371fB84f97203CC2F2125c8775",
-                                  txHash: batchTxHash || '',
-                                  tempoModeratoBlock: 42431,
-                                  settlementLatencyMs: 14.8,
-                                  authMechanism: "EIP-712 Scoped Session Key"
-                                },
+                                onChainSettlement: settlementRecord,
                                 workforceComposition: {
                                   leadAgent: "Unit 01 (Campaign Director)",
                                   externalPaidProviders: [
@@ -6307,42 +6175,37 @@ export function MultiAgentSwarmView({
                                 }
                               } : selectedPreset.id === 'swarm_arbitrage' ? {
                                 project: "Synapse402 Autonomous AI Workforce",
-                                protocol: "HTTP 402 Micropayments on Tempo L1 (Chain ID: 42431)",
-                                mission: "Cross-DEX Flash Arbitrage Execution",
-                                status: "EXECUTED_CONFIRMED_ON_CHAIN",
+                                protocol: "HTTP 402 budgeted payments (Tempo L1 when live; Chain ID: 42431)",
+                                mission: "Cross-DEX Market Comparison (Evaluation)",
+                                status: batchTxHash ? "PAYMENT_CONFIRMED_REPORT_READY" : "EVALUATION_RESULT_READY",
                                 budgetSummary: {
                                   budgetCapUsd: 0.0100,
-                                  totalSpentUsd: 0.0060,
-                                  budgetSavedUsd: 0.0040,
+                                  plannedSpendUsd: 0.0060,
+                                  liveSettledSpendUsd: batchTxHash ? 0.0060 : 0,
+                                  remainingCapUsd: 0.0040,
                                   humanRole: "Strategy Directive & Hard Spending Cap Enforced",
                                   executionTimeSec: actualExecutionTimeSec
                                 },
-                                onChainSettlement: {
-                                  vaultAddress: "0x3c42E274FAdd8e371fB84f97203CC2F2125c8775",
-                                  txHash: batchTxHash || '',
-                                  tempoModeratoBlock: 42431,
-                                  settlementLatencyMs: 14.8,
-                                  authMechanism: "EIP-712 Scoped Session Key"
-                                },
+                                onChainSettlement: settlementRecord,
                                 marketFeeds: [
-                                  "Market Depth Mesh L2 API ($0.0010)",
-                                  "Crypto Skew Volatility Feed ($0.0020)"
+                                  "Licensed normalized depth example ($0.0010)",
+                                  "Licensed volatility snapshot example ($0.0020)"
                                 ],
                                 workers: [
                                   "Momentum Prediction Model",
                                   "Safe Code Runner Sandbox"
                                 ],
-                                executionProof: {
-                                  spreadCaptured: "+1.42%",
-                                  netEdgeUsd: 0.428,
-                                  gasSpentTempo: 0.000018,
-                                  slippageProtection: "0.05% Max Verified"
+                                evaluationInputs: {
+                                  sampleSpreadObserved: "+1.42%",
+                                  estimatedEdgeUsd: 0.428,
+                                  configuredSlippageLimit: "0.05%",
+                                  tradeSubmitted: false
                                 }
                               } : {
                                 project: "Synapse402 Autonomous AI Workforce",
-                                protocol: "HTTP 402 Micropayments on Tempo L1 (Chain ID: 42431)",
+                                protocol: "HTTP 402 budgeted payments (Tempo L1 when live; Chain ID: 42431)",
                                 mission: "Enterprise Supplier Due Diligence",
-                                status: "DOSSIER_APPROVED_LEGAL_CLEAR",
+                                 status: "EVALUATION_REVIEW_READY",
                                 budgetSummary: {
                                   budgetCapUsd: 0.0300,
                                   totalSpentUsd: 0.0270,
@@ -6350,25 +6213,19 @@ export function MultiAgentSwarmView({
                                   humanRole: "Strategy Directive & Hard Spending Cap Enforced",
                                   executionTimeSec: actualExecutionTimeSec
                                 },
-                                onChainSettlement: {
-                                  vaultAddress: "0x3c42E274FAdd8e371fB84f97203CC2F2125c8775",
-                                  txHash: batchTxHash || '',
-                                  tempoModeratoBlock: 42431,
-                                  settlementLatencyMs: 14.8,
-                                  authMechanism: "EIP-712 Scoped Session Key"
-                                },
+                                onChainSettlement: settlementRecord,
                                 supplierEvaluated: "Apex Foundry Ltd",
-                                entityStatus: "Active Legal Entity (LEI Verified)",
-                                financialSolvency: "+$12.4M Liquid Cash Audited",
-                                sanctionsScore: "0 Sanctions Hits (OFAC & UN Clean)",
-                                solvencyScore: "4.12 Safe Zone",
-                                recommendation: "EXECUTE CONTRACT (Score 94/100)"
+                                 entityStatus: "Example registry snapshot supplied",
+                                 financialSolvency: "+$12.4M example cash figure",
+                                 sanctionsScore: "Example watchlist result supplied",
+                                 solvencyScore: "4.12 example stress score",
+                                 recommendation: "REVIEW RECOMMENDED (evaluation result)"
                               };
 
                               const jsonFilename = selectedPreset.id === 'swarm_media_creative'
                                 ? 'campaign_bundle_tempo_l1.json'
                                 : selectedPreset.id === 'swarm_arbitrage'
-                                ? 'arbitrage_execution_tempo_l1.json'
+                                ? 'market_comparison_evaluation.json'
                                 : 'supplier_dossier_tempo_l1.json';
 
                               const blob = new Blob([JSON.stringify(bundleJson, null, 2)], { type: 'application/json' });
@@ -6379,10 +6236,10 @@ export function MultiAgentSwarmView({
                               a.click();
                               URL.revokeObjectURL(url);
                             }}
-                            className="px-5 py-3 rounded-xl bg-[#d7ff4f]/10 hover:bg-[#d7ff4f]/20 border border-[#d7ff4f]/30 text-[#d7ff4f] text-xs font-mono font-semibold transition flex items-center gap-2 cursor-pointer active:scale-95"
+                            className="px-5 py-3 rounded-xl bg-white/[.04] hover:bg-white/[.08] border border-white/15 text-zinc-200 text-xs font-mono font-semibold transition flex items-center gap-2 cursor-pointer active:scale-95"
                           >
                             <Download className="w-3.5 h-3.5" />
-                            <span>{selectedPreset.id === 'swarm_media_creative' ? 'Download Campaign Bundle (.JSON)' : selectedPreset.id === 'swarm_arbitrage' ? 'Download Arbitrage Audit (.JSON)' : 'Download Due Diligence Dossier (.JSON)'}</span>
+                            <span>{selectedPreset.id === 'swarm_media_creative' ? 'Download Campaign Bundle (.JSON)' : selectedPreset.id === 'swarm_arbitrage' ? 'Download Market Comparison (.JSON)' : 'Download Due Diligence Dossier (.JSON)'}</span>
                           </button>
                           <button
                             type="button"
@@ -6399,109 +6256,65 @@ export function MultiAgentSwarmView({
                           </button>
                         </div>
 
-                        {/* Payment & Proof Card (Hierarchy: At the Bottom) */}
-                        <div className="mt-4 p-5 sm:p-6 rounded-2xl bg-black/50 border border-white/10 shadow-xl space-y-4 text-left max-w-4xl mx-auto">
+                        {/* Short payment record: the result, without repeating the technical trace. */}
+                        <div className="mt-4 p-5 sm:p-6 rounded-2xl bg-[#171c22] border border-white/10 shadow-sm space-y-4 text-left max-w-4xl mx-auto">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-xl bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 flex items-center justify-center text-[#d7ff4f] shrink-0">
-                                <ShieldCheck className="w-5 h-5" />
-                              </div>
+                              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${batchTxHash ? 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.35)]' : 'bg-zinc-500'}`} aria-hidden="true" />
                               <div>
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-[#d7ff4f]/10 text-[#d7ff4f] border border-[#d7ff4f]/30">
-                                    ✓ Payment confirmed on Tempo
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${batchTxHash ? 'bg-emerald-400/10 text-emerald-300 border-emerald-400/25' : 'bg-white/[.05] text-zinc-300 border-white/10'}`}>
+                                    {batchTxHash ? 'PAYMENT CONFIRMED' : 'EVALUATION ONLY'}
                                   </span>
-                                  <span className="text-xs text-zinc-400 font-mono">Tempo L1 Testnet (Chain ID 42431)</span>
                                 </div>
                                 <h4 className="text-sm font-bold text-white tracking-tight mt-1">
-                                  Payment &amp; Proof
+                                  Payment record
                                 </h4>
                               </div>
                             </div>
 
-                            {/* Direct Tempo Explorer & Vault Buttons */}
-                            <div className="flex items-center gap-2 shrink-0">
+                            {batchTxHash && <div className="flex items-center gap-2 shrink-0">
                               <a
-                                href={batchTxHash ? `https://explore.tempo.xyz/tx/${batchTxHash}` : undefined}
+                                href={`https://explore.tempo.xyz/tx/${batchTxHash}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="px-3 py-1.5 rounded-xl bg-[#d7ff4f]/10 hover:bg-[#d7ff4f]/20 border border-[#d7ff4f]/30 text-[#d7ff4f] hover:text-[#cbf540] text-xs font-mono font-semibold transition flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer active:scale-95"
+                                className="px-3 py-1.5 rounded-xl border border-[#d7ff4f]/30 bg-[#d7ff4f]/10 hover:bg-[#d7ff4f]/20 text-[#d7ff4f] text-xs font-semibold transition flex items-center gap-1.5 shrink-0"
                               >
-                                <span>View Transaction ↗</span>
-                                <ExternalLink className="w-3.5 h-3.5 text-[#d7ff4f]" />
+                                <span>View receipt</span>
+                                <ExternalLink className="w-3.5 h-3.5" />
                               </a>
-                              <a
-                                href="https://explore.tempo.xyz/address/0x3c42E274FAdd8e371fB84f97203CC2F2125c8775"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-zinc-300 hover:text-white text-xs font-mono transition flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95"
-                              >
-                                <span>Vault Contract ↗</span>
-                                <ExternalLink className="w-3.5 h-3.5 text-zinc-400" />
-                              </a>
-                            </div>
+                            </div>}
                           </div>
 
-                          {/* Transaction ID & Copy */}
-                          <div className="p-3 rounded-xl bg-black/60 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs font-mono">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="text-zinc-400 uppercase text-[10px] shrink-0 font-bold">Transaction ID:</span>
-                              <span className="text-[#d7ff4f] font-bold truncate">
-                                {batchTxHash || 'No batch transaction returned'}
-                              </span>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                            <div className="p-3 rounded-lg bg-black/20 border border-white/[0.06]">
+                              <span className="text-zinc-500 block text-[10px] uppercase">Total</span>
+                              <strong className="text-[#d7ff4f]">${selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)}</strong>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => batchTxHash && copyToClipboard(batchTxHash, 'climax_tx_hash')}
-                              className="px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/10 border border-white/10 text-zinc-200 hover:text-white text-[11px] transition flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95"
-                            >
-                              {copiedKey === 'climax_tx_hash' ? (
-                                <>
-                                  <Check className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                                  <span className="text-[#d7ff4f] font-bold">ID Copied!</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="w-3.5 h-3.5 text-zinc-400" />
-                                  <span>Copy Tx ID</span>
-                                </>
-                              )}
-                            </button>
-                          </div>
-
-                          {/* 4 Telemetry Metrics */}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px] font-mono">
-                            <div className="p-2.5 rounded-lg bg-black/40 border border-white/[0.06]">
-                              <span className="text-zinc-400 block text-[9.5px]">PAYMENT</span>
-                              <span className="text-[#d7ff4f] font-bold">
-                                ${selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD
-                              </span>
+                            <div className="p-3 rounded-lg bg-black/20 border border-white/[0.06]">
+                              <span className="text-zinc-500 block text-[10px] uppercase">Work steps</span>
+                              <strong className="text-white">{selectedPreset.subcontractors.length}</strong>
                             </div>
-                            <div className="p-2.5 rounded-lg bg-black/40 border border-white/[0.06]">
-                              <span className="text-zinc-400 block text-[9.5px]">TRANSACTIONS</span>
-                              <span className="text-zinc-200 font-bold">
-                                {selectedPreset.id === 'swarm_media_creative' ? '7 Feeds Paid · 12 Work Steps' : `${selectedPreset.subcontractors.length} Nodes Verified`}
-                              </span>
-                            </div>
-                            <div className="p-2.5 rounded-lg bg-black/40 border border-white/[0.06]">
-                              <span className="text-zinc-400 block text-[9.5px]">PAYMENT AUTH</span>
-                              <span className="text-[#d7ff4f] font-bold">&lt; 15ms</span>
-                            </div>
-                            <div className="p-2.5 rounded-lg bg-black/40 border border-white/[0.06]">
-                              <span className="text-zinc-400 block text-[9.5px]">PROOF PROTOCOL</span>
-                              <span className="text-zinc-200 font-bold">Tempo L1 Policy Seal</span>
+                            <div className="p-3 rounded-lg bg-black/20 border border-white/[0.06] col-span-2 sm:col-span-1">
+                              <span className="text-zinc-500 block text-[10px] uppercase">Status</span>
+                              <strong className={batchTxHash ? 'text-emerald-400' : 'text-zinc-300'}>{batchTxHash ? 'Confirmed' : 'No live payment'}</strong>
                             </div>
                           </div>
-
-                          <div className="text-[10.5px] font-mono text-zinc-400 pt-1 text-center sm:text-left">
-                            Payment confirmed on Tempo testnet • Chain ID 42431 • Tamper-proof audit trail
-                          </div>
+                          {batchTxHash && <div className="flex items-center gap-2 text-xs font-mono text-zinc-400">
+                            <span className="truncate">Receipt ID: {batchTxHash}</span>
+                            <button type="button" onClick={() => copyToClipboard(batchTxHash, 'climax_tx_hash')} className="px-2 py-1 rounded-md bg-white/[.05] border border-white/10 hover:text-white shrink-0">{copiedKey === 'climax_tx_hash' ? 'Copied' : 'Copy'}</button>
+                          </div>}
                         </div>
                       </div>
                     )}
 
                     {/* 3. LIVE MULTI-AGENT PROTOCOL DIALOGUE WIRE (WAR-ROOM STREAM) */}
-                    <div className="p-4 sm:p-5 rounded-2xl bg-white/[.03] backdrop-blur-md border border-white/[.08] shadow-sm space-y-3">
+                    <details className="group rounded-2xl bg-white/[.03] backdrop-blur-md border border-white/[.08] shadow-sm">
+                      <summary className="list-none cursor-pointer p-4 sm:p-5 flex items-center justify-between gap-3 text-sm font-bold text-white hover:bg-white/[.025] transition">
+                        <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-zinc-500" />Activity log <span className="text-[10px] font-mono text-zinc-400 font-normal">{agentDialogues.length} steps</span></span>
+                        <ChevronDown className="w-4 h-4 text-zinc-400 transition-transform group-open:rotate-180" />
+                      </summary>
+                    <div className="px-4 pb-4 sm:px-5 sm:pb-5 space-y-3">
                       <div className="flex items-center justify-between flex-wrap gap-2 border-b border-white/[0.08] pb-2.5">
                         <div className="flex items-center gap-2.5">
                           <div className="w-7 h-7 rounded-lg bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 flex items-center justify-center text-[#d7ff4f]">
@@ -6592,6 +6405,7 @@ export function MultiAgentSwarmView({
                         )}
                       </div>
                     </div>
+                    </details>
                   </>
                 );
               }
@@ -6641,7 +6455,7 @@ export function MultiAgentSwarmView({
                               <div className="flex items-center justify-between text-[10px] font-mono mt-auto pt-1.5 border-t border-white/[0.04]">
                                 <span className="text-zinc-200 font-medium">${sub.costPathUsd}</span>
                                 <span className={isSettled ? 'text-emerald-400 font-semibold' : isBusy ? 'text-[#d7ff4f] font-bold' : 'text-zinc-400'}>
-                                  {isSettled ? '✓ Delivered' : isBusy ? 'Active...' : 'Ready'}
+                                  {isSettled ? (batchTxHash ? '✓ Delivered' : '✓ Prepared') : isBusy ? 'Active...' : 'Ready'}
                                 </span>
                               </div>
                             </button>
@@ -6663,14 +6477,16 @@ export function MultiAgentSwarmView({
                               WORK COMPLETE
                             </h2>
                             <p className="text-sm text-zinc-300 font-sans max-w-lg mx-auto">
-                              {selectedPreset.id === 'swarm_media_creative'
-                                ? 'Creative Studio Assets Ready — Transparent PNG, visual concept layout, and audio stems synthesized.'
-                                : 'Market Risk Dossier Ready — Real-time orderbooks verified, Python risk calculations passed, 0 sanctions hits.'}
+                              {batchTxHash
+                                ? (selectedPreset.id === 'swarm_media_creative'
+                                  ? 'Creative Studio Assets Ready — Transparent PNG, visual concept layout, and audio stems synthesized.'
+                                  : 'Market Risk Dossier Ready — sample inputs reviewed and Python calculations prepared.')
+                                : 'Evaluation package ready — sample outputs assembled for review; no external result was independently verified.'}
                             </p>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 max-w-3xl mx-auto pt-4 border-t border-white/10 font-mono text-left">
                             <div className="p-4 rounded-xl bg-black/60 border border-white/[0.08]">
-                              <span className="text-[10px] uppercase text-zinc-500 block mb-1">Total Spent</span>
+                              <span className="text-[10px] uppercase text-zinc-500 block mb-1">{batchTxHash ? 'Total spent' : 'Planned cost'}</span>
                               <span className="text-xl font-bold text-white block">
                                 ${selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)}
                               </span>
@@ -6678,13 +6494,13 @@ export function MultiAgentSwarmView({
                             </div>
                             <div className="p-4 rounded-xl bg-black/60 border border-white/[0.08]">
                               <span className="text-[10px] uppercase text-zinc-500 block mb-1">
-                                {selectedPreset.id === 'swarm_media_creative' ? 'Pipeline Composition' : 'Nodes Paid'}
+                                {selectedPreset.id === 'swarm_media_creative' ? 'Pipeline composition' : batchTxHash ? 'Nodes paid' : 'Steps reviewed'}
                               </span>
                               <span className="text-xl font-bold text-[#d7ff4f] block">
                                 {selectedPreset.id === 'swarm_media_creative' ? '7 Feeds · 12 Workers' : selectedPreset.subcontractors.length}
                               </span>
                               <span className="text-[11px] text-zinc-400 block mt-0.5">
-                                {selectedPreset.id === 'swarm_media_creative' ? '19 Pipeline Steps Complete' : 'Specialist Endpoints'}
+                                {selectedPreset.id === 'swarm_media_creative' ? '19 pipeline steps' : 'Specialist endpoints'}
                               </span>
                             </div>
                             <div className="p-4 rounded-xl bg-black/60 border border-white/[0.08]">
@@ -6703,7 +6519,7 @@ export function MultiAgentSwarmView({
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.08] pb-2">
                               <div className="flex items-center gap-2">
                                 <ShieldCheck className="w-4 h-4 text-[#d7ff4f]" />
-                                <span className="text-[#d7ff4f] font-bold uppercase text-[11px]">Settled On-Chain • Tempo L1</span>
+                                <span className="text-[#d7ff4f] font-bold uppercase text-[11px]">{batchTxHash ? 'Settled on-chain • Tempo L1' : 'Evaluation payment plan'}</span>
                                 <span className="text-zinc-500 text-[10px]">Chain ID 42431 · Type 0x76 MPP</span>
                               </div>
                               <a
@@ -6717,9 +6533,9 @@ export function MultiAgentSwarmView({
                               </a>
                             </div>
                             <div className="flex items-center justify-between text-[11px] text-zinc-300">
-                              <span>Total Settled: <strong className="text-white">${selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD</strong></span>
-                              <span>Units Paid: <strong className="text-[#d7ff4f]">{selectedPreset.subcontractors.filter(s => s.costPathUsd > 0).length}</strong></span>
-                              <span>Network Fee: <strong className="text-emerald-400">&lt;$0.00002</strong></span>
+                              <span>{batchTxHash ? 'Total settled' : 'Total planned'}: <strong className="text-white">${selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD</strong></span>
+                              <span>{batchTxHash ? 'Units paid' : 'Payment steps'}: <strong className="text-[#d7ff4f]">{selectedPreset.subcontractors.filter(s => s.costPathUsd > 0).length}</strong></span>
+                              <span>{batchTxHash ? 'Network fee' : 'Network fee'}: <strong className="text-emerald-400">{batchTxHash ? '&lt;$0.00002' : 'not incurred'}</strong></span>
                             </div>
                           </div>
 
@@ -6750,27 +6566,25 @@ export function MultiAgentSwarmView({
             {/* Header: Title, Live Status Badges & Action Controls */}
             <div className="p-4 sm:p-5 border-b border-white/10 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white/[0.02]">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/[0.06] border border-white/15 flex items-center justify-center text-white shrink-0 shadow-sm">
-                  <Layers className="w-5 h-5" />
-                </div>
+                <span className="w-2.5 h-2.5 rounded-full bg-[#d7ff4f] shadow-[0_0_12px_rgba(215,255,79,0.45)] shrink-0" aria-hidden="true" />
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
-                      Workforce Execution & Live Deliverables
+                      Workforce execution & deliverables
                     </h3>
                     <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold border bg-white/[0.04] text-zinc-300 border-white/10 flex items-center gap-1.5">
                       <span className={`w-1.5 h-1.5 rounded-full ${settledWorkerIds.size === selectedPreset.subcontractors.length ? 'bg-emerald-400' : 'bg-zinc-500'}`} />
-                      {settledWorkerIds.size}/{selectedPreset.subcontractors.length} Completed {settledWorkerIds.size > 0 ? '(<15ms payment auth)' : '• Standby'}
+                      {settledWorkerIds.size}/{selectedPreset.subcontractors.length} {settledWorkerIds.size > 0 ? 'Steps complete' : 'Ready'}
                     </span>
                   </div>
                   <p className="text-xs text-zinc-400 font-sans mt-0.5">
                     {settledWorkerIds.size === selectedPreset.subcontractors.length
-                      ? `All ${selectedPreset.subcontractors.length} mission units successfully completed and delivered outputs.`
+                    ? `${selectedPreset.subcontractors.length} work steps completed in the evaluation flow${batchTxHash ? ' and confirmed on Tempo L1.' : '.'}`
                       : isExecuting
                       ? selectedPreset.subcontractors.length === 20
                         ? 'Executing 3-phase workforce pipeline in parallel...'
                         : 'Executing workforce pipeline...'
-                      : '20 mission units configured and ready for execution.'}
+                    : `${selectedPreset.subcontractors.length} work steps configured and ready.`}
                   </p>
                 </div>
               </div>
@@ -6797,7 +6611,7 @@ export function MultiAgentSwarmView({
                       mission: selectedPreset.title,
                       totalNodes: selectedPreset.subcontractors.length,
                       totalSettledCostUsd: Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4),
-                      tempoL1Settlement: "Verified parallel payment lanes",
+                      tempoL1Settlement: batchTxHash ? "Verified parallel payment lanes" : "Budgeted payment steps; no chain receipt",
                       settledNodes: selectedPreset.subcontractors.map(s => ({
                         node: s.shortName,
                         role: s.role,
@@ -6840,13 +6654,13 @@ export function MultiAgentSwarmView({
                       `Total Spend: $${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)} USD`,
                       `Policy Budget Cap: ${(selectedPreset as any).budgetLimit || '$0.0500 cap'} (Zero Overdrafts)`,
                       `SaaS Subscription Incurred: $0.00 (Zero Retainers)`,
-                      `Settlement Layer: Tempo L1 Micropayments (<15ms gateway auth • ~500ms block finality)`,
+                      `Settlement Layer: ${batchTxHash ? 'Tempo L1 micropayments (confirmed trace)' : 'Evaluation payment plan (wallet required for chain settlement)'}`,
                       `On-Chain Tx Hash: ${batchTxHash || 'No batch transaction returned'}`,
                       "-------------------------------------------------------",
                       "VERIFIED DELIVERABLE SPECIFICATIONS:",
                       ...selectedPreset.subcontractors.map((s, idx) => `  ${idx + 1}. [${s.shortName}] ${s.role}: ${s.deliverablePreview} ($${s.costPathUsd.toFixed(4)})`),
                       "-------------------------------------------------------",
-                      "EXECUTIVE VERIFICATION STATUS: AUDIT APPROVED & ON-CHAIN VERIFIED",
+                      "EXECUTIVE STATUS: REVIEW READY (ON-CHAIN TRACE DEPENDS ON LIVE WALLET)",
                       "======================================================="
                     ].join("\n") : [
                       "=======================================================",
@@ -6858,13 +6672,13 @@ export function MultiAgentSwarmView({
                       `Total Spend: $${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)} USD`,
                       `Corporate Policy Cap: ${(selectedPreset as any).budgetLimit || '$0.0300 cap'} (Zero Unapproved Overdrafts)`,
                       `SaaS Subscription Incurred: $0.00 (Zero Recurring Retainers)`,
-                      `Settlement Layer: Tempo L1 Micropayments (<15ms gateway auth • ~500ms block finality)`,
+                      `Settlement Layer: ${batchTxHash ? 'Tempo L1 micropayments (confirmed trace)' : 'Evaluation payment plan (wallet required for chain settlement)'}`,
                       `On-Chain Tx Hash: ${batchTxHash || 'No batch transaction returned'}`,
                       "-------------------------------------------------------",
                       "VERIFIED DELIVERABLE SPECIFICATIONS:",
                       ...selectedPreset.subcontractors.map((s, idx) => `  ${idx + 1}. [${s.shortName}] ${s.role}: ${s.deliverablePreview} ($${s.costPathUsd.toFixed(4)})`),
                       "-------------------------------------------------------",
-                      "EXECUTIVE VERIFICATION STATUS: AUDIT APPROVED & ON-CHAIN VERIFIED",
+                      "EXECUTIVE STATUS: REVIEW READY (ON-CHAIN TRACE DEPENDS ON LIVE WALLET)",
                       "======================================================="
                     ].join("\n");
                     navigator.clipboard.writeText(memoText);
@@ -6881,7 +6695,7 @@ export function MultiAgentSwarmView({
                   ) : (
                     <>
                       <FileText className="w-3.5 h-3.5 text-zinc-300" />
-                      <span>Export Official Memo</span>
+                      <span>Export summary</span>
                     </>
                   )}
                 </button>
@@ -6889,7 +6703,7 @@ export function MultiAgentSwarmView({
             </div>
 
             {/* 4 Clean Navigation Tabs */}
-            <div className="flex items-center gap-1 px-3 sm:px-4 pt-3 border-b border-white/10 overflow-x-auto bg-black/40">
+            <div className="flex items-center gap-1 px-3 sm:px-4 pt-3 border-b border-white/10 overflow-x-auto bg-white/[.025]">
               {[
                 { id: 'summary', label: 'Summary & Decision', icon: FileText, count: null },
                 { id: 'inspector', label: 'Inspect Workers', icon: Cpu, count: null },
@@ -6957,21 +6771,27 @@ export function MultiAgentSwarmView({
                   ) : (
                     <div className="space-y-5 pt-1">
                       {/* Executive Summary Header */}
-                      <div className="p-4 rounded-2xl bg-black/40 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="p-4 rounded-2xl bg-[#1f252b]/70 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-xl bg-[#d7ff4f]/15 border border-[#d7ff4f]/30 flex items-center justify-center text-[#d7ff4f] shrink-0">
                             <CheckCircle2 className="w-4 h-4" />
                           </div>
                           <div>
                             <span className="text-xs font-bold text-white font-mono block">
-                              {selectedPreset.id === 'swarm_media_creative'
-                                ? 'Executive Campaign Deliverables Approved'
-                                : selectedPreset.id === 'swarm_arbitrage'
-                                ? 'Arbitrage Execution Approved'
-                                : 'Enterprise Due Diligence Dossier Approved'}
+                              {batchTxHash
+                                ? (selectedPreset.id === 'swarm_media_creative'
+                                  ? 'Executive Campaign Deliverables Approved'
+                                  : selectedPreset.id === 'swarm_arbitrage'
+                                  ? 'Market Comparison Approved'
+                                  : 'Enterprise Due Diligence Dossier Approved')
+                                : (selectedPreset.id === 'swarm_media_creative'
+                                  ? 'Executive Campaign Deliverables Ready'
+                                  : selectedPreset.id === 'swarm_arbitrage'
+                                  ? 'Market Comparison Ready'
+                                  : 'Enterprise Due Diligence Draft Ready')}
                             </span>
                             <span className="text-[11px] text-zinc-400 font-sans">
-                              {selectedPreset.subcontractors.length} autonomous units settled on Tempo L1 • Total spend: ${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)} USD
+                              {selectedPreset.subcontractors.length} work steps completed {batchTxHash ? 'with a Tempo L1 trace' : 'in the evaluation flow'} • Total planned spend: ${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)} USD
                             </span>
                           </div>
                         </div>
@@ -6990,13 +6810,13 @@ export function MultiAgentSwarmView({
                                 `Total Spend: $${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)} USD`,
                                 `Budget Policy Cap: ${selectedPreset.budgetLimit || '$0.0500 cap'} (Zero Overdrafts)`,
                                 `SaaS Subscriptions Incurred: $0.00 (Zero Recurring Retainers)`,
-                                `Settlement Layer: Tempo L1 Micropayments (<15ms handshake • ~135ms L1 finality)`,
+                                `Settlement Layer: ${batchTxHash ? 'Tempo L1 micropayments (confirmed trace)' : 'Evaluation payment plan (wallet required for chain settlement)'}`,
                                 `Batch Tx Hash: ${batchTxHash || 'No batch transaction returned'}`,
                                 "-------------------------------------------------------",
                                 "VERIFIED DELIVERABLES SUMMARY:",
                                 ...selectedPreset.subcontractors.map((s, idx) => `  ${idx + 1}. [${s.shortName}] ${s.role}: ${s.deliverablePreview} ($${s.costPathUsd.toFixed(4)})`),
                                 "-------------------------------------------------------",
-                                "EXECUTIVE STATUS: COMPLETED & SETTLED ON TEMPO L1",
+                                "EXECUTIVE STATUS: REVIEW READY (ON-CHAIN TRACE DEPENDS ON LIVE WALLET)",
                                 "======================================================="
                               ].join("\n");
                               copyToClipboard(memoText, 'tab_memo_btn');
@@ -7019,7 +6839,7 @@ export function MultiAgentSwarmView({
                       </div>
 
                       {/* Deliverables Table */}
-                      <div className="rounded-2xl bg-black/50 border border-white/10 overflow-hidden font-mono text-xs">
+                      <div className="rounded-2xl bg-[#1f252b]/70 border border-white/10 overflow-hidden font-mono text-xs">
                         <div className="px-4 py-2.5 bg-white/[0.03] border-b border-white/[0.08] flex items-center justify-between text-[11px] text-zinc-400 font-bold uppercase">
                           <span>Unit & Role</span>
                           <span>Output & Cost</span>
@@ -7040,7 +6860,7 @@ export function MultiAgentSwarmView({
                               </div>
                               <div className="text-right shrink-0">
                                 <span className="text-[#d7ff4f] font-bold block">${s.costPathUsd.toFixed(4)}</span>
-                                <span className="text-zinc-400 text-[10px] block">✓ Delivered</span>
+                                <span className="text-zinc-400 text-[10px] block">{batchTxHash ? '✓ Delivered' : '✓ Prepared'}</span>
                               </div>
                             </div>
                           ))}
@@ -7100,7 +6920,7 @@ export function MultiAgentSwarmView({
                           {isSettled ? (
                             <span className="px-2.5 py-1 rounded-md text-[11px] font-mono font-medium border bg-[#d7ff4f]/10 text-[#d7ff4f] border-[#d7ff4f]/30 flex items-center gap-1.5">
                               <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f]" />
-                              Settled (&lt;15ms payment authorization on Tempo L1)
+                              {batchTxHash ? 'Settled on Tempo L1' : 'Payment step completed in evaluation'}
                             </span>
                           ) : (
                             <span className="px-2.5 py-1 rounded-md text-[11px] font-mono font-medium border bg-white/[0.03] text-zinc-400 border-white/10">
@@ -7127,7 +6947,7 @@ export function MultiAgentSwarmView({
                         <div className="p-3 rounded-lg bg-black/40 border border-white/[0.05]">
                           <span className="text-[10px] text-zinc-500 block uppercase">Cost & Speed</span>
                           <span className="text-white font-medium block text-[11px] font-mono mt-0.5">
-                            ${currentSub.costPathUsd.toFixed(4)} USD • &lt;15ms authorization
+                            ${currentSub.costPathUsd.toFixed(4)} USD • policy check
                           </span>
                         </div>
                       </div>
@@ -7137,10 +6957,10 @@ export function MultiAgentSwarmView({
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-mono text-zinc-300 font-semibold flex items-center gap-1.5">
                             <Sparkles className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                            <span>Verified Specialist Deliverable:</span>
+                            <span>Specialist Deliverable:</span>
                           </span>
                           <span className="text-[10.5px] font-mono text-zinc-400">
-                            {isSettled ? 'Cryptographically Sealed on Tempo L1' : 'Awaiting Execution'}
+                            {isSettled ? (batchTxHash ? 'Sealed on Tempo L1' : 'Completed in evaluation') : 'Awaiting Execution'}
                           </span>
                         </div>
                         <div className="p-3 rounded-md bg-white/[0.02] border border-white/[0.04] font-mono text-xs text-zinc-200 leading-relaxed break-words select-all whitespace-pre-wrap">
@@ -7159,10 +6979,10 @@ export function MultiAgentSwarmView({
                   <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
                     <div className="flex items-center gap-2">
                       <Coins className="w-4 h-4 text-white" />
-                      <span className="text-zinc-100 font-bold">On-Chain Settlement Receipt</span>
+                      <span className="text-zinc-100 font-bold">Payment Record</span>
                     </div>
                     <span className="px-2 py-0.5 rounded bg-[#d7ff4f]/10 text-[#d7ff4f] border border-[#d7ff4f]/30 text-[10.5px] font-semibold">
-                      ✓ Confirmed on Tempo L1
+                      {batchTxHash ? '✓ Confirmed on Tempo L1' : 'Evaluation record · no chain receipt'}
                     </span>
                   </div>
 
@@ -7173,10 +6993,10 @@ export function MultiAgentSwarmView({
                     </div>
                     <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.05] space-y-1">
                       <span className="text-zinc-500 block uppercase text-[10px]">Settlement Network</span>
-                      <span className="text-[#d7ff4f] font-mono block">Tempo L1 Testnet</span>
+                      <span className="text-[#d7ff4f] font-mono block">{batchTxHash ? 'Tempo L1 Testnet' : 'Awaiting live wallet'}</span>
                     </div>
                     <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.05] space-y-1">
-                      <span className="text-zinc-500 block uppercase text-[10px]">Total Paid</span>
+                      <span className="text-zinc-500 block uppercase text-[10px]">{batchTxHash ? 'Total paid' : 'Total planned'}</span>
                       <span className="text-[#d7ff4f] font-semibold block">
                         {settledWorkerIds.size} of {selectedPreset.subcontractors.length} Nodes (${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)} USD)
                       </span>
@@ -7185,7 +7005,7 @@ export function MultiAgentSwarmView({
 
                   <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] text-[11px] text-zinc-300 space-y-2">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                      <span>Differentiated micro-settlements released on Tempo L1 upon verified delivery. Total pipeline cost: ${(selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0)).toFixed(4)} USD of {(selectedPreset as any).budgetLimit || '$0.0500 cap'}.</span>
+                      <span>{batchTxHash ? 'Differentiated micro-settlements were released on Tempo L1 after delivery checks.' : 'Each payment step is planned against the budget and is not sent until a live wallet is connected.'} Total pipeline cost: ${(selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0)).toFixed(4)} USD of {(selectedPreset as any).budgetLimit || '$0.0500 cap'}.</span>
                       <span className="text-[#d7ff4f] font-mono font-semibold">
                         {selectedPreset.id === 'swarm_media_creative' ? 'Surplus: $0.0255 protected' : selectedPreset.id === 'swarm_arbitrage' ? 'Surplus: $0.0040 protected' : 'Surplus: $0.0030 protected'}
                       </span>
@@ -7340,12 +7160,12 @@ export function MultiAgentSwarmView({
                 <span className="font-bold text-[#f5f5f2] flex items-center">
                   <span>3. One Final Micro-Receipt</span>
                   <InfoBadge
-                    title="Tempo L1 Final Settlement"
-                    text="Words are tallied as they arrive; the final tiny fraction settles on Tempo L1 upon completion or stop."
+                    title="Final payment record"
+                    text="Words are tallied as they arrive; the final amount is recorded when the stream completes or stops. A live wallet is required for an on-chain receipt."
                   />
                 </span>
                 <span className="text-white/50">
-                  Words are counted live; the accumulated fraction of a cent settles on Tempo L1 when finished.
+                  Words are counted live; the accumulated amount is recorded when finished. Live chain settlement requires a connected wallet.
                 </span>
               </div>
             </div>
@@ -7375,8 +7195,8 @@ export function MultiAgentSwarmView({
                         : 'bg-black/40 border-white/[.08] text-white/50'
                     }`}
                   >
-                    <div className="font-bold text-xs text-[#f5f5f2] mb-0.5">Market Arbitrage &amp; Micro-Pricing</div>
-                    <p className="text-[11px] text-white/50">Simulates real-time pricing and sub-cent USD execution on Tempo L1.</p>
+                    <div className="font-bold text-xs text-[#f5f5f2] mb-0.5">Market Market Comparison &amp; Micro-Pricing</div>
+                    <p className="text-[11px] text-white/50">Simulates real-time pricing and a budgeted sub-cent payment step.</p>
                   </button>
 
                   <button
@@ -7402,7 +7222,7 @@ export function MultiAgentSwarmView({
                     }`}
                   >
                     <div className="font-bold text-xs text-[#f5f5f2] mb-0.5">External Tools &amp; Data Verification</div>
-                    <p className="text-[11px] text-white/50">Live tool response verification and settlement on Tempo L1.</p>
+                    <p className="text-[11px] text-white/50">Live tool response verification with a budget check.</p>
                   </button>
                 </div>
 
@@ -7461,7 +7281,7 @@ export function MultiAgentSwarmView({
                 <span className="px-2 py-0.5 rounded-md bg-[#d7ff4f] text-[#08090c] font-black text-[10px] tracking-wider uppercase">
                   STEP 2
                 </span>
-                <span className="text-xs font-bold text-white tracking-wide">Live Token Stream Metering & Settlement Receipt</span>
+                <span className="text-xs font-bold text-white tracking-wide">Live token stream and payment record</span>
               </div>
               {/* Telemetry Bar */}
               <div className="p-3 rounded-xl bg-white/[.04] border border-white/15 grid grid-cols-3 gap-2 font-mono text-center">
@@ -7470,7 +7290,7 @@ export function MultiAgentSwarmView({
                   <span className="text-base font-bold text-[#f5f5f2]">{streamTokens.length}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-white/50 uppercase block">Micro-Settled</span>
+                  <span className="text-[10px] text-white/50 uppercase block">Tracked cost</span>
                   <span className="text-base font-bold text-[#d7ff4f]">${streamCost.toFixed(6)}</span>
                 </div>
                 <div>
@@ -7523,15 +7343,17 @@ export function MultiAgentSwarmView({
                     <div className="flex items-center justify-between text-[#f5f5f2] font-bold">
                       <span className="flex items-center gap-1.5 text-[#d7ff4f]">
                         <ShieldCheck className="w-3.5 h-3.5" />
-                        <span>Instant Payment Receipt</span>
+                        <span>{streamLiveConfirmed ? 'Confirmed payment receipt' : 'Evaluation payment record'}</span>
                       </span>
-                      <span className="text-[10px] font-mono text-zinc-300">Tempo Block #{streamTraceInfo.blockHeight ? streamTraceInfo.blockHeight.toLocaleString() : 'LIVE_L1'}</span>
+                      <span className="text-[10px] font-mono text-zinc-300">
+                        {streamLiveConfirmed && streamTraceInfo.blockHeight ? `Tempo block #${streamTraceInfo.blockHeight.toLocaleString()}` : 'No chain receipt'}
+                      </span>
                     </div>
                     <div className="text-[10px] font-mono text-slate-300">
                       • {streamTraceInfo.leakagePrevented}
                     </div>
                     <div className="text-[10px] font-mono text-slate-300">
-                      • Payment Reference: <code className="text-[#d7ff4f]">{streamTraceInfo.finalTraceId || streamTraceInfo.streamId}</code>
+                      • Payment reference: <code className="text-[#d7ff4f]">{streamLiveConfirmed ? (streamTraceInfo.txHash || streamTraceInfo.finalTraceId) : (streamTraceInfo.streamId || 'evaluation')}</code>
                     </div>
                   </div>
                 )}
@@ -7555,7 +7377,7 @@ export function MultiAgentSwarmView({
                   <span>Connect Claude Desktop &amp; Cursor to Tempo L1</span>
                   <InfoBadge
                     title="Desktop AI Micro-Payments"
-                    text="Connects desktop AI clients (Claude/Cursor) to Tempo L1. Your AI buys live data or tools within a strict $0.05 budget limit without needing credit card numbers."
+                    text="Connects an AI client to the payment flow. It can request approved licensed or private resources within a strict $0.05 limit; a live wallet is needed before funds move."
                   />
                 </h3>
               </div>
@@ -7741,7 +7563,7 @@ export function MultiAgentSwarmView({
                 <span className="px-2 py-0.5 rounded-full bg-[#d7ff4f]/10 text-[#d7ff4f] border border-[#d7ff4f]/30 text-[10px] font-mono font-bold uppercase tracking-wider">
                   REALITY CHECK • SIDE-BY-SIDE PROOF
                 </span>
-                <span className="text-[10px] font-mono text-zinc-400">403 Forbidden vs 200 OK</span>
+                <span className="text-[10px] font-mono text-zinc-400">403 Forbidden vs paid response</span>
               </div>
               <h3 className="text-base font-bold text-zinc-100 flex items-center gap-2">
                 <ShieldAlert className="w-4 h-4 text-[#d7ff4f]" />
@@ -7752,7 +7574,7 @@ export function MultiAgentSwarmView({
                 />
               </h3>
               <p className="text-xs text-zinc-300 mt-1 max-w-3xl leading-relaxed">
-                Traditional crawlers waste millions on proxy rotations and CAPTCHA solvers, only to get blocked by web firewalls. Synapse402 replaces the firewall with an open turnstile: bots settle 0.1¢ per request on Tempo L1 and receive clean, structured JSON payloads in &lt;15ms.
+                Traditional crawlers can be blocked by web firewalls. Synapse402 gives an approved agent a paid, structured response; the budget is checked before the request and a live wallet is needed for on-chain settlement.
               </p>
             </div>
 
@@ -7874,9 +7696,9 @@ export function MultiAgentSwarmView({
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-[#d7ff4f] font-mono uppercase tracking-wider">
-                      Synapse402 Autonomous Agent (Tempo L1)
+                      Synapse402 Autonomous Agent (budgeted request)
                     </h4>
-                    <span className="text-[10px] text-zinc-400 font-mono">Approach: HTTP 402 Micro-Payment (&lt;15ms on Tempo L1)</span>
+                    <span className="text-[10px] text-zinc-400 font-mono">Approach: HTTP 402 payment request</span>
                   </div>
                 </div>
                 <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${
@@ -7895,7 +7717,7 @@ export function MultiAgentSwarmView({
                   <strong className="text-[#d7ff4f] text-sm">{synapseResult ? '1,420 Bytes (Structured JSON)' : '—'}</strong>
                 </div>
                 <div className="p-2 rounded bg-black/40 border border-white/5">
-                  <span className="text-[10px] text-zinc-400 block">Tempo L1 Latency</span>
+                  <span className="text-[10px] text-zinc-400 block">Request latency</span>
                   <strong className="text-emerald-400 text-sm">{synapseResult ? `${synapseResult.durationMs}ms` : '—'}</strong>
                 </div>
                 <div className="p-2 rounded bg-black/40 border border-white/5">
@@ -7912,7 +7734,7 @@ export function MultiAgentSwarmView({
 
               {/* Raw JSON Payload Window */}
               <div className="space-y-1">
-                <span className="text-[10px] font-mono uppercase text-zinc-400 block">Delivered Structured Data (Parsed JSON):</span>
+                  <span className="text-[10px] font-mono uppercase text-zinc-400 block">{synapseResult ? 'Structured data returned (parsed JSON):' : 'Example structured data (parsed JSON):'}</span>
                 <pre className="p-3 rounded-lg bg-black/60 border border-[#d7ff4f]/20 text-[10px] font-mono text-[#d7ff4f] overflow-x-auto max-h-36">
                   {synapseResult ? JSON.stringify(synapseResult.payload, null, 2) : '// Click "Run Head-to-Head Test" to see verified JSON delivery...'}
                 </pre>
@@ -7921,7 +7743,7 @@ export function MultiAgentSwarmView({
               <div className="p-2.5 rounded-lg bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 text-[11px] text-zinc-300 flex items-start gap-2">
                 <Zap className="w-4 h-4 text-[#d7ff4f] shrink-0 mt-0.5" />
                 <span>
-                  <strong>Closed Economic Equilibrium:</strong> Publisher receives instant 0.1¢ revenue (99.9% to publisher after 0.1% protocol fee). The AI agent gets clean data in 14ms. Both parties win.
+                  <strong>Closed economic loop:</strong> The provider can charge per approved request and the agent receives structured data. In this environment the amount is recorded as an evaluation step; live settlement requires a wallet.
                 </span>
               </div>
             </div>
@@ -7938,7 +7760,7 @@ export function MultiAgentSwarmView({
                   <tr className="border-b border-white/[.08] text-zinc-400 text-[11px]">
                     <th className="py-2 px-3">Metric</th>
                     <th className="py-2 px-3 text-rose-400">Traditional Web Scrapers</th>
-                    <th className="py-2 px-3 text-[#d7ff4f]">Synapse402 on Tempo L1</th>
+                    <th className="py-2 px-3 text-[#d7ff4f]">Synapse402 paid request</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[.04] text-zinc-300 text-[11px]">
@@ -7950,7 +7772,7 @@ export function MultiAgentSwarmView({
                   <tr>
                     <td className="py-2.5 px-3 font-semibold text-white">Execution Latency</td>
                     <td className="py-2.5 px-3 text-zinc-400">800–2,500ms (Heavy proxy overhead)</td>
-                    <td className="py-2.5 px-3 text-[#d7ff4f] font-bold">&lt;15ms gateway check (~135ms Tempo L1 block)</td>
+                    <td className="py-2.5 px-3 text-[#d7ff4f] font-bold">Budget check before delivery; chain time depends on live wallet</td>
                   </tr>
                   <tr>
                     <td className="py-2.5 px-3 font-semibold text-white">Data Quality</td>
@@ -7995,17 +7817,17 @@ export function MultiAgentSwarmView({
             </div>
 
             <div className="flex-1 overflow-y-auto bg-black/60 rounded-xl p-4 border border-white/[0.06] font-mono text-xs text-zinc-300 whitespace-pre-wrap leading-relaxed">
-              {selectedDeliverablePreview.content}
+              {evaluationCopy(selectedDeliverablePreview.content)}
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-white/10 text-xs font-mono">
-              <span className="text-zinc-500 text-[11px]">Settled on Tempo L1 (Chain 42431) • Zero Subscriptions</span>
+              <span className="text-zinc-500 text-[11px]">{batchTxHash ? 'Settled on Tempo L1 (Chain 42431)' : 'Evaluation deliverable · no chain receipt'} • Zero Subscriptions</span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     soundEngine.playClick();
-                    navigator.clipboard.writeText(selectedDeliverablePreview.content);
+                    navigator.clipboard.writeText(evaluationCopy(selectedDeliverablePreview.content));
                     setCopiedKey('deliverable_modal');
                     setTimeout(() => setCopiedKey(null), 2000);
                   }}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { AgentAccount } from '../types/synapse402';
 import { 
   Wallet, 
@@ -29,6 +29,7 @@ interface DashboardWalletProps {
   onOpenCreateAgent: () => void;
   onToggleAgentStatus: (agentId: string) => void;
   isRealWalletConnected?: boolean;
+  networkMode?: 'LIVE_TESTNET' | 'RESILIENT_SANDBOX';
   walletAddress?: string | null;
   walletBalances?: { pathUsd: number; tempo: number; vaultTvl: number; isSessionKeyRegistered: boolean; sessionStatus: string } | null;
   vaultMetrics?: {
@@ -99,6 +100,7 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
   onOpenCreateAgent,
   onToggleAgentStatus,
   isRealWalletConnected = false,
+  networkMode = 'RESILIENT_SANDBOX',
   walletBalances = null,
 }) => {
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
@@ -114,6 +116,13 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
   const unassignedBalance = Math.max(0, Number((displayVaultBal - totalAllocatedDaily).toFixed(2)));
 
   const selectedAgent = agents.find((a) => a.id === selectedAgentId) || null;
+  const spendLabel = networkMode === 'LIVE_TESTNET' ? 'Spent Today' : 'Planned Today';
+  const allowedProviderCount = (agent: AgentAccount) =>
+    agent.whitelistedDomains?.length || DEFAULT_ALLOWED_PROVIDERS[agent.id]?.length || 0;
+  const getTestProvider = (agent: AgentAccount) => {
+    const configured = agent.whitelistedDomains?.[0] || DEFAULT_ALLOWED_PROVIDERS[agent.id]?.[0];
+    return configured || 'https://api.tempo.dex/v1/router/quote';
+  };
 
   // Test Payment Action: Normal 0.1¢ Spend
   const handleTestNormalSpend = async (agent: AgentAccount) => {
@@ -122,6 +131,13 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
     setTestType('normal');
     setTestOutcome(null);
     const t0 = performance.now();
+    const testProvider = getTestProvider(agent);
+    let testProviderHost = testProvider;
+    try {
+      testProviderHost = new URL(testProvider).hostname;
+    } catch {
+      // Keep the configured string visible if a legacy fixture has no URL scheme.
+    }
 
     try {
       const res = await fetch('/api/mpp/settle', {
@@ -129,7 +145,7 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           keyId: agent.id,
-          targetUrl: 'https://api.tempo.xyz/v1/router/quote',
+          targetUrl: testProvider,
           pricePathUsd: 0.001,
           category: 'Market Data',
         }),
@@ -138,16 +154,19 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
       const latency = Math.round(performance.now() - t0);
 
       if (res.ok) {
-        soundEngine.playSettlementChime();
-        agent.spentTodayUsd = Number(((agent.spentTodayUsd || 0) + 0.001).toFixed(4));
+        const isLiveSettlement = data.trace?.executionMode === 'LIVE_TESTNET' && data.trace?.status === 'SETTLED' && Boolean(data.trace?.txHash);
+        if (isLiveSettlement) {
+          soundEngine.playSettlementChime();
+          agent.spentTodayUsd = Number(((agent.spentTodayUsd || 0) + 0.001).toFixed(4));
+        }
         setTestOutcome({
           agentId: agent.id,
           type: 'normal',
           status: 'APPROVED',
-          title: 'Payment Approved & Settled',
-          checked: `Daily limit ($${agent.dailyLimitUsd.toFixed(2)}) & Approved provider (api.tempo.xyz)`,
-          happened: `Policy verified off-chain, 0.1¢ settled on Tempo L1 via MPP`,
-          moneySent: `Yes — $0.001 paid to provider`,
+          title: isLiveSettlement ? 'Payment Approved & Settled' : 'Payment Plan Approved',
+          checked: `Daily limit ($${agent.dailyLimitUsd.toFixed(2)}) & Approved provider (${testProviderHost})`,
+          happened: isLiveSettlement ? 'Policy verified and 0.1¢ settled on Tempo L1 via MPP' : 'Policy verified; evaluation response returned without a chain transaction',
+          moneySent: isLiveSettlement ? 'Yes — $0.001 paid to provider' : 'No — payment recorded as an evaluation step',
           txHash: data.trace?.txHash,
           latencyMs: data.trace?.latencyMs || latency,
         });
@@ -195,7 +214,7 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           keyId: agent.id,
-          targetUrl: 'https://api.tempo.xyz/v1/router/quote',
+          targetUrl: getTestProvider(agent),
           pricePathUsd: 999.0,
           category: 'High Value Compute',
         }),
@@ -245,9 +264,9 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
   };
 
   return (
-    <section id="section-agent-wallet-budget" className="space-y-6 font-sans">
+    <section id="section-agent-wallet-budget" className="relative isolate space-y-6 font-sans">
       {/* 1. Page Header & Core Purpose */}
-      <div className="p-5 sm:p-6 rounded-2xl bg-[#0c0e14] border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+      <div className="p-5 sm:p-6 rounded-2xl bg-white/[.035] border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="px-2.5 py-0.5 rounded-md bg-[#d7ff4f] text-[#08090c] font-black text-[10px] tracking-wider uppercase">
@@ -258,11 +277,11 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
             </h2>
             <span className="text-zinc-500 text-xs hidden sm:inline">•</span>
             <span className="text-xs text-zinc-300 font-medium hidden sm:inline">
-              Set spending limits for your AI
+              Set the job limit and agent limits
             </span>
           </div>
           <p className="text-xs sm:text-sm text-zinc-400 max-w-2xl leading-relaxed">
-            Give each agent a budget and control where it can spend. The company vault balance is protected while agents pay for APIs and compute as they work.
+            Set one limit for a job. Each agent stays inside its smaller limit and approved providers, while unused funds remain protected.
           </p>
         </div>
 
@@ -278,19 +297,19 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
       </div>
 
       {/* 2. Reconciled Financial Summary & Visual Cascade */}
-      <div className="bg-[#0c0e14] border border-white/10 rounded-2xl p-5 sm:p-6 space-y-5 shadow-sm">
+      <div className="relative z-10 bg-[#171d25] border border-white/10 rounded-2xl p-5 sm:p-6 space-y-5 shadow-sm">
         {/* Top 3 Summary Figures (100% Reconciled Math) */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pb-5 border-b border-white/[.08]">
-          {/* 1. Company Balance */}
-          <div className="p-4 rounded-xl bg-white/[.025] border border-white/[.06] space-y-1">
+          {/* 1. Protected Balance */}
+          <div className="relative z-10 p-4 rounded-xl bg-[#202731] border border-white/[.08] space-y-1">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-white/70"></span>
-                Company Balance
+                Available Balance
               </span>
               <InfoBadge
-                title="Company Central Balance"
-                text="The central treasury funds deposited in the SynapseVault contract. Autonomous AI agents cannot access this principal directly."
+                title="Central balance"
+                text="Funds held for agent work. Each agent can use only its approved limit and provider list."
               />
             </div>
             <div className="flex items-baseline gap-2 pt-1">
@@ -300,20 +319,20 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
               <span className="text-xs text-zinc-500 font-medium">USD</span>
             </div>
             <p className="text-[11px] text-zinc-400 pt-0.5">
-              {isRealWalletConnected ? 'Live on Tempo L1 Testnet' : 'On-Chain Vault Balance'}
+              {networkMode === 'LIVE_TESTNET' ? 'Read from Tempo L1' : 'Evaluation balance · no chain read'}
             </p>
           </div>
 
-          {/* 2. Allocated Daily Budgets */}
-          <div className="p-4 rounded-xl bg-white/[.025] border border-white/[.06] space-y-1">
+          {/* 2. Agent Limits In Use */}
+          <div className="relative z-10 p-4 rounded-xl bg-[#202731] border border-white/[.08] space-y-1">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-[#d7ff4f]"></span>
-                Allocated Daily Budgets
+                Agent Limits In Use
               </span>
               <InfoBadge
-                title="Allocated Daily Budgets"
-                text="The sum of all daily spending caps configured across active bots ($50 + $35 + $25 + $20 + $15 + $25 = $170.00). Bots cannot spend beyond their respective limit."
+                title="Agent Limits In Use"
+                text="The sum of the daily spending caps configured for active agents. No agent can spend beyond its own limit."
               />
             </div>
             <div className="flex items-baseline gap-2 pt-1">
@@ -328,7 +347,7 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
           </div>
 
           {/* 3. Unassigned Balance */}
-          <div className="p-4 rounded-xl bg-white/[.025] border border-white/[.06] space-y-1">
+          <div className="relative z-10 p-4 rounded-xl bg-[#202731] border border-white/[.08] space-y-1">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
@@ -336,7 +355,7 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
               </span>
               <InfoBadge
                 title="Unassigned Protected Balance"
-                text="Liquid treasury capital that has not been allocated to any bot. This money is 100% shielded from all agent operations."
+                text="Balance that is not assigned to an agent. It cannot be spent until you allocate a limit."
               />
             </div>
             <div className="flex items-baseline gap-2 pt-1">
@@ -352,11 +371,11 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
         </div>
 
         {/* Visual Cascade: How Spending Limits Protect Company Funds */}
-        <div className="p-4 rounded-xl bg-white/[.02] border border-white/[.06] space-y-2.5">
+        <div className="p-4 rounded-xl bg-white/[.035] border border-white/[.06] space-y-2.5">
           <div className="flex items-center justify-between text-xs font-semibold text-zinc-300">
             <span className="flex items-center gap-2">
               <Lock className="w-3.5 h-3.5 text-[#d7ff4f]" />
-              <span>How Company Balance is Protected</span>
+              <span>How your balance is protected</span>
             </span>
             <span className="text-[11px] font-mono text-zinc-400">
               Reconciled: ${totalAllocatedDaily.toFixed(2)} allocated + ${unassignedBalance.toFixed(2)} unassigned = ${displayVaultBal.toFixed(2)}
@@ -367,7 +386,7 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
             <div className="p-2.5 rounded-lg bg-white/[.03] border border-white/10 flex flex-col justify-between">
               <span className="text-zinc-500 text-[10px] uppercase">1. Vault Balance</span>
               <span className="text-white font-bold text-sm mt-1">${displayVaultBal.toFixed(2)}</span>
-              <span className="text-[10px] text-zinc-400 mt-1">Company central funds</span>
+              <span className="text-[10px] text-zinc-400 mt-1">Unassigned funds</span>
             </div>
 
             <div className="p-2.5 rounded-lg bg-[#d7ff4f]/[0.06] border border-[#d7ff4f]/20 flex flex-col justify-between">
@@ -378,7 +397,9 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
 
             <div className="p-2.5 rounded-lg bg-white/[.03] border border-white/10 flex flex-col justify-between">
               <span className="text-zinc-500 text-[10px] uppercase">3. Provider Policy</span>
-              <span className="text-zinc-200 font-bold text-sm mt-1">4 allowed providers</span>
+              <span className="text-zinc-200 font-bold text-sm mt-1">
+                {agents.reduce((total, agent) => total + allowedProviderCount(agent), 0)} approved domains
+              </span>
               <span className="text-[10px] text-zinc-400 mt-1">Unknown URLs blocked</span>
             </div>
 
@@ -394,7 +415,7 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
           <div className="flex items-center gap-2 text-xs text-zinc-400 font-mono">
             <span className="w-2 h-2 rounded-full bg-[#d7ff4f]"></span>
-            <span>Total Spent Today:</span>
+            <span>{spendLabel}:</span>
             <strong className="text-white font-mono">${totalSpentToday.toFixed(4)} USD</strong>
           </div>
 
@@ -437,15 +458,15 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
         </div>
 
         {/* Table Container */}
-        <div className="bg-[#0c0e14] border border-white/10 rounded-2xl overflow-hidden shadow-sm">
+        <div className="bg-white/[.035] border border-white/10 rounded-2xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-white/10 bg-white/[.02] text-[11px] font-mono text-zinc-400 uppercase tracking-wider">
+                <tr className="border-b border-white/10 bg-white/[.035] text-[11px] font-mono text-zinc-400 uppercase tracking-wider">
                   <th className="py-3 px-4 font-semibold">Agent</th>
                   <th className="py-3 px-4 font-semibold hidden md:table-cell">What It Does</th>
                   <th className="py-3 px-4 font-semibold text-right">Daily Limit</th>
-                  <th className="py-3 px-4 font-semibold text-right">Spent Today</th>
+                  <th className="py-3 px-4 font-semibold text-right">{spendLabel}</th>
                   <th className="py-3 px-4 font-semibold text-right">Remaining</th>
                   <th className="py-3 px-4 font-semibold text-center hidden sm:table-cell">Allowed Providers</th>
                   <th className="py-3 px-4 font-semibold text-center">Status</th>
@@ -463,7 +484,7 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
                   return (
                     <tr
                       key={agent.id}
-                      className="hover:bg-white/[.025] transition-colors group cursor-pointer"
+                      className="hover:bg-white/[.045] transition-colors group cursor-pointer"
                       onClick={() => {
                         setSelectedAgentId(agent.id);
                         setTestOutcome(null);
@@ -480,7 +501,7 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
                               <span>{agent.name}</span>
                             </div>
                             <span className="text-[10px] font-mono text-zinc-500 block truncate max-w-[130px]">
-                              {agent.sessionKey ? `${agent.sessionKey.slice(0, 6)}...${agent.sessionKey.slice(-4)}` : '0x...'}
+                              {agent.sessionKey ? `${agent.sessionKey.slice(0, 6)}...${agent.sessionKey.slice(-4)}` : 'Assigned by gateway'}
                             </span>
                           </div>
                         </div>
@@ -520,7 +541,7 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
                       <td className="py-3 px-4 text-center hidden sm:table-cell">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-mono bg-white/[.04] text-zinc-300 border border-white/10">
                           <Globe className="w-3 h-3 text-[#d7ff4f]" />
-                          <span>4 allowed providers</span>
+                          <span>{allowedProviderCount(agent)} approved domains</span>
                         </span>
                       </td>
 
@@ -572,7 +593,7 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
       {selectedAgent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
           <div 
-            className="w-full max-w-2xl bg-[#0c0e14] border border-white/15 rounded-2xl p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-2xl bg-white/[.035] border border-white/15 rounded-2xl p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Top: Title & Close */}
@@ -608,17 +629,17 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
             </div>
 
             {/* Agent Address (Clear Human Terminology, NOT Card ID) */}
-            <div className="p-3.5 rounded-xl bg-white/[.025] border border-white/[.08] space-y-1.5">
+            <div className="p-3.5 rounded-xl bg-white/[.045] border border-white/[.08] space-y-1.5">
               <div className="flex items-center justify-between text-xs font-semibold text-zinc-400">
                 <span className="flex items-center gap-1.5 text-zinc-300">
                   <KeyRound className="w-3.5 h-3.5 text-[#d7ff4f]" />
                   <span>Agent address</span>
                 </span>
-                <span className="text-[10px] font-mono text-zinc-500">Tempo L1 Account</span>
+                <span className="text-[10px] font-mono text-zinc-500">{isRealWalletConnected ? 'Tempo L1 account' : 'Evaluation address'}</span>
               </div>
               <div className="flex items-center justify-between gap-2 pt-0.5">
                 <span className="font-mono text-xs sm:text-sm text-zinc-200 truncate" title={selectedAgent.sessionKey}>
-                  {selectedAgent.sessionKey || '0x...'}
+                  {selectedAgent.sessionKey || 'Assigned by gateway after setup'}
                 </span>
                 {selectedAgent.sessionKey && (
                   <button
@@ -648,7 +669,7 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
 
             {/* Spending Limits Breakdown */}
             <div className="grid grid-cols-3 gap-3">
-              <div className="p-3 rounded-xl bg-white/[.02] border border-white/[.08]">
+              <div className="p-3 rounded-xl bg-white/[.035] border border-white/[.08]">
                 <span className="text-[10px] font-mono uppercase text-zinc-500 block">Daily Limit</span>
                 <span className="text-base font-bold text-white font-mono mt-1 block">
                   ${Number(selectedAgent.dailyLimitUsd || 0).toFixed(2)}
@@ -656,15 +677,15 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
                 <span className="text-[10px] text-zinc-400">per 24-hour window</span>
               </div>
 
-              <div className="p-3 rounded-xl bg-white/[.02] border border-white/[.08]">
-                <span className="text-[10px] font-mono uppercase text-zinc-500 block">Spent Today</span>
+              <div className="p-3 rounded-xl bg-white/[.035] border border-white/[.08]">
+                <span className="text-[10px] font-mono uppercase text-zinc-500 block">{spendLabel}</span>
                 <span className="text-base font-bold text-[#d7ff4f] font-mono mt-1 block">
                   ${Number(selectedAgent.spentTodayUsd || 0).toFixed(4)}
                 </span>
-                <span className="text-[10px] text-zinc-400">recorded on-chain</span>
+                <span className="text-[10px] text-zinc-400">tracked by the gateway; chain receipt appears after live settlement</span>
               </div>
 
-              <div className="p-3 rounded-xl bg-white/[.02] border border-white/[.08]">
+              <div className="p-3 rounded-xl bg-white/[.035] border border-white/[.08]">
                 <span className="text-[10px] font-mono uppercase text-zinc-500 block">Remaining</span>
                 <span className="text-base font-bold text-emerald-400 font-mono mt-1 block">
                   ${Math.max(0, Number((selectedAgent.dailyLimitUsd - (selectedAgent.spentTodayUsd || 0)).toFixed(4)))}
@@ -674,21 +695,21 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
             </div>
 
             {/* Allowed Providers Allowlist */}
-            <div className="p-3.5 rounded-xl bg-white/[.025] border border-white/[.08] space-y-2">
+            <div className="p-3.5 rounded-xl bg-white/[.045] border border-white/[.08] space-y-2">
               <div className="flex items-center justify-between text-xs font-semibold text-zinc-300">
                 <span className="flex items-center gap-1.5">
                   <Globe className="w-3.5 h-3.5 text-[#d7ff4f]" />
                   <span>Allowed Providers (Whitelisted Domains)</span>
                 </span>
                 <span className="text-[10.5px] font-mono text-zinc-400">
-                  4 allowed providers
+                  {allowedProviderCount(selectedAgent)} approved domains
                 </span>
               </div>
               <p className="text-[11px] text-zinc-400">
                 This agent is cryptographically restricted to paying only these specific approved domains. Requests to any other URL are intercepted with $0 loss.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
-                {(DEFAULT_ALLOWED_PROVIDERS[selectedAgent.id] || [
+                {(selectedAgent.whitelistedDomains?.length ? selectedAgent.whitelistedDomains : DEFAULT_ALLOWED_PROVIDERS[selectedAgent.id] || [
                   'api.tempo.xyz',
                   'api.deepseek.com',
                   'api.binance.com',
@@ -703,7 +724,7 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
             </div>
 
             {/* Payment Rule Note */}
-            <div className="p-3 rounded-xl bg-white/[.02] border border-white/[.08] text-xs text-zinc-300 flex items-start gap-2.5">
+            <div className="p-3 rounded-xl bg-white/[.035] border border-white/[.08] text-xs text-zinc-300 flex items-start gap-2.5">
               <ShieldCheck className="w-4 h-4 text-[#d7ff4f] shrink-0 mt-0.5" />
               <p className="leading-relaxed text-[11.5px] text-zinc-400">
                 <strong className="text-white">Payment Rule:</strong> The agent can pay only within its daily limit and approved provider list. Rejections occur off-chain before any payment is sent to the blockchain, ensuring zero treasury exposure.
@@ -847,7 +868,7 @@ export const DashboardWallet: React.FC<DashboardWalletProps> = ({
       )}
 
       {/* 5. Technical Details Section (At the Bottom) */}
-      <div className="p-4 rounded-2xl bg-white/[.02] border border-white/[.06] flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-zinc-400">
+      <div className="p-4 rounded-2xl bg-white/[.035] border border-white/[.06] flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-zinc-400">
         <div className="flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f]"></span>
           <span>Tempo L1 Contract:</span>

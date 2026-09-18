@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { AgentAccount, LivePaymentEvent, MonetizedApiEndpoint } from './types/synapse402';
 import { DashboardWallet } from './components/DashboardWallet';
 import { LivePaymentsFeed } from './components/LivePaymentsFeed';
@@ -37,8 +37,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'live' | 'monetize' | 'demo' | 'missions' | 'architecture' | 'swarm'>('demo');
   const [swarmSubView, setSwarmSubView] = useState<'swarm' | 'stream' | 'mcp' | 'reality'>('swarm');
 
-  const [userBalanceUsd, setUserBalanceUsd] = useState(241.55);
-  const [blockHeight, setBlockHeight] = useState(35156101);
+  const [userBalanceUsd, setUserBalanceUsd] = useState(0);
+  const [blockHeight, setBlockHeight] = useState(0);
   const [networkInfo, setNetworkInfo] = useState<{
     status: string;
     networkMode: 'LIVE_TESTNET' | 'RESILIENT_SANDBOX';
@@ -46,11 +46,11 @@ export default function App() {
     rpcLatencyMs: number;
     isOnline: boolean;
   }>({
-    status: 'ok',
-    networkMode: 'LIVE_TESTNET',
-    blockHeight: 35156101,
-    rpcLatencyMs: 20,
-    isOnline: true,
+    status: 'checking',
+    networkMode: 'RESILIENT_SANDBOX',
+    blockHeight: 0,
+    rpcLatencyMs: 0,
+    isOnline: false,
   });
 
   const [vaultMetrics, setVaultMetrics] = useState<{
@@ -124,7 +124,7 @@ export default function App() {
         }
       } else {
         if (typeof window !== 'undefined') {
-          alert('MetaMask was not detected in your browser.\n\nPlease install the MetaMask extension to test live wallet signing, or continue in Demo Sandbox mode (no wallet required).');
+          alert('MetaMask was not detected in your browser.\n\nInstall MetaMask to test live wallet signing, or continue in evaluation mode without a blockchain transaction.');
         }
       }
     } catch (err) {
@@ -180,11 +180,11 @@ export default function App() {
     {
       id: 'key_quant_alpha',
       name: 'Crypto Market Bot',
-      role: 'Real-time market price feeds & orderbook depth',
+      role: 'Approved market snapshots & orderbook depth',
       dailyLimitUsd: 50.0,
-      spentTodayUsd: 0.032,
+      spentTodayUsd: 0,
       status: 'ACTIVE',
-      sessionKey: '0x0c929C42048bA76A170fD3fE0Cf7d0A12aC429c6',
+      sessionKey: '',
       avatarColor: 'bg-[#d7ff4f]/20 text-[#d7ff4f]',
     },
     {
@@ -194,7 +194,7 @@ export default function App() {
       dailyLimitUsd: 35.0,
       spentTodayUsd: 0,
       status: 'ACTIVE',
-      sessionKey: '0x0823f01203A914b4bFE3Ac246e63aECf5C30F584',
+      sessionKey: '',
       avatarColor: 'bg-white/10 text-white',
     },
     {
@@ -204,7 +204,7 @@ export default function App() {
       dailyLimitUsd: 25.0,
       spentTodayUsd: 0,
       status: 'ACTIVE',
-      sessionKey: '0xD177CB670928082FF62708AB59bA30958e7FfD4f',
+      sessionKey: '',
       avatarColor: 'bg-[#d7ff4f]/20 text-[#d7ff4f]',
     },
     {
@@ -214,7 +214,7 @@ export default function App() {
       dailyLimitUsd: 20.0,
       spentTodayUsd: 0,
       status: 'ACTIVE',
-      sessionKey: '0x147d48e9532A82aA0B68B1df2e6D5d6571A4efBA',
+      sessionKey: '',
       avatarColor: 'bg-white/10 text-white',
     },
     {
@@ -224,7 +224,7 @@ export default function App() {
       dailyLimitUsd: 15.0,
       spentTodayUsd: 0,
       status: 'ACTIVE',
-      sessionKey: '0x6e49C504BD8443df79D7CBbd020e9059AAb43D2A',
+      sessionKey: '',
       avatarColor: 'bg-[#d7ff4f]/20 text-[#d7ff4f]',
     },
     {
@@ -234,7 +234,7 @@ export default function App() {
       dailyLimitUsd: 25.0,
       spentTodayUsd: 0,
       status: 'ACTIVE',
-      sessionKey: '0x67BFdF561EDc1985e341678F4e1f85C06EEEd574',
+      sessionKey: '',
       avatarColor: 'bg-white/10 text-white',
     },
   ]);
@@ -246,102 +246,102 @@ export default function App() {
   const [monetizedEndpoints, setMonetizedEndpoints] = useState<MonetizedApiEndpoint[]>([
     {
       id: 'ep_deepseek',
-      title: 'DeepSeek R1 High-Speed Inference API',
+      title: 'Example LLM Inference Service',
       endpointUrl: 'https://api.deepseek.com/v1/chat/completions',
       pricePerCallUsd: 0.0008,
       category: 'AI / LLM Inferences',
-      totalEarnedUsd: 0.052,
-      totalCalls: 65,
+      totalEarnedUsd: 0,
+      totalCalls: 0,
       integrationSnippet: `import { withTempoMpp } from './sdk';\n\n// Pay-per-token LLM inference on Tempo L1 with zero retainers\napp.post('/v1/chat/completions', withTempoMpp({ priceUsd: 0.0008, payee: '0xYourWallet' }), handler);`,
     },
     {
       id: 'ep_scraper_paywall',
-      title: 'Web Publisher & Media AI Scraper Paywall',
+      title: 'Example licensed article access',
       endpointUrl: 'https://news-provider.media/api/scrape/clean-markdown',
       pricePerCallUsd: 0.001,
       category: 'Web Data & Scraping',
-      totalEarnedUsd: 0.038,
-      totalCalls: 38,
+      totalEarnedUsd: 0,
+      totalCalls: 0,
       integrationSnippet: `import { withTempoMpp } from './sdk';\n\n// Turn bot crawler traffic into instant revenue instead of empty 403 blocks\napp.get('/api/scrape/*', withTempoMpp({ priceUsd: 0.001, payee: '0xYourWallet' }), (req, res) => {\n  res.json({ title: 'Unblocked Clean Content', format: 'markdown', costUsd: 0.001 });\n});`,
     },
     {
       id: 'ep_1',
-      title: 'DeepL Neural Document Translation Engine',
+      title: 'Example document translation service',
       endpointUrl: 'https://api.translate-provider.io/v2/document/instant',
       pricePerCallUsd: 0.001,
       category: 'Language AI',
-      totalEarnedUsd: 0.018,
-      totalCalls: 18,
+      totalEarnedUsd: 0,
+      totalCalls: 0,
       integrationSnippet: `import { withTempoMpp } from './sdk';\n\napp.post('/v2/document/instant', withTempoMpp({ priceUsd: 0.001, payee: '0xYourWallet' }), handler);`,
     },
     {
       id: 'ep_2',
-      title: 'AI Vision Background Removal & Upscaling',
+      title: 'Example image processing service',
       endpointUrl: 'https://api.vision-neural.ai/v1/remove-bg',
       pricePerCallUsd: 0.002,
       category: 'Computer Vision',
-      totalEarnedUsd: 0.028,
-      totalCalls: 14,
+      totalEarnedUsd: 0,
+      totalCalls: 0,
       integrationSnippet: `import { withTempoMpp } from './sdk';\n\napp.post('/v1/remove-bg', withTempoMpp({ priceUsd: 0.002, payee: '0xYourWallet' }), handler);`,
     },
     {
       id: 'ep_3',
-      title: 'Decentralized Media Micro-License Authorization',
+      title: 'Example media access service',
       endpointUrl: 'https://api.news-dispatch.net/v1/article/unlock',
       pricePerCallUsd: 0.001,
       category: 'Publishing / Media',
-      totalEarnedUsd: 0.009,
-      totalCalls: 9,
+      totalEarnedUsd: 0,
+      totalCalls: 0,
       integrationSnippet: `import { withTempoMpp } from './sdk';\n\napp.get('/v1/article/unlock', withTempoMpp({ priceUsd: 0.001, payee: '0xYourWallet' }), handler);`,
     },
     {
       id: 'ep_4',
-      title: 'Python Sandbox Code Execution Engine',
+      title: 'Example Python sandbox service',
       endpointUrl: 'https://api.sandbox-python.dev/v1/containers/exec',
       pricePerCallUsd: 0.005,
       category: 'Code Execution',
-      totalEarnedUsd: 0.040,
-      totalCalls: 8,
+      totalEarnedUsd: 0,
+      totalCalls: 0,
       integrationSnippet: `import { withTempoMpp } from './sdk';\n\napp.post('/v1/containers/exec', withTempoMpp({ priceUsd: 0.005, payee: '0xYourWallet' }), handler);`,
     },
     {
       id: 'ep_5',
-      title: 'Residential Anti-Bot Web Scraper & Browser',
+      title: 'Example structured web extraction service',
       endpointUrl: 'https://api.stealth-crawler.net/v1/scrape',
       pricePerCallUsd: 0.003,
       category: 'Web Data & Scraping',
-      totalEarnedUsd: 0.066,
-      totalCalls: 22,
+      totalEarnedUsd: 0,
+      totalCalls: 0,
       integrationSnippet: `import { withTempoMpp } from './sdk';\n\napp.post('/v1/scrape', withTempoMpp({ priceUsd: 0.003, payee: '0xYourWallet' }), handler);`,
     },
     {
       id: 'ep_6',
-      title: 'Neural TTS Voice Synthesis API',
+      title: 'Example voice synthesis service',
       endpointUrl: 'https://api.voice-neural.io/v1/synthesize',
       pricePerCallUsd: 0.004,
       category: 'Voice & Speech',
-      totalEarnedUsd: 0.020,
-      totalCalls: 5,
+      totalEarnedUsd: 0,
+      totalCalls: 0,
       integrationSnippet: `import { withTempoMpp } from './sdk';\n\napp.post('/v1/synthesize', withTempoMpp({ priceUsd: 0.004, payee: '0xYourWallet' }), handler);`,
     },
     {
       id: 'ep_7',
-      title: 'Amadeus / Sabre Real-Time Flight GDS Cache',
+      title: 'Example travel availability feed',
       endpointUrl: 'https://api.gds-flights.network/v1/fares',
       pricePerCallUsd: 0.002,
       category: 'Travel / GDS Data',
-      totalEarnedUsd: 22.10,
-      totalCalls: 11050,
+      totalEarnedUsd: 0,
+      totalCalls: 0,
       integrationSnippet: `import { withTempoMpp } from './sdk';\n\napp.get('/v1/fares', withTempoMpp({ priceUsd: 0.002, payee: '0xYourWallet' }), handler);`,
     },
     {
       id: 'ep_8',
-      title: 'Autonomous Fraud & Sanctions Identity Check',
+      title: 'Example identity risk check',
       endpointUrl: 'https://api.identity-risk.shield/v1/verify',
       pricePerCallUsd: 0.005,
       category: 'Compliance & KYC',
-      totalEarnedUsd: 35.00,
-      totalCalls: 7000,
+      totalEarnedUsd: 0,
+      totalCalls: 0,
       integrationSnippet: `import { withTempoMpp } from './sdk';\n\napp.post('/v1/verify', withTempoMpp({ priceUsd: 0.005, payee: '0xYourWallet' }), handler);`,
     },
   ]);
@@ -469,8 +469,8 @@ export default function App() {
       .then((metrics) => {
         if (metrics) {
           setVaultMetrics(metrics);
-          setUserBalanceUsd(metrics.totalVaultLiquidity ?? 224.47);
-          setBlockHeight(metrics.blockHeight || 35183138);
+          setUserBalanceUsd(metrics.totalVaultLiquidity ?? 0);
+          setBlockHeight(typeof metrics.blockHeight === 'number' ? metrics.blockHeight : 0);
         }
       })
       .catch((err) => console.error('Error loading metrics:', err));
@@ -492,6 +492,7 @@ export default function App() {
               ? 'bg-[#d7ff4f]/20 text-[#d7ff4f]'
               : 'bg-white/10 text-white',
             merkleRoot: k.merkleRoot,
+            whitelistedDomains: Array.isArray(k.whitelistedDomains) ? k.whitelistedDomains : [],
           }));
           setAgents(loadedAgents);
         }
@@ -597,8 +598,8 @@ export default function App() {
               latencyMs: t.latencyMs || 80,
               timestamp: t.timestamp ? new Date(t.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString(),
             txHash: t.txHash || '',
-              executionMode: t.executionMode || 'LIVE_TESTNET',
-              status: isVoided ? 'VOIDED' : (t.status || 'SETTLED'),
+              executionMode: t.executionMode || 'RESILIENT_SANDBOX',
+              status: isVoided ? 'VOIDED' : (t.status || (t.executionMode === 'LIVE_TESTNET' ? 'SETTLED' : 'SIMULATED_PASS')),
               blockNumber: t.blockNumber,
               merkleProof: t.merkleProof,
               merkleRoot: t.merkleRoot,
@@ -626,15 +627,15 @@ export default function App() {
           if (status.blockHeight) setBlockHeight(status.blockHeight);
           setNetworkInfo({
             status: status.status,
-            networkMode: status.networkMode || 'LIVE_TESTNET',
-            blockHeight: status.blockHeight || 35156101,
-            rpcLatencyMs: status.rpcLatencyMs || 20,
+            networkMode: status.networkMode || 'RESILIENT_SANDBOX',
+            blockHeight: typeof status.blockHeight === 'number' ? status.blockHeight : 0,
+            rpcLatencyMs: typeof status.rpcLatencyMs === 'number' ? status.rpcLatencyMs : 0,
             isOnline: true,
           });
         }
       })
       .catch(() => {
-        setNetworkInfo((prev) => ({ ...prev, isOnline: false }));
+        setNetworkInfo((prev) => ({ ...prev, status: 'offline', isOnline: false }));
       });
 
     // 5. Fetch persisted monetized endpoints
@@ -689,7 +690,7 @@ export default function App() {
       });
       const metrics = await r.json();
       if (metrics) {
-        setUserBalanceUsd(metrics.totalVaultLiquidity ?? 50.0);
+        setUserBalanceUsd(typeof metrics?.totalVaultLiquidity === 'number' ? metrics.totalVaultLiquidity : 0);
       }
     } catch (err) {
       console.error('Deposit failed', err);
@@ -735,6 +736,7 @@ export default function App() {
             sessionKey: k.sessionPublicKey,
             avatarColor: newAgent.avatarColor || 'bg-[#d7ff4f]/20 text-[#d7ff4f]',
             merkleRoot: k.merkleRoot,
+            whitelistedDomains: Array.isArray(k.whitelistedDomains) ? k.whitelistedDomains : [],
           };
           setAgents((prev) => [formatted, ...prev]);
           refreshBackendData();
@@ -786,14 +788,17 @@ export default function App() {
     if (newEvents && newEvents.length > 0) {
       setLiveEvents((prev) => [...newEvents, ...prev]);
     }
-    if (totalCost > 0) {
-      setUserBalanceUsd((prev) => Math.max(0, Number((prev - totalCost).toFixed(4))));
+    const confirmedCost = (newEvents || [])
+      .filter((event) => event.status === 'SETTLED' && event.executionMode === 'LIVE_TESTNET' && Boolean(event.txHash))
+      .reduce((sum, event) => sum + (event.amountUsd || 0), 0);
+    if (confirmedCost > 0) {
+      setUserBalanceUsd((prev) => Math.max(0, Number((prev - confirmedCost).toFixed(4))));
     }
     refreshBackendData();
   };
 
   return (
-    <div id="synapse-root" className="synapse-app min-h-screen bg-[#0b0e14] text-[#f5f5f2] font-sans selection:bg-[#d7ff4f]/20 selection:text-white">
+    <div id="synapse-root" className="synapse-app min-h-screen bg-[#11161f] text-[#f5f5f2] font-sans selection:bg-[#d7ff4f]/20 selection:text-white">
       <div className="pointer-events-none fixed inset-0 z-0 opacity-40 [background-image:radial-gradient(circle_at_50%_0%,rgba(56,189,248,0.03),transparent_70%)]" />
       <div className="relative z-10 flex min-h-screen">
         <aside className="hidden w-[270px] shrink-0 border-r border-white/[.08] bg-[#0d1017]/95 px-5 py-6 lg:flex lg:flex-col">
@@ -804,13 +809,13 @@ export default function App() {
           <div className="mb-3 px-2 text-[9px] font-semibold uppercase tracking-[.22em] text-zinc-500">Workspace</div>
           <nav className="space-y-2" aria-label="Primary navigation">
             {[
-              { id: 'demo', label: '1-Click Demo', subtitle: 'Live proof: Pay → Get data', icon: Sparkles },
-              { id: 'missions', label: 'AI Missions', subtitle: 'What jobs can you give to AI?', icon: Compass },
-              { id: 'dashboard', label: 'Bots & Budgets', subtitle: 'How companies control limits', icon: Wallet },
-              { id: 'swarm', label: 'AI Workforce', subtitle: '20 units working together', icon: Layers, isEpicenter: true, dot: true },
-              { id: 'monetize', label: 'Earn from Bots', subtitle: 'How sites monetize AI traffic', icon: Store },
-              { id: 'live', label: 'Payment Receipts', subtitle: 'Where did every cent go?', icon: Activity },
-              { id: 'architecture', label: 'How It Works', subtitle: 'Settlement rails & architecture', icon: Layers },
+              { id: 'demo', label: 'Payment walkthrough', subtitle: 'See one job from start to finish', icon: Sparkles },
+              { id: 'missions', label: 'AI Missions', subtitle: 'Choose a job for the agent', icon: Compass },
+              { id: 'dashboard', label: 'Bots & Budgets', subtitle: 'Set limits for your agents', icon: Wallet },
+              { id: 'swarm', label: 'AI Workforce', subtitle: 'The team that does the job', icon: Layers, isEpicenter: true, dot: true },
+              { id: 'monetize', label: 'Earn from Bots', subtitle: 'Add a service agents can use', icon: Store },
+              { id: 'live', label: 'Payment Receipts', subtitle: 'Check where the money went', icon: Activity },
+              { id: 'architecture', label: 'How It Works', subtitle: 'See the full payment path', icon: Layers },
             ].map(({ id, label, subtitle, icon: Icon, isEpicenter, dot }) => {
               const isSelected = activeTab === id;
 
@@ -924,34 +929,36 @@ export default function App() {
                   <div className="text-[10px] uppercase tracking-[.20em] text-zinc-400 font-mono font-semibold flex items-center gap-1.5">
                     <span className="text-white">Tempo L1</span>
                     <span className="text-white/30">•</span>
-                    <span>AI Budget Guardrails &amp; Scoped Session Keys</span>
+                    <span>AI jobs with spending limits</span>
                   </div>
                   <h1 className="mt-0.5 text-[17px] font-semibold tracking-[-.03em] flex items-center gap-2">
                     <span>
                       {activeTab === 'demo'
-                        ? '1-Click Demo — Test how AI payments work'
+                        ? 'Payment walkthrough — See how an AI payment works'
                         : activeTab === 'missions'
                         ? 'AI Missions — What jobs can you give to an AI workforce?'
                         : activeTab === 'swarm' && swarmSubView === 'reality'
                         ? 'Reality Check — Traditional Scraping vs Synapse402'
-                        : activeTab === 'swarm' && swarmSubView === 'stream'
-                        ? 'Live AI Stream — Real-time continuous micro-settlement'
+                         : activeTab === 'swarm' && swarmSubView === 'stream'
+                         ? 'Payment stream — Watch each approved step'
                         : activeTab === 'swarm' && swarmSubView === 'mcp'
                         ? 'AI Desktop Tools (MCP) — Local agent integration'
                         : activeTab === 'swarm'
-                        ? 'AI Workforce — 20 mission units working together'
+                         ? 'AI Workforce — One job split across specialist steps'
                         : activeTab === 'dashboard'
-                        ? 'Bots & Budgets — How companies control spending limits'
+                        ? 'Bots & Budgets — Set limits for your agents'
                         : activeTab === 'live'
-                        ? 'Payment Receipts — See what your AI paid for'
+                         ? 'Payment receipts — What was requested and confirmed'
                         : activeTab === 'monetize'
-                        ? 'Earn from Bots — How websites monetize AI traffic'
-                        : 'How Synapse402 Works — Settlement rails & architecture'}
+                         ? 'Earn from agents — Let a service charge per request'
+                        : 'How Synapse402 Works — From a goal to a finished job'}
                     </span>
                     <span className="text-xs text-zinc-400 font-normal font-sans hidden xl:inline">
                       {activeTab === 'demo'
-                        ? '— Live proof of agent budget enforcement on Tempo L1'
-                        : '— Autonomous Budget Controller & Micro-Payments for AI Agents'}
+                         ? (networkInfo.networkMode === 'LIVE_TESTNET' ? '— Live proof of the spending limit on Tempo L1' : '— Evaluation only; no blockchain transaction was submitted')
+                        : activeTab === 'architecture'
+                         ? '— How people, agents, and providers share one payment flow'
+                         : '— Give an agent a job and pay only for approved steps'}
                     </span>
                   </h1>
                 </div>
@@ -986,14 +993,20 @@ export default function App() {
                     <span className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-mono tracking-wider uppercase ${
                       networkInfo.isOnline && networkInfo.networkMode === 'LIVE_TESTNET'
                         ? 'border-[#d7ff4f]/30 bg-[#d7ff4f]/10 text-[#d7ff4f]'
-                        : 'border-red-500/30 bg-red-500/10 text-red-400'
+                        : networkInfo.isOnline
+                          ? 'border-amber-300/30 bg-amber-300/10 text-amber-200'
+                          : networkInfo.status === 'checking'
+                            ? 'border-white/15 bg-white/[0.04] text-zinc-400'
+                            : 'border-red-500/30 bg-red-500/10 text-red-400'
                     }`}>
                       <span className={`h-1.5 w-1.5 rounded-full ${
                         networkInfo.isOnline && networkInfo.networkMode === 'LIVE_TESTNET'
                           ? 'bg-[#d7ff4f]'
-                          : 'bg-red-400'
+                          : networkInfo.isOnline
+                            ? 'bg-amber-300'
+                            : networkInfo.status === 'checking' ? 'bg-zinc-400' : 'bg-red-400'
                       }`} />
-                      {networkInfo.isOnline && networkInfo.networkMode === 'LIVE_TESTNET' ? 'TEMPO LIVE' : 'OFFLINE'}
+                      {networkInfo.isOnline && networkInfo.networkMode === 'LIVE_TESTNET' ? 'TEMPO LIVE' : networkInfo.isOnline ? 'SANDBOX' : networkInfo.status === 'checking' ? 'CHECKING' : 'OFFLINE'}
                     </span>
                     <button 
                       onClick={() => setIsWalletModalOpen(true)} 
@@ -1005,24 +1018,28 @@ export default function App() {
                 ) : (
                   <div className="flex items-center gap-2">
                     <a
-                      href={`https://explore.tempo.xyz/block/${blockHeight}`}
+                      href={networkInfo.networkMode === 'LIVE_TESTNET' && blockHeight > 0 ? `https://explore.tempo.xyz/block/${blockHeight}` : undefined}
                       target="_blank"
                       rel="noreferrer"
                       className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-mono font-medium tracking-wider transition hover:brightness-125 ${
                         networkInfo.isOnline && networkInfo.networkMode === 'LIVE_TESTNET'
                           ? 'border-[#d7ff4f]/30 bg-[#d7ff4f]/[0.08] text-[#d7ff4f] hover:bg-[#d7ff4f]/15'
-                          : 'border-red-500/30 bg-red-500/10 text-red-400'
+                          : networkInfo.isOnline
+                            ? 'border-amber-300/30 bg-amber-300/10 text-amber-200'
+                            : networkInfo.status === 'checking'
+                              ? 'border-white/15 bg-white/[0.04] text-zinc-400'
+                              : 'border-red-500/30 bg-red-500/10 text-red-400'
                       }`}
-                      title={networkInfo.isOnline ? `Tempo L1 Testnet (42431) • Block ${blockHeight} • ${networkInfo.rpcLatencyMs}ms (Click to view in Tempo Explorer)` : 'Tempo RPC offline'}
+                      title={networkInfo.isOnline && networkInfo.networkMode === 'LIVE_TESTNET' ? `Tempo L1 Testnet (42431) • Block ${blockHeight} • ${networkInfo.rpcLatencyMs}ms (Click to view in Tempo Explorer)` : networkInfo.isOnline ? 'Connected to the fallback network; no live blockchain write is active.' : 'Backend is offline'}
                     >
                       <span className="relative flex h-2 w-2">
                         {networkInfo.isOnline && networkInfo.networkMode === 'LIVE_TESTNET' ? (
                           <span className="relative inline-flex h-2 w-2 rounded-full bg-[#d7ff4f]"></span>
                         ) : (
-                          <span className="relative inline-flex h-2 w-2 rounded-full bg-red-400"></span>
+                          <span className={`relative inline-flex h-2 w-2 rounded-full ${networkInfo.isOnline ? 'bg-amber-300' : networkInfo.status === 'checking' ? 'bg-zinc-400' : 'bg-red-400'}`}></span>
                         )}
                       </span>
-                      <span>{networkInfo.isOnline && networkInfo.networkMode === 'LIVE_TESTNET' ? `TEMPO BLOCK #${blockHeight}` : 'OFFLINE'}</span>
+                      <span>{networkInfo.isOnline && networkInfo.networkMode === 'LIVE_TESTNET' ? `TEMPO BLOCK #${blockHeight}` : networkInfo.isOnline ? 'SANDBOX' : networkInfo.status === 'checking' ? 'CHECKING' : 'OFFLINE'}</span>
                     </a>
                     <button 
                       onClick={() => setIsWalletModalOpen(true)} 
@@ -1037,7 +1054,7 @@ export default function App() {
             </div>
             <div className="flex gap-2 overflow-x-auto border-t border-white/[.06] px-5 py-2.5 lg:hidden">
               {[
-                { id: 'demo', label: '1-Click Demo' },
+                { id: 'demo', label: 'Payment walkthrough' },
                 { id: 'swarm', label: 'AI Workforce' },
                 { id: 'monetize', label: 'Earn from Bots' },
                 { id: 'dashboard', label: 'Bots & Budgets' },
@@ -1100,14 +1117,14 @@ export default function App() {
               />
             )}
             {/* Global Telemetry Strip (Hidden on demo, live receipts, missions, and bots & budgets for focused views) */}
-            {activeTab !== 'demo' && activeTab !== 'live' && activeTab !== 'missions' && activeTab !== 'dashboard' && (
+            {activeTab !== 'demo' && activeTab !== 'live' && activeTab !== 'missions' && activeTab !== 'dashboard' && activeTab !== 'architecture' && (
               <section className="grid gap-4 sm:grid-cols-3">
                 {/* Card 1: Treasury Balance */}
                 <div className="rounded-2xl border border-white/[.08] bg-white/[.03] backdrop-blur-md p-4 sm:p-5 flex items-center justify-between shadow-sm">
                   <div>
                     <div className="text-[11px] text-zinc-400 font-medium flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-zinc-400"></span>
-                      <span>Treasury Pool</span>
+                      <span>{isRealWalletConnected ? 'Treasury Pool' : 'Evaluation balance'}</span>
                     </div>
                     <div className="text-2xl font-mono font-bold tracking-tight text-white mt-1">
                       ${Number(userBalanceUsd || 0).toFixed(2)} <span className="text-xs text-zinc-500 font-normal">USD</span>
@@ -1135,14 +1152,14 @@ export default function App() {
                   <div>
                     <div className="text-[11px] text-zinc-400 font-medium flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f]"></span>
-                      <span>Settled Micro-Payments</span>
+                      <span>Recorded Payments</span>
                     </div>
                     <div className="text-2xl font-mono font-bold tracking-tight text-white mt-1">
-                      {(vaultMetrics?.totalTransactionsCount || 1879).toLocaleString()} <span className="text-xs text-zinc-500 font-normal">transactions</span>
+                      {(vaultMetrics?.totalTransactionsCount || 0).toLocaleString()} <span className="text-xs text-zinc-500 font-normal">{networkInfo.networkMode === 'LIVE_TESTNET' ? 'confirmed' : 'planned'}</span>
                     </div>
                   </div>
                   <span className="text-[10.5px] font-mono px-2 py-0.5 rounded border border-[#d7ff4f]/20 text-[#d7ff4f] bg-[#d7ff4f]/10 font-medium">
-                    Policy Check &lt;15ms
+                    {networkInfo.networkMode === 'LIVE_TESTNET' && vaultMetrics?.totalTransactionsCount ? 'Live activity' : 'Evaluation data'}
                   </span>
                 </div>
 
@@ -1151,10 +1168,10 @@ export default function App() {
                   <div>
                     <div className="text-[11px] text-zinc-400 font-medium flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f]"></span>
-                      <span>Active Session Keys</span>
+                      <span>Configured session keys</span>
                     </div>
                     <div className="text-2xl font-mono font-bold tracking-tight text-white mt-1">
-                      {agents.filter((a) => a.status === 'ACTIVE').length} / {agents.length} <span className="text-xs text-zinc-500 font-normal">active</span>
+                      {agents.filter((a) => a.status === 'ACTIVE').length} / {agents.length} <span className="text-xs text-zinc-500 font-normal">configured</span>
                     </div>
                   </div>
                   <span className="text-[10.5px] font-mono px-2 py-0.5 rounded border border-[#d7ff4f]/20 text-[#d7ff4f] bg-[#d7ff4f]/10 font-medium">
@@ -1174,7 +1191,7 @@ export default function App() {
                   userBalanceUsd={userBalanceUsd} 
                 />
               )}
-              {activeTab === 'dashboard' && <DashboardWallet userBalanceUsd={userBalanceUsd} agents={agents} onOpenDeposit={() => setIsDepositOpen(true)} onOpenCreateAgent={() => setIsCreateAgentOpen(true)} onToggleAgentStatus={handleToggleAgentStatus} isRealWalletConnected={isRealWalletConnected} walletAddress={walletAddress} walletBalances={walletBalances} vaultMetrics={vaultMetrics} />}
+              {activeTab === 'dashboard' && <DashboardWallet userBalanceUsd={userBalanceUsd} agents={agents} onOpenDeposit={() => setIsDepositOpen(true)} onOpenCreateAgent={() => setIsCreateAgentOpen(true)} onToggleAgentStatus={handleToggleAgentStatus} isRealWalletConnected={isRealWalletConnected} networkMode={networkInfo.networkMode} walletAddress={walletAddress} walletBalances={walletBalances} vaultMetrics={vaultMetrics} />}
               {activeTab === 'live' && <LivePaymentsFeed events={liveEvents} onInspectEvent={(event) => { setSelectedTraceForInspector(event); setIsInspectorOpen(true); }} onRefresh={refreshBackendData} />}
               {activeTab === 'monetize' && <ApiMonetizationPortal endpoints={monetizedEndpoints} onAddEndpoint={handleAddMonetizedEndpoint} walletAddress={walletAddress} />}
               {activeTab === 'swarm' && <MultiAgentSwarmView onSwarmSettled={refreshBackendData} initialSubView={swarmSubView} onSubViewChange={setSwarmSubView} />}

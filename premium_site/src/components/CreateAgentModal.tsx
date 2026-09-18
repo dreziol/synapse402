@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Bot, X } from 'lucide-react';
 import { ethers } from 'ethers';
 import { AgentAccount } from '../types/synapse402';

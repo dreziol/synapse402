@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Safely formats TEMPO native gas balance.
  * Prevents BigInt / Wei saturation overflow into scientific notation (e.g. e+57)
  * and formats clean, human-readable numbers like "1,000.00" or "50.00".

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { MonetizedApiEndpoint } from '../types/synapse402';
 import { Store, Plus, Copy, Check, Code2, Play, Loader2, CheckCircle2, ExternalLink, ArrowRightLeft, Coins, Sparkles, Zap, Flame, ShieldAlert, RefreshCw, ShieldCheck, DollarSign, Globe, Palette, FileText, Mic, Plane, TrendingUp, BarChart3, Box } from 'lucide-react';
 import { soundEngine } from '../utils/audioEffects';
@@ -90,7 +90,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
     if (url.includes('synthesize') || url.includes('voice')) return { old: '$25/mo Voice AI SaaS tier', gain: 'Pay per second (zero credit expiry)' };
     if (url.includes('fares') || url.includes('flights')) return { old: '$500+ Enterprise Flight Data tier', gain: 'Instant programmatic lookup' };
     if (url.includes('verify') || url.includes('identity')) return { old: '$50/mo KYC provider tier', gain: 'Zero monthly retainer' };
-    if (url.includes('binance') || url.includes('orderbook') || url.includes('market-depth')) return { old: '$29/mo Market data feed', gain: 'Pay per query ($0 idle cost)' };
+    if (url.includes('binance') || url.includes('orderbook') || url.includes('market-depth')) return { old: '$29/mo licensed depth feed', gain: 'Pay only for normalized/deep snapshots' };
     if (url.includes('sec-edgar') || url.includes('sec-data-mirror')) return { old: '$49/mo Financial filing feed', gain: 'Pay per parsed financial filing' };
     return { old: '$20–$50/mo SaaS plan', gain: 'Pay per call (Zero idle subscription cost)' };
   };
@@ -114,7 +114,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
     const url = ep.endpointUrl.toLowerCase();
     if (url.includes('translate')) return {
       type: 'Translated Document',
-      detail: 'German ➔ English: "Machine commerce with instant Tempo settlement executed without human lock-in."',
+      detail: 'German ➔ English: "Machine commerce with pay-per-request access and no human checkout."',
       iconName: 'Globe',
     };
     if (url.includes('vision') || url.includes('remove-bg')) return {
@@ -124,7 +124,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
     };
     if (url.includes('article') || url.includes('news') || url.includes('scrape')) return {
       type: 'Full-Text Article',
-      detail: '"Global Machine Economy Transition 2026: AI agents settle micro-services per call on Tempo L1 under strict budget guardrails."',
+      detail: '"Global Machine Economy Transition 2026: AI agents request micro-services per call under strict budget guardrails."',
       iconName: 'FileText',
     };
     if (url.includes('containers') || url.includes('python')) return {
@@ -134,12 +134,12 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
     };
     if (url.includes('synthesize') || url.includes('voice')) return {
       type: 'Neural Audio Clip',
-      detail: 'PCM WAV 24kHz (4.2s speech synthesized): "Payment authorized. Transaction confirmed on Tempo L1."',
+      detail: 'PCM WAV 24kHz (4.2s speech synthesized): "Payment authorized within the configured budget."',
       iconName: 'Mic',
     };
     if (url.includes('fares') || url.includes('flights')) return {
-      type: 'Flight GDS Itinerary',
-      detail: 'Delta DL1842: JFK ➔ SFO | Non-Stop | Class Y (12 Seats Available at $412.00)',
+      type: 'Example GDS Itinerary',
+      detail: 'Example fare response: JFK ➔ SFO | Non-Stop | Class Y (availability returned by the connected provider)',
       iconName: 'Plane',
     };
     if (url.includes('verify') || url.includes('identity')) return {
@@ -148,18 +148,18 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
       iconName: 'ShieldCheck',
     };
     if (url.includes('binance') || url.includes('orderbook') || url.includes('market-depth')) return {
-      type: 'L2 Orderbook Depth',
-      detail: 'AAPL/USD Bids: $175.38 (450 sh) | Asks: $175.42 (320 sh) | Spread: 0.022%',
+      type: 'Example L2 Orderbook Snapshot',
+      detail: 'Example normalized depth: AAPL/USD bids and asks with a calculated spread; public spot data is not presented as paid.',
       iconName: 'TrendingUp',
     };
     if (url.includes('sec-edgar') || url.includes('sec-data-mirror')) return {
-      type: 'Audited Financial Digest',
-      detail: 'Apple Inc. Operating Metrics: Net Sales $391.0B (+8% YoY), Gross Margin 46.2%, Free Cash Flow $108.8B',
+      type: 'Example Filing Digest',
+      detail: 'Example normalized filing metrics; the connected provider may charge for licensed parsing or enrichment.',
       iconName: 'BarChart3',
     };
     return {
       type: 'API Structured Data',
-      detail: 'Verified payload delivered with cryptographic settlement proof.',
+      detail: 'Structured payload delivered; a chain receipt appears only after live settlement.',
       iconName: 'Box',
     };
   };
@@ -182,14 +182,15 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
       });
       const data = await res.json();
       if (res.ok) {
-        soundEngine.playSettlementChime();
+        const isLiveSettlement = data.trace?.executionMode === 'LIVE_TESTNET' && data.trace?.status === 'SETTLED' && Boolean(data.trace?.txHash);
+        if (isLiveSettlement) soundEngine.playSettlementChime();
         setLocalStats((prev) => {
           const current = prev[ep.id] || { calls: ep.totalCalls, earned: ep.totalEarnedUsd };
           return {
             ...prev,
             [ep.id]: {
               calls: current.calls + 1,
-              earned: Number((current.earned + ep.pricePerCallUsd).toFixed(4)),
+              earned: Number((current.earned + (isLiveSettlement ? ep.pricePerCallUsd : 0)).toFixed(4)),
             },
           };
         });
@@ -197,7 +198,9 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
           id: ep.id,
           status: 200,
           txHash: data.trace?.txHash,
-          message: `HTTP 200 OK • Settled on Tempo L1 (${data.trace?.latencyMs || 12}ms)`,
+          message: isLiveSettlement
+            ? `HTTP 200 OK • Settled on Tempo L1 (${data.trace?.latencyMs || 12}ms)`
+            : 'HTTP 200 OK • Evaluation response returned; no chain transaction was submitted',
         });
       } else {
         soundEngine.playDefenseIntercept();
@@ -231,7 +234,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
     e.preventDefault();
     if (!title || !endpointUrl || !pricePerCallUsd) return;
 
-    soundEngine.playSettlementChime();
+    soundEngine.playClick();
 
     onAddEndpoint({
       title,
@@ -253,18 +256,18 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full bg-[#d7ff4f]/10 text-[#d7ff4f] border border-[#d7ff4f]/30 text-xs font-semibold">
-              SELLER PLATFORM • Turn Bot Traffic into Revenue
+              SERVICE OWNER • Offer paid machine access
             </span>
           </div>
           <h3 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center flex-wrap gap-1">
-            <span>Turn Bot Traffic into Revenue: Charge $0.001 per Request Instead of Blocking with 403 Errors</span>
+            <span>Let agents pay for a structured API response</span>
             <InfoBadge
-              title="HTTP 402 Stateless Middleware"
-              text="Data providers wrap standard Express/Fastify routes with withTempoMpp(). Every machine request must settle on Tempo L1 with verified EIP-712 payment before receiving the payload."
+              title="How this works"
+              text="A service can return a payment request for machine access. The connected backend confirms the payment status before the payload is treated as paid."
             />
           </h3>
           <p className="text-sm text-zinc-300 mt-1 max-w-2xl leading-relaxed font-sans">
-            Websites spend thousands on bot defense just to return 403 Forbidden ($0 revenue). With 2 lines of middleware, monetize verified AI agents at 0.1¢ per request on Tempo L1 for a <strong className="text-[#d7ff4f]">99.9% seller payout</strong> (0.1% protocol fee), with zero credit card swipe fees, and Google/Bing still index your site for free.
+            Most sites treat automated traffic as a threat and return a 403, so an agent cannot finish the job. Add a small payment gate with the SDK: an approved agent can request structured access, the service states its price, and the rules decide whether the request can continue. The figures below are examples; a payment is presented as confirmed only when the backend returns a trace.
           </p>
         </div>
 
@@ -284,11 +287,11 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
           <div className="flex items-center gap-2">
             <ArrowRightLeft className="w-4 h-4 text-[#d7ff4f]" />
             <h4 className="text-xs font-bold text-white font-mono uppercase tracking-wide">
-              The Two-Sided Market Flywheel (Mutual Economic Incentive)
+              How the service and agent fit together
             </h4>
           </div>
           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.05] text-zinc-400 border border-white/10">
-            How Everyone Wins
+              Who pays and who provides
           </span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] font-sans">
@@ -297,14 +300,14 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
               <div className="w-6 h-6 rounded bg-[#d7ff4f]/10 text-[#d7ff4f] flex items-center justify-center shrink-0">
                 <Globe className="w-3.5 h-3.5" />
               </div>
-              <span>01. Web Publishers</span>
+              <span>01. Service owners</span>
               <InfoBadge
                 title="Reverse Proxy Monetization"
-                text="Replaces Cloudflare CAPTCHA/403 blocks with automated 0.1¢ monetization. Unlocks instant pathUSD payment on Tempo L1."
+                text="Lets a service answer an approved paid request instead of maintaining user accounts. A live wallet is required before funds move on-chain."
               />
             </div>
             <p className="text-zinc-300 text-[11px] leading-relaxed">
-              Monetize crawler traffic in 60s with 2 lines of middleware. Turn 403 blocks into <strong>0.1¢/page micropayments</strong> deposited directly to your vault.
+              Monetize approved machine traffic with 2 lines of middleware. Set a per-request price and receive a payment record; live deposits require a connected wallet.
             </p>
           </div>
 
@@ -320,7 +323,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
               />
             </div>
             <p className="text-zinc-300 text-[11px] leading-relaxed">
-              Zero scraping infrastructure overhead or CAPTCHA solving. Bots pay 0.1¢ via HTTP 402 and receive <strong>clean, structured JSON</strong> via authorized access.
+              No scraping account or manual checkout is needed. Agents answer an HTTP 402 challenge within their budget and receive <strong>clean, structured JSON</strong> when access is approved.
             </p>
           </div>
 
@@ -332,11 +335,11 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
               <span>03. Mutual Economics</span>
               <InfoBadge
                 title="Tempo L1 Type 0x76 Rails"
-                text="Zero 30¢ credit card swipe minimums. Sub-cent fees (<$0.00002) make 0.1-cent data calls economically viable."
+                text="Small per-request prices make machine-to-machine access practical; exact chain fees are shown only for a confirmed live trace."
               />
             </div>
             <p className="text-zinc-300 text-[11px] leading-relaxed">
-              Publishers get paid for compute; AI agents get reliable programmatic access. Settled in <strong>&lt;15ms gateway check (~0.5s Tempo L1 block consensus)</strong> with 99.9% seller payout (0.1% protocol fee).
+              Service owners can charge for compute while AI agents get programmatic access. The gateway checks the rules first; a payment is shown as settled only when a confirmed trace is available.
             </p>
           </div>
         </div>
@@ -352,7 +355,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
             <span>Protect Routes with 2-Line Middleware</span>
             <InfoBadge
               title="Dynamic SEO Segmentation & WAF Efficiency"
-              text="allowSearchCrawlers: true automatically lets Googlebot and Bingbot pass freely to protect your search ranking, while AI bots and scrapers settle 0.1¢ via Tempo L1."
+                text="allowSearchCrawlers: true lets ordinary search crawlers pass freely, while other requests are checked against the configured price and policy."
             />
           </span>
         </div>
@@ -368,7 +371,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
               </span>
               <button
                 type="button"
-                onClick={() => handleCopy('middleware_code', `import { withTempoMpp } from './sdk';\n\napp.get('/articles/:id', withTempoMpp({\n  priceUsd: 0.001,\n  payee: '${walletAddress || '0xa287550D1c3D277caA59C560230AC840e1Ee58B6'}',\n  allowSearchCrawlers: true,\n  surgePricing: { windowMs: 4000, maxBeforeSurge: 2, multiplier: 2.5 }\n}), (req, res) => {\n  res.json({ title: 'Unblocked Content', markdown: '# Clean Extracted Content' });\n});`)}
+                onClick={() => handleCopy('middleware_code', `import { withTempoMpp } from './sdk';\n\napp.get('/articles/:id', withTempoMpp({\n  priceUsd: 0.001,\n  payee: '${walletAddress || '0xYourWallet'}',\n  allowSearchCrawlers: true,\n  surgePricing: { windowMs: 4000, maxBeforeSurge: 2, multiplier: 2.5 }\n}), (req, res) => {\n  res.json({ title: 'Unblocked Content', markdown: '# Clean Extracted Content' });\n});`)}
                 className="px-2 py-0.5 rounded text-[10.5px] font-mono bg-white/[0.06] hover:bg-white/15 text-zinc-300 hover:text-white border border-white/10 transition flex items-center gap-1 cursor-pointer"
               >
                 {copiedId === 'middleware_code' ? (
@@ -393,10 +396,10 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                 2-Line SDK
               </span>
               <code className="text-xs font-mono text-zinc-200 whitespace-nowrap">
-                <span className="text-zinc-200">app</span>.<span className="text-zinc-300">use</span>('<span className="text-[#d7ff4f]">/api/data</span>', <span className="text-[#d7ff4f]">withTempoMpp</span>({'{'} <span className="text-zinc-300">priceUsd</span>: <span className="text-zinc-200">0.002</span>, <span className="text-zinc-300">payee</span>: '<span className="text-[#d7ff4f]">{walletAddress || '0xa287550D1c3D277caA59C560230AC840e1Ee58B6'}</span>', <span className="text-zinc-300">allowSearchCrawlers</span>: <span className="text-zinc-200">true</span> {'}'}));
+              <span className="text-zinc-200">app</span>.<span className="text-zinc-300">use</span>('<span className="text-[#d7ff4f]">/api/data</span>', <span className="text-[#d7ff4f]">withTempoMpp</span>({'{'} <span className="text-zinc-300">priceUsd</span>: <span className="text-zinc-200">0.002</span>, <span className="text-zinc-300">payee</span>: '<span className="text-[#d7ff4f]">{walletAddress || '0xYourWallet'}</span>', <span className="text-zinc-300">allowSearchCrawlers</span>: <span className="text-zinc-200">true</span> {'}'}));
               </code>
             </div>
-            <span className="text-[10px] font-mono text-zinc-200/80 shrink-0">Instant Turnkey Monetization</span>
+            <span className="text-[10px] font-mono text-zinc-200/80 shrink-0">Simple route setup</span>
           </div>
 
           {/* Developer Code Block with Syntax Highlighting */}
@@ -416,7 +419,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
               <span className="text-zinc-300">priceUsd</span>: <span className="text-zinc-200">0.001</span>,
             </div>
             <div className="pl-4">
-              <span className="text-zinc-300">payee</span>: <span className="text-[#d7ff4f]">'{walletAddress || '0xa287550D1c3D277caA59C560230AC840e1Ee58B6'}'</span>,
+              <span className="text-zinc-300">payee</span>: <span className="text-[#d7ff4f]">'{walletAddress || '0xYourWallet'}'</span>,
             </div>
             <div className="pl-4">
               <span className="text-zinc-300">allowSearchCrawlers</span>: <span className="text-zinc-200">true</span>, <span className="text-zinc-500 italic">// Googlebot &amp; Bingbot pass free for SEO indexing!</span>
@@ -452,7 +455,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                   Publisher Monetization Calculator (Illustrative Estimate)
                 </span>
                 <span className="px-1.5 py-0.5 rounded bg-white/[0.06] text-zinc-300 border border-white/15 text-[9px] font-mono font-bold">
-                  SIMULATION ESTIMATOR
+                  COST ESTIMATOR
                 </span>
               </div>
               <p className="text-[11px] text-zinc-400 mt-0.5">
@@ -554,7 +557,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                   Price Goes Up When Traffic Spikes (DDoS Defense)
                 </span>
                 <span className="px-1.5 py-0.5 rounded bg-[#d7ff4f]/20 text-[#d7ff4f] border border-[#d7ff4f]/30 text-[9px] font-mono font-bold">
-                  SIMULATED PROTECTION DEMO
+                  PROTECTION TEST
                 </span>
               </div>
               <p className="text-[11px] text-zinc-400 mt-0.5">
@@ -577,16 +580,16 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
             ) : (
               <>
                 <Zap className="w-3.5 h-3.5 fill-current text-[#08090c]" />
-                <span>Simulate High-Traffic Burst (5 Requests)</span>
+                <span>Test High-Traffic Burst (5 Requests)</span>
               </>
             )}
           </button>
         </div>
 
-        {/* Live Burst Response Grid */}
+        {/* Provider response preview */}
         <div className="space-y-2">
           <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 px-1">
-            <span>LIVE ENDPOINT RESPONSE TELEMETRY (/api/v1/surge-demo):</span>
+            <span>PROVIDER RESPONSE PREVIEW (sample route):</span>
             <span className="text-[#d7ff4f] font-bold">
               Base Price: $0.0010 • Surge Multiplier: 2.5x per burst
             </span>
@@ -744,14 +747,14 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
 
               <div className="grid grid-cols-2 gap-2 text-xs bg-white/[.025] p-2.5 rounded-lg border border-white/[.08]">
                 <div>
-                  <span className="text-zinc-400 text-xs block">Total Calls</span>
+                  <span className="text-zinc-400 text-xs block">Example calls</span>
                   <span className="text-zinc-100 font-bold font-mono text-sm">{totalCalls.toLocaleString()}</span>
                   <span className="text-[10px] text-zinc-500 font-mono block mt-0.5">
                     Gross: ${grossEarned.toFixed(2)}
                   </span>
                 </div>
                 <div>
-                  <span className="text-zinc-400 text-xs block">Net Payout (99.9%)</span>
+                  <span className="text-zinc-400 text-xs block">Projected payout</span>
                   <span className="text-[#d7ff4f] font-bold font-mono text-sm">${netEarned.toFixed(2)}</span>
                   <span className="text-[10px] text-zinc-500 font-mono block mt-0.5" title="0.1% protocol fee">
                     Fee (0.1%): ${protocolFee.toFixed(4)}
@@ -775,7 +778,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                   ) : (
                     <Play className="w-3.5 h-3.5 fill-current text-[#08090c]" />
                   )}
-                  <span>{testingEndpointId === ep.id ? 'Settling on L1...' : 'Test 0.1¢ Paywall'}</span>
+                  <span>{testingEndpointId === ep.id ? 'Running test...' : 'Test paywall'}</span>
                 </button>
 
                 <button
@@ -815,7 +818,9 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                         <div className="flex items-center justify-between">
                           <div>
                             <span className="text-zinc-400 block font-sans uppercase">YOU EARNED:</span>
-                            <span className="text-[#d7ff4f] font-bold font-mono text-xs">+${Number(ep.pricePerCallUsd || 0.001).toFixed(4)} USD</span>
+                            <span className="text-[#d7ff4f] font-bold font-mono text-xs">
+                              {testResult.txHash ? '+' : 'Quoted '} ${Number(ep.pricePerCallUsd || 0.001).toFixed(4)} USD
+                            </span>
                           </div>
                           <div className="text-right">
                             <span className="text-zinc-400 block font-sans uppercase">DELIVERABLE:</span>
@@ -831,15 +836,17 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                           <div className="flex items-center justify-between text-[9px] font-mono uppercase font-bold text-[#d7ff4f]">
                             <span className="flex items-center gap-1">
                               <Zap className="w-3 h-3 text-[#d7ff4f]" />
-                              <span>Demo Execution Outcome:</span>
+                              <span>Example execution outcome:</span>
                             </span>
-                            <span className="text-zinc-400">&lt;150ms VIA TEMPO</span>
+                            <span className="text-zinc-400">
+                              {testResult.txHash ? '&lt;150ms • Tempo receipt' : 'Evaluation • no chain receipt'}
+                            </span>
                           </div>
                           <p className="text-zinc-200 text-[11px] font-mono">
                             {delivered.detail}
                           </p>
                           <span className="text-[9.5px] text-zinc-400 block font-sans">
-                            In production, autonomous agents instantly retrieve paid payload while your merchant vault collects +${Number(ep.pricePerCallUsd || 0.001).toFixed(4)} in realtime.
+                            In production, an approved agent can retrieve the paid payload after the payment status is confirmed; the service records its configured price of +${Number(ep.pricePerCallUsd || 0.001).toFixed(4)}.
                           </span>
                         </div>
                       </div>
@@ -897,7 +904,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="e.g., DeepQuant High-Frequency Orderbook"
+                  placeholder="e.g., Licensed normalized market depth"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   className="w-full bg-white/[.04] border border-white/[.08] rounded-lg p-2 text-[#f5f5f2] outline-none focus:border-[#d7ff4f]"

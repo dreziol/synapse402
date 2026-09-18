@@ -1,4 +1,4 @@
-import { ScopedSessionKey, PaywalledEndpoint, MPPExecutionTrace, VaultMetrics } from '../types/synapse';
+﻿import { ScopedSessionKey, PaywalledEndpoint, MPPExecutionTrace, VaultMetrics } from '../types/synapse';
 
 export async function fetchVaultMetrics(): Promise<VaultMetrics> {
   const res = await fetch('/api/vault/metrics');

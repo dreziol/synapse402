@@ -1,4 +1,4 @@
-// Lightweight Web Audio API Synthesizer for High-Tech Haptic/Acoustic Feedback
+﻿// Lightweight Web Audio API Synthesizer for High-Tech Haptic/Acoustic Feedback
 // Zero external dependencies, pure browser audio oscillator synthesis
 
 class SynapseSoundEngine {

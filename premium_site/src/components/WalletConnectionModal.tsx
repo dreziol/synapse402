@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { X, Wallet, ExternalLink, Copy, Check, ShieldCheck, RefreshCw, LogOut } from 'lucide-react';
 import { soundEngine } from '../utils/audioEffects';
 import { formatTempoGas } from '../utils/formatters';
@@ -27,23 +27,16 @@ export const WalletConnectionModal: React.FC<WalletConnectionModalProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
 
-  const PRE_FUNDED_EVAL_WALLET = '0xa287550D1c3D277caA59C560230AC840e1Ee58B6';
-  const [evalCopied, setEvalCopied] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleCopy = (addr: string, isEval = false) => {
+  const handleCopy = (addr: string) => {
     soundEngine.playClick();
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(addr).catch(() => {});
     }
-    if (isEval) {
-      setEvalCopied(true);
-      setTimeout(() => setEvalCopied(false), 2000);
-    } else {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -62,14 +55,14 @@ export const WalletConnectionModal: React.FC<WalletConnectionModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-sm text-white flex items-center">
-                <span>{isRealWalletConnected ? 'Connected MetaMask Wallet' : 'Evaluation Wallet & Gas Subsidy'}</span>
+                <span>{isRealWalletConnected ? 'Connected MetaMask Wallet' : 'Evaluation mode'}</span>
                 <InfoBadge
-                  title="Sponsored Testnet Sandbox"
-                  text="Pre-funded relayer wallet on Tempo Moderato (42431) loaded with gas and pathUSD. Allows judges to test payments with zero faucet friction."
+                  title="Evaluation mode"
+                  text="The fallback mode lets judges inspect requests and policy checks without presenting a wallet or chain receipt as real. Connect MetaMask to submit an actual Tempo transaction."
                 />
               </h3>
               <p className="text-[11px] text-zinc-400 font-sans">
-                {isRealWalletConnected ? 'Direct on-chain session on Tempo Moderato' : 'Pre-funded account for instant, zero-faucet testing'}
+                {isRealWalletConnected ? 'Direct on-chain session on Tempo Moderato' : 'No wallet connected; responses stay in evaluation mode'}
               </p>
             </div>
           </div>
@@ -78,42 +71,21 @@ export const WalletConnectionModal: React.FC<WalletConnectionModalProps> = ({
           </button>
         </div>
 
-        {/* Pre-Funded Evaluation Wallet Card */}
+        {/* Evaluation status card */}
         <div className="p-3.5 rounded-xl bg-[#d7ff4f]/[0.04] border border-[#d7ff4f]/20 space-y-2.5">
           <div className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-1.5">
               <ShieldCheck className="w-3.5 h-3.5 text-[#d7ff4f]" />
-              <span className="text-[#d7ff4f] font-mono font-semibold text-[11px]">PRE-FUNDED TESTNET RELAYER</span>
+              <span className="text-[#d7ff4f] font-mono font-semibold text-[11px]">LOCAL EVALUATION</span>
             </div>
             <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#d7ff4f]/20 text-[#d7ff4f] border border-[#d7ff4f]/30 font-bold">
-              INSTANT SANDBOX
+              EVALUATION ACCOUNT
             </span>
           </div>
 
           <p className="text-[11px] text-zinc-300 leading-snug">
-            Official pre-funded relayer on Tempo L1 loaded with gas and pathUSD. Zero faucet or manual funding required — all transactions execute immediately through this sandbox account.
+            The interface can walk through requests, policy checks, and provider responses locally. It shows a chain receipt only after a connected wallet confirms one.
           </p>
-
-          <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-black/40 border border-white/[.08] font-mono text-[11px] text-zinc-200">
-            <span className="truncate">{PRE_FUNDED_EVAL_WALLET}</span>
-            <button
-              onClick={() => handleCopy(PRE_FUNDED_EVAL_WALLET, true)}
-              className="px-2 py-1 rounded bg-white/[.08] hover:bg-white/[.15] text-zinc-200 hover:text-white flex items-center gap-1 transition shrink-0 text-[10px]"
-            >
-              {evalCopied ? <Check className="w-3 h-3 text-[#d7ff4f]" /> : <Copy className="w-3 h-3" />}
-              <span>{evalCopied ? 'Copied' : 'Copy'}</span>
-            </button>
-          </div>
-
-          <a
-            href={`https://explore.tempo.xyz/address/${PRE_FUNDED_EVAL_WALLET}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-[11px] text-[#d7ff4f] hover:underline font-medium pt-0.5"
-          >
-            <span>View Relayer Balance on Tempo Explorer</span>
-            <ExternalLink className="w-3 h-3" />
-          </a>
         </div>
 
         {/* Connected Wallet or Status Card */}
@@ -125,7 +97,7 @@ export const WalletConnectionModal: React.FC<WalletConnectionModalProps> = ({
                 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
                 : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
             }`}>
-              {isRealWalletConnected ? 'METAMASK CONNECTED' : 'DEMO MODE (PRE-FUNDED)'}
+              {isRealWalletConnected ? 'METAMASK CONNECTED' : 'EVALUATION ACCOUNT'}
             </span>
           </div>
 
@@ -134,7 +106,7 @@ export const WalletConnectionModal: React.FC<WalletConnectionModalProps> = ({
               <div className="flex items-center justify-between gap-2 p-2 rounded-lg bg-white/[.03] border border-white/[.06] font-mono text-xs text-zinc-200">
                 <span className="truncate">{walletAddress}</span>
                 <button
-                  onClick={() => handleCopy(walletAddress, false)}
+                  onClick={() => handleCopy(walletAddress)}
                   className="px-2.5 py-1 rounded bg-white/[.06] hover:bg-white/[.12] text-zinc-300 hover:text-white flex items-center gap-1 transition shrink-0 text-[11px]"
                 >
                   {copied ? <Check className="w-3 h-3 text-[#d7ff4f]" /> : <Copy className="w-3 h-3" />}
@@ -189,7 +161,7 @@ export const WalletConnectionModal: React.FC<WalletConnectionModalProps> = ({
           )}
           <div className="flex justify-between py-1.5 border-b border-white/[.06]">
             <span className="text-zinc-400 font-sans">Settlement Speed:</span>
-            <span className="text-[#d7ff4f] font-semibold">Instant (&lt;150ms on Tempo L1)</span>
+            <span className="text-[#d7ff4f] font-semibold">Shown after confirmation</span>
           </div>
           <div className="flex justify-between py-1.5 border-b border-white/[.06]">
             <span className="text-zinc-400 font-sans">Budget Protection:</span>
@@ -205,7 +177,7 @@ export const WalletConnectionModal: React.FC<WalletConnectionModalProps> = ({
               className="flex-1 py-2.5 rounded-xl bg-white/[.06] hover:bg-white/[.12] border border-white/15 text-zinc-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span>Switch to Pre-Funded Demo Mode</span>
+              <span>Switch to evaluation account</span>
             </button>
           ) : (
             <button

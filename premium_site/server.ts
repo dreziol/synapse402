@@ -1,9 +1,10 @@
 import * as dotenv from 'dotenv';
 dotenv.config({ quiet: true } as any);
 
-import express, { Request, Response } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
 import { synapseEngine } from './server/synapseCore';
 import { handleMcpJsonRpc, SYNAPSE_MCP_TOOLS, executeMcpTool } from './server/mcpServer';
@@ -13,6 +14,36 @@ import { withTempoMpp } from './src/sdk';
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
 const invoiceStore = new Map<string, { amountPathUsd: number; memo: string; createdAt: string; isSettled: boolean }>();
+
+const localMpp = (options: Parameters<typeof withTempoMpp>[0]) => {
+  const paymentMiddleware = withTempoMpp({
+    ...options,
+    verifyPayment: (req: Request, effectivePrice: number) => synapseEngine.verifyProviderRequest(
+      req.path,
+      String(req.headers['x-tempo-mpp-signature'] || ''),
+      String(req.headers['x-tempo-nonce-2d'] || ''),
+      String(req.headers['x-synapse-trace-id'] || ''),
+      effectivePrice,
+    ),
+  });
+
+  return (req: Request, res: Response, next: NextFunction) => {
+    const networkMode = synapseEngine.getNetworkStatus().networkMode;
+    // Provider payloads in this local showcase are fixtures. The payment
+    // proof can be live, but the returned business data still needs upstream
+    // verification before it should be presented as production data.
+    res.setHeader('X-Synapse-Execution-Mode', networkMode);
+    res.setHeader('X-Synapse-Data-Status', 'EVALUATION_FIXTURE');
+    const sendJson = res.json.bind(res);
+    res.json = ((body: any) => {
+      if (body && typeof body === 'object' && !Array.isArray(body)) {
+        return sendJson({ ...body, executionMode: networkMode, providerDataStatus: 'EVALUATION_FIXTURE' });
+      }
+      return sendJson(body);
+    }) as Response['json'];
+    return paymentMiddleware(req, res, next);
+  };
+};
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
@@ -135,7 +166,7 @@ app.get('/api/keys', (req: Request, res: Response) => {
 app.post('/api/keys', (req: Request, res: Response) => {
   const { agentName, role, maxPerCallPathUsd, totalBudgetPathUsd, whitelistedDomains } = req.body;
 
-  if (!agentName || maxPerCallPathUsd === undefined || totalBudgetPathUsd === undefined) {
+  if (!String(agentName || '').trim() || maxPerCallPathUsd === undefined || totalBudgetPathUsd === undefined) {
     return res.status(400).json({ error: 'Missing required parameters (agentName, maxPerCallPathUsd, totalBudgetPathUsd).' });
   }
 
@@ -155,11 +186,25 @@ app.post('/api/keys', (req: Request, res: Response) => {
   }
 
   const domains = Array.isArray(whitelistedDomains)
-    ? whitelistedDomains
+    ? whitelistedDomains.map((domain) => String(domain).trim()).filter(Boolean)
     : String(whitelistedDomains || '')
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean);
+
+  if (domains.length === 0) {
+    return res.status(400).json({ error: 'At least one approved http/https provider domain is required.' });
+  }
+  if (domains.some((domain) => {
+    try {
+      const parsed = new URL(domain);
+      return !['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname;
+    } catch {
+      return true;
+    }
+  })) {
+    return res.status(400).json({ error: 'whitelistedDomains must contain valid http:// or https:// URLs.' });
+  }
 
   try {
     const newKey = synapseEngine.addKey({
@@ -250,6 +295,7 @@ app.post('/api/mpp/settle', async (req: Request, res: Response) => {
     nonce,
     validBefore,
     asyncRelay,
+    evaluationOnly,
   } = req.body;
 
   if (!targetUrl || pricePathUsd === undefined) {
@@ -282,6 +328,7 @@ app.post('/api/mpp/settle', async (req: Request, res: Response) => {
         nonce: nonce !== undefined ? Number(nonce) : undefined,
         validBefore: validBefore !== undefined ? Number(validBefore) : undefined,
         asyncRelay: Boolean(asyncRelay || req.headers['x-tempo-async-relay'] === 'true'),
+        evaluationOnly: Boolean(evaluationOnly),
       }
     );
     res.json({
@@ -298,7 +345,7 @@ app.post('/api/mpp/settle', async (req: Request, res: Response) => {
     else if (msg.startsWith('404') || msg.includes('Not Found')) statusCode = 404;
     else if (msg.startsWith('429') || msg.includes('Too Many Requests') || msg.includes('Rate limit')) statusCode = 429;
     else if (msg.startsWith('400') || msg.includes('Bad Request')) statusCode = 400;
-    else if (msg.includes('budget') || msg.includes('insufficient') || msg.includes('402')) statusCode = 402;
+    else if (msg.includes('budget') || msg.includes('insufficient') || msg.includes('402') || msg.includes('exceeds maximum allowed per call')) statusCode = 402;
     else statusCode = 400;
     res.status(statusCode).json({ error: msg });
   }
@@ -316,13 +363,28 @@ app.get('/api/endpoints', (req: Request, res: Response) => {
 
 app.post('/api/endpoints', (req: Request, res: Response) => {
   const { title, endpointUrl, pricePerCallUsd, category } = req.body;
-  if (!title || !endpointUrl || pricePerCallUsd === undefined) {
+  const cleanTitle = String(title || '').trim();
+  const cleanEndpointUrl = String(endpointUrl || '').trim();
+  const price = Number(pricePerCallUsd);
+  if (!cleanTitle || !cleanEndpointUrl || pricePerCallUsd === undefined) {
     return res.status(400).json({ error: 'title, endpointUrl, and pricePerCallUsd are required.' });
   }
+  if (cleanTitle.length > 160) {
+    return res.status(400).json({ error: 'title must be 160 characters or fewer.' });
+  }
+  try {
+    const parsed = new URL(cleanEndpointUrl);
+    if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname) throw new Error('invalid protocol');
+  } catch {
+    return res.status(400).json({ error: 'endpointUrl must be a valid http:// or https:// URL.' });
+  }
+  if (!Number.isFinite(price) || price <= 0 || price > 1000) {
+    return res.status(400).json({ error: 'pricePerCallUsd must be a positive number no greater than $1,000.' });
+  }
   const ep = synapseEngine.addEndpoint({
-    title: String(title).trim(),
-    endpointUrl: String(endpointUrl).trim(),
-    pricePerCallUsd: Number(pricePerCallUsd),
+    title: cleanTitle,
+    endpointUrl: cleanEndpointUrl,
+    pricePerCallUsd: price,
     category: category ? String(category).trim() : 'General API',
   });
   res.status(201).json({ endpoint: ep });
@@ -331,12 +393,20 @@ app.post('/api/endpoints', (req: Request, res: Response) => {
 // 5c. SynapseMPPReceiver On-Chain Merchant Invoicing
 app.post('/api/mpp/invoices', (req: Request, res: Response) => {
   const { amountPathUsd, memo } = req.body;
+  const amount = Number(amountPathUsd ?? 0.005);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 1000) {
+    return res.status(400).json({ error: 'amountPathUsd must be a positive number no greater than $1,000.' });
+  }
+  const invoiceMemo = memo === undefined || memo === null || String(memo).trim() === ''
+    ? 'pacs.008|merchant_invoice'
+    : String(memo).trim();
+  if (invoiceMemo.length > 256) {
+    return res.status(400).json({ error: 'memo must be 256 characters or fewer.' });
+  }
   const invoiceId = '0x' + crypto.randomBytes(32).toString('hex');
-  const amount = Number(amountPathUsd || 0.005);
-  const invoiceMemo = memo || 'pacs.008|merchant_invoice';
   const createdAt = new Date().toISOString();
   invoiceStore.set(invoiceId, { amountPathUsd: amount, memo: invoiceMemo, createdAt, isSettled: false });
-  res.json({
+  res.status(201).json({
     status: 'CREATED',
     invoiceId,
     receiverContract: process.env.TEMPO_RECEIVER_ADDRESS || '0xfCEb1a2633881c19283836a2E17Ba25E612724A0',
@@ -372,8 +442,8 @@ app.get('/api/mcp/manifest', (req: Request, res: Response) => {
     schema_version: 'v1',
     name_for_model: 'synapse402_tempo_gateway',
     name_for_human: 'Synapse402 Tempo L1 MPP Gateway',
-    description_for_model: 'Autonomous HTTP 402 paywall solver and multi-agent swarm settlement engine on Tempo L1 using EIP-712 scoped session keys.',
-    description_for_human: 'Connects AI models (Claude, Cursor) to paywalled APIs via Tempo L1 native micropayments.',
+    description_for_model: 'Autonomous HTTP 402 paywall solver and multi-agent work gateway using EIP-712 scoped session keys; Tempo L1 settlement is used only when live chain access is available.',
+    description_for_human: 'Connects AI models (Claude, Cursor) to paywalled APIs with explicit budget checks and a live Tempo L1 receipt when a wallet is available.',
     protocol: 'Model Context Protocol (MCP) 2024-11-05',
     transport: 'HTTP JSON-RPC 2.0',
     endpoint: '/api/mcp',
@@ -383,12 +453,13 @@ app.get('/api/mcp/manifest', (req: Request, res: Response) => {
 
 // 7. Multi-Agent Swarm Execution Endpoint
 app.post('/api/swarm/execute', async (req: Request, res: Response) => {
-  const { leadKeyId, taskDescription, subcontractors } = req.body;
+  const { leadKeyId, taskDescription, subcontractors, evaluationOnly } = req.body;
   try {
     const result = await executeMcpTool('synapse_batch_swarm_settle', {
       leadAgentKeyId: leadKeyId,
       taskDescription,
       subcontractors,
+      evaluationOnly: Boolean(evaluationOnly),
     });
     res.json(result);
   } catch (err: any) {
@@ -401,37 +472,10 @@ app.post('/api/swarm/execute', async (req: Request, res: Response) => {
 app.get('/api/stream/inference', handleStreamInference);
 app.post('/api/stream/inference', handleStreamInference);
 
-// 9. Live Test Provider Route Protected by withTempoMpp Middleware
-app.get(
-  '/api/v1/test-provider-data',
-  withTempoMpp({
-    priceUsd: 0.002,
-    payee: process.env.TEMPO_RECEIVER_ADDRESS || '0xfCEb1a2633881c19283836a2E17Ba25E612724A0',
-  }),
-  (req: Request, res: Response) => {
-    res.setHeader('X-Tempo-Settled', '0x76');
-    res.json({
-      status: 'ok',
-      unlocked: true,
-      service: 'DeepQuant Orderbook L2 Depth',
-      signer: process.env.TEMPO_RECEIVER_ADDRESS || '0xfCEb1a2633881c19283836a2E17Ba25E612724A0',
-      microCreditUsd: 0.002,
-      asset: 'pathUSD',
-      payload: {
-        symbol: 'TEMPO/USD',
-        bid: 42.50,
-        ask: 42.52,
-        depth: 154200,
-        timestamp: Date.now(),
-      },
-    });
-  }
-);
-
 // 10. Rate-Limiting via Price (Dynamic 402 Surge Pricing for Bot Defense)
 app.get(
   '/api/v1/surge-demo',
-  withTempoMpp({
+  localMpp({
     priceUsd: 0.001,
     payee: process.env.TEMPO_RECEIVER_ADDRESS || '0xfCEb1a2633881c19283836a2E17Ba25E612724A0',
     surgePricing: {
@@ -441,12 +485,12 @@ app.get(
     },
   }),
   (req: Request, res: Response) => {
-    res.setHeader('X-Tempo-Settled', '0x76');
+    res.setHeader('X-Tempo-MPP-Access', 'authorized');
     res.json({
       status: 'ok',
       unlocked: true,
       service: 'Surge Protection Endpoint',
-      signer: '0x71C839a9E841D8B4e21a8904cB2e3Ac992cE25a9',
+      signer: localPayee,
       effectivePrice: (req as any).tempoMpp?.amountPathUsd ?? 0.001,
       surgeActive: (req as any).tempoMpp?.surgeActive ?? false,
       payload: {
@@ -465,9 +509,9 @@ const localPayee = process.env.TEMPO_RECEIVER_ADDRESS || '0xfCEb1a2633881c192838
 // Service 1: AI Market Analysis ($0.0008)
 app.all(
   '/api/v1/data/ai-market-analysis',
-  withTempoMpp({ priceUsd: 0.0008, payee: localPayee }),
+  localMpp({ priceUsd: 0.0008, payee: localPayee }),
   (req: Request, res: Response) => {
-    res.setHeader('X-Tempo-Settled', '0x76');
+    res.setHeader('X-Tempo-MPP-Access', 'authorized');
     res.json({
       status: 'ok',
       service: 'AI Market Sentiment & Liquidity Analysis',
@@ -480,16 +524,16 @@ app.all(
   }
 );
 
-// Service 2: Live Stock & Forex Orderbook ($0.0010)
+// Service 2: Evaluation market snapshot fixture ($0.0010)
 app.all(
   '/api/v1/data/stock-orderbook',
-  withTempoMpp({ priceUsd: 0.0010, payee: localPayee }),
+  localMpp({ priceUsd: 0.0010, payee: localPayee }),
   (req: Request, res: Response) => {
-    res.setHeader('X-Tempo-Settled', '0x76');
+    res.setHeader('X-Tempo-MPP-Access', 'authorized');
     const basePrice = 175.40;
     res.json({
       status: 'ok',
-      service: 'High-Frequency AAPL/USD Orderbook L2 Depth',
+      service: 'Example AAPL/USD Orderbook L2 Snapshot',
       costUsd: 0.0010,
       symbol: 'AAPL/USD',
       bids: [
@@ -510,9 +554,9 @@ app.all(
 // Service 3: Python Risk Sandbox ($0.0050)
 app.all(
   '/api/v1/data/python-sandbox',
-  withTempoMpp({ priceUsd: 0.0050, payee: localPayee }),
+  localMpp({ priceUsd: 0.0050, payee: localPayee }),
   (req: Request, res: Response) => {
-    res.setHeader('X-Tempo-Settled', '0x76');
+    res.setHeader('X-Tempo-MPP-Access', 'authorized');
     res.json({
       status: 'ok',
       service: 'Python 3.12 Isolated Micro-Sandbox',
@@ -533,9 +577,9 @@ app.all(
 // Service 4: Paywalled Financial Article & Scraper Access ($0.0010)
 app.all(
   '/api/v1/data/unlocked-article',
-  withTempoMpp({ priceUsd: 0.0010, payee: localPayee }),
+  localMpp({ priceUsd: 0.0010, payee: localPayee }),
   (req: Request, res: Response) => {
-    res.setHeader('X-Tempo-Settled', '0x76');
+    res.setHeader('X-Tempo-MPP-Access', 'authorized');
     res.json({
       status: 'ok',
       service: 'Web Publisher HTTP 402 Paywall Solver',
@@ -552,14 +596,14 @@ app.all(
 // Service 5: Test Provider Data (Vision / Media Cutout - $0.0005)
 app.all(
   '/api/v1/test-provider-data',
-  withTempoMpp({ priceUsd: 0.0005, payee: localPayee }),
+  localMpp({ priceUsd: 0.0005, payee: localPayee }),
   (req: Request, res: Response) => {
-    res.setHeader('X-Tempo-Settled', '0x76');
+    res.setHeader('X-Tempo-MPP-Access', 'authorized');
     res.json({
       status: 'ok',
       service: 'Neural Vision Processing Pipeline',
       costUsd: 0.0005,
-      deliverable: 'PNG Transparent Cutout (200 OK)',
+      deliverable: 'PNG transparent cutout response shape (evaluation)',
       format: 'image/png',
       timestamp: Date.now(),
     });
@@ -571,9 +615,9 @@ app.all(
 // ==========================================
 app.all(
   '/api/v1/due-diligence/corporate-registry',
-  withTempoMpp({ priceUsd: 0.0020, payee: localPayee }),
+  localMpp({ priceUsd: 0.0020, payee: localPayee }),
   (req: Request, res: Response) => {
-    res.setHeader('X-Tempo-Settled', '0x76');
+    res.setHeader('X-Tempo-MPP-Access', 'authorized');
     res.json({
       status: 'ok',
       service: 'Delaware Division of Corporations API',
@@ -588,9 +632,9 @@ app.all(
 
 app.all(
   '/api/v1/due-diligence/sec-filings',
-  withTempoMpp({ priceUsd: 0.0020, payee: localPayee }),
+  localMpp({ priceUsd: 0.0020, payee: localPayee }),
   (req: Request, res: Response) => {
-    res.setHeader('X-Tempo-Settled', '0x76');
+    res.setHeader('X-Tempo-MPP-Access', 'authorized');
     res.json({
       status: 'ok',
       service: 'SEC EDGAR Intelligence API',
@@ -606,9 +650,9 @@ app.all(
 
 app.all(
   '/api/v1/due-diligence/beneficial-ownership',
-  withTempoMpp({ priceUsd: 0.0015, payee: localPayee }),
+  localMpp({ priceUsd: 0.0015, payee: localPayee }),
   (req: Request, res: Response) => {
-    res.setHeader('X-Tempo-Settled', '0x76');
+    res.setHeader('X-Tempo-MPP-Access', 'authorized');
     res.json({
       status: 'ok',
       service: 'Global Beneficial Ownership Registry',
@@ -623,14 +667,14 @@ app.all(
 
 app.all(
   '/api/v1/due-diligence/credit-rating',
-  withTempoMpp({ priceUsd: 0.0015, payee: localPayee }),
+  localMpp({ priceUsd: 0.0015, payee: localPayee }),
   (req: Request, res: Response) => {
-    res.setHeader('X-Tempo-Settled', '0x76');
+    res.setHeader('X-Tempo-MPP-Access', 'authorized');
     res.json({
       status: 'ok',
       service: 'Commercial Credit Bureau API',
       entity: 'Apex Foundry Ltd',
-      creditScore: '88/100 (Investment Grade A-)',
+      creditScore: 'Sample score 88/100 (A-) — verify with the upstream bureau',
       dpo: '34 Days',
       defaults: 0,
       costUsd: 0.0015,
@@ -641,9 +685,9 @@ app.all(
 
 app.all(
   '/api/v1/due-diligence/court-dockets',
-  withTempoMpp({ priceUsd: 0.0015, payee: localPayee }),
+  localMpp({ priceUsd: 0.0015, payee: localPayee }),
   (req: Request, res: Response) => {
-    res.setHeader('X-Tempo-Settled', '0x76');
+    res.setHeader('X-Tempo-MPP-Access', 'authorized');
     res.json({
       status: 'ok',
       service: 'PACER Federal & State Court Dockets API',
@@ -659,9 +703,9 @@ app.all(
 
 app.all(
   '/api/v1/due-diligence/sanctions-check',
-  withTempoMpp({ priceUsd: 0.0020, payee: localPayee }),
+  localMpp({ priceUsd: 0.0020, payee: localPayee }),
   (req: Request, res: Response) => {
-    res.setHeader('X-Tempo-Settled', '0x76');
+    res.setHeader('X-Tempo-MPP-Access', 'authorized');
     res.json({
       status: 'ok',
       service: 'OFAC / EU / UN Watchlist Screener API',
@@ -677,9 +721,9 @@ app.all(
 
 app.all(
   '/api/v1/due-diligence/adverse-media',
-  withTempoMpp({ priceUsd: 0.0015, payee: localPayee }),
+  localMpp({ priceUsd: 0.0015, payee: localPayee }),
   (req: Request, res: Response) => {
-    res.setHeader('X-Tempo-Settled', '0x76');
+    res.setHeader('X-Tempo-MPP-Access', 'authorized');
     res.json({
       status: 'ok',
       service: 'PEP & Global Adverse Media Screener',
@@ -694,9 +738,9 @@ app.all(
 
 app.all(
   '/api/v1/due-diligence/solvency-simulation',
-  withTempoMpp({ priceUsd: 0.0040, payee: localPayee }),
+  localMpp({ priceUsd: 0.0040, payee: localPayee }),
   (req: Request, res: Response) => {
-    res.setHeader('X-Tempo-Settled', '0x76');
+    res.setHeader('X-Tempo-MPP-Access', 'authorized');
     res.json({
       status: 'ok',
       service: 'Python 3.12 Monte Carlo Solvency Sandbox',
@@ -712,9 +756,9 @@ app.all(
 
 app.all(
   '/api/v1/due-diligence/clearance-dossier',
-  withTempoMpp({ priceUsd: 0.0010, payee: localPayee }),
+  localMpp({ priceUsd: 0.0010, payee: localPayee }),
   (req: Request, res: Response) => {
-    res.setHeader('X-Tempo-Settled', '0x76');
+    res.setHeader('X-Tempo-MPP-Access', 'authorized');
     res.json({
       status: 'ok',
       service: 'Executive Clearance Dossier & Board Memo Service',
@@ -727,17 +771,14 @@ app.all(
   }
 );
 
-// Service 6: Upstream Fault Simulation Endpoint (HTTP 500 for SLA Void/Refund verification)
-app.all('/api/v1/mock-500', (_req: Request, res: Response) => {
-  res.status(500).json({ error: 'Internal Server Error (Simulated Fault Injection for SLA Verification)' });
-});
-
 // ==========================================
 // Vite Middleware / SPA Fallback
 // ==========================================
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
+      root: path.resolve(process.cwd()),
+      configLoader: 'runner',
       server: {
         middlewareMode: true,
         watch: {

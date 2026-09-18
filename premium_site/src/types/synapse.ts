@@ -1,4 +1,4 @@
-export type KeyStatus = 'ACTIVE' | 'PAUSED' | 'DEPLETED' | 'REVOKED';
+﻿export type KeyStatus = 'ACTIVE' | 'PAUSED' | 'DEPLETED' | 'REVOKED';
 
 export interface ScopedSessionKey {
   id: string;

@@ -26,7 +26,7 @@ export interface McpToolDefinition {
 export const SYNAPSE_MCP_TOOLS: McpToolDefinition[] = [
   {
     name: 'synapse_call_paid_api',
-    description: 'Autonomous HTTP 402 Paywall Solver with Proof-of-Execution Escrow on Tempo L1. Pays micro-fees via EIP-712 scoped session key and returns verified response.',
+    description: 'Autonomous HTTP 402 paywall solver. Checks the budget and approved endpoint, then settles on Tempo L1 only when live chain access is available; otherwise returns an explicit evaluation trace.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -36,7 +36,7 @@ export const SYNAPSE_MCP_TOOLS: McpToolDefinition[] = [
         },
         targetUrl: {
           type: 'string',
-          description: 'The paywalled endpoint URL to query (e.g. /api/v1/data/stock-orderbook or https://api.binance.com/api/v3/depth).',
+          description: 'The approved endpoint URL to query (for example the local evaluation snapshot /api/v1/data/stock-orderbook or a separately configured external provider).',
         },
         maxBudgetPathUsd: {
           type: 'number',
@@ -46,13 +46,17 @@ export const SYNAPSE_MCP_TOOLS: McpToolDefinition[] = [
           type: 'boolean',
           description: 'If true, locks payment into Escrow and settles only upon valid HTTP 200 + response hash match.',
         },
+        evaluationOnly: {
+          type: 'boolean',
+          description: 'When true, run the plan without sending a live chain transaction or changing live balances.',
+        },
       },
       required: ['targetUrl'],
     },
   },
   {
     name: 'synapse_batch_swarm_settle',
-    description: 'Multi-Agent Swarm Subcontracting Engine: Lead agent hires multiple specialized sub-agents and pays them atomically in a single Tempo Type 0x76 batch.',
+    description: 'Multi-agent work runner: a lead agent assigns approved steps to specialized workers and records each planned payment; a live Tempo batch is used only when chain access is available.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -76,6 +80,10 @@ export const SYNAPSE_MCP_TOOLS: McpToolDefinition[] = [
             required: ['role', 'targetUrl', 'costPathUsd'],
           },
         },
+        evaluationOnly: {
+          type: 'boolean',
+          description: 'When true, prepare every step without sending live chain transactions.',
+        },
       },
       required: ['taskDescription', 'subcontractors'],
     },
@@ -95,7 +103,7 @@ export const SYNAPSE_MCP_TOOLS: McpToolDefinition[] = [
   },
   {
     name: 'synapse_list_monetized_services',
-    description: 'Lists all available Tempo L1 MPP-monetized data and AI inference endpoints in the network registry.',
+    description: 'Lists available HTTP 402 data and AI endpoints in the registry; each result states whether settlement is live or evaluation-only.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -141,7 +149,7 @@ export async function processMcpRequest(body: any): Promise<{ status: number; bo
               serverInfo: {
                 name: 'synapse402-tempo-mcp-server',
                 version: '1.2.0',
-                description: 'First Paid MCP Server & Autonomous Agent Swarm Gateway on Tempo L1',
+                description: 'MCP gateway for budgeted agent work and HTTP 402 service access; live Tempo settlement is optional.',
               },
             },
           },
@@ -253,6 +261,7 @@ export async function executeMcpTool(name: string, args: any): Promise<any> {
       const targetUrl = normalizeTargetUrl(args.targetUrl);
       const maxBudget = Number(args.maxBudgetPathUsd || 0.002);
       const proofOfExecution = args.proofOfExecutionRequired !== false;
+      const evaluationOnly = args.evaluationOnly === true;
 
       if (!keyId) {
         throw new Error('No active session key available for payment authorization.');
@@ -272,31 +281,40 @@ export async function executeMcpTool(name: string, args: any): Promise<any> {
       const settlement = await synapseEngine.settle402(keyId, targetUrl, maxBudget, 'MCP Tool Execution', {
         allowDynamicWhitelist: false,
         asyncRelay: true,
+        evaluationOnly,
       });
 
       // 3. Compute Proof of Execution Check
       const executionDigest = sha256(JSON.stringify(settlement.trace.liveProxyPayload || settlement.trace.id));
+      const liveConfirmed = settlement.trace.executionMode === 'LIVE_TESTNET'
+        && settlement.trace.status === 'SETTLED'
+        && typeof settlement.trace.txHash === 'string'
+        && settlement.trace.txHash.startsWith('0x');
 
       return {
-        status: 'SUCCESS',
+        status: liveConfirmed ? 'SUCCESS' : 'EVALUATION',
         standard: 'Model Context Protocol (MCP) + Tempo MPP',
         proofOfExecution: {
-          escrowStatus: 'SETTLED_AND_RELEASED',
+          escrowStatus: liveConfirmed ? 'SETTLED_AND_RELEASED' : 'EVALUATION_ONLY',
           executionDigest: `0x${executionDigest}`,
-          escrowVerified: proofOfExecution,
+          escrowVerified: liveConfirmed && proofOfExecution,
           voidProtection: 'Active (Pre-settlement void, zero cost charged on 5xx failure)',
         },
         settlement: {
-          txType: 'Tempo Type 0x76 (Native MPP)',
+          txType: liveConfirmed ? 'Tempo Type 0x76 (Native MPP)' : 'Evaluation payment plan',
           costPathUsd: settlement.trace.costPathUsd,
           blockHeight: settlement.blockHeight,
+          executionMode: settlement.trace.executionMode,
+          txHash: liveConfirmed ? settlement.trace.txHash : null,
           nonce2D: settlement.trace.nonce2D,
           eip712Signature: settlement.trace.eip712Signature,
           tip20Memo: settlement.trace.tip20Memo,
           complianceStatus: settlement.trace.sanctionsCompliance?.status || settlement.trace.complianceVerification?.status || 'CLEARED',
         },
         endpointResponse: settlement.trace.liveProxyPayload || {
-          message: `Deliverable from ${targetUrl} successfully received and decrypted under EIP-712 channel.`,
+          message: liveConfirmed
+            ? `Deliverable from ${targetUrl} was received after the confirmed payment.`
+            : `Evaluation response prepared for ${targetUrl}; no chain payment was submitted.`,
           timestamp: new Date().toISOString(),
         },
       };
@@ -308,7 +326,12 @@ export async function executeMcpTool(name: string, args: any): Promise<any> {
       if (!leadKey) throw new Error('No active lead agent session key found in vault.');
       const leadKeyId = leadKey.id;
 
-      const taskDescription = args.taskDescription || 'Multi-Agent Swarm Collaborative Computation';
+      const taskDescription = args.taskDescription === undefined
+        ? 'Multi-Agent Swarm Collaborative Computation'
+        : String(args.taskDescription).trim();
+      if (!taskDescription || taskDescription.length > 5000) {
+        throw new Error('taskDescription must be 1–5,000 characters.');
+      }
       const subcontractors = (Array.isArray(args.subcontractors) && args.subcontractors.length > 0)
         ? args.subcontractors
         : [
@@ -317,6 +340,10 @@ export async function executeMcpTool(name: string, args: any): Promise<any> {
             { id: 'sub_3', role: 'Web Page Data Scraper', shortName: 'Web Scraper', targetUrl: '/api/v1/data/stock-orderbook', costPathUsd: 0.0005 },
             { id: 'sub_4', role: 'Financial Paywall Research Reader', shortName: 'Paywall Unlocker', targetUrl: '/api/v1/data/unlocked-article', costPathUsd: 0.0005 },
           ];
+      if (subcontractors.length > 64) {
+        throw new Error('A swarm batch can contain at most 64 approved steps.');
+      }
+      const evaluationOnly = args.evaluationOnly === true;
 
       const totalBatchCost = subcontractors.reduce((acc: number, s: any) => {
         const c = Number(s?.costPathUsd ?? s?.costUsd ?? s?.cost ?? s?.priceUsd ?? s?.pricePathUsd ?? 0.0005);
@@ -366,6 +393,7 @@ export async function executeMcpTool(name: string, args: any): Promise<any> {
           const subSettlement = await synapseEngine.settle402(leadKeyId, subUrl, subCost, `Swarm: ${sub.role || 'Worker'}`, {
             allowDynamicWhitelist: allowDynamic,
             asyncRelay: true,
+            evaluationOnly,
           });
           settledSum += subCost;
           settledTraces.push(subSettlement.trace);
@@ -394,17 +422,22 @@ export async function executeMcpTool(name: string, args: any): Promise<any> {
         throw new Error(`Swarm batch execution failed and rolled back: ${execErr.message}`);
       }
 
-      const primaryTxHash = settledTraces.find((t) => t.executionMode === 'LIVE_TESTNET' && t.txHash)?.txHash || '';
+      // A pending async relay has a provisional hash, but it is not a receipt.
+      // Only expose a batch chain hash after every requested step has a confirmed live trace.
+      const allLiveSettled = settledTraces.length === subcontractors.length && settledTraces.every(
+        (t) => t.executionMode === 'LIVE_TESTNET' && t.status === 'SETTLED' && typeof t.txHash === 'string' && t.txHash.startsWith('0x')
+      );
+      const primaryTxHash = allLiveSettled ? settledTraces[0].txHash : '';
 
       return {
         swarmBatchId: batchId,
         task: taskDescription,
         batchExecution: {
-          batchType: 'Tempo 0x76 Pipelined Subcontracting',
+          batchType: primaryTxHash ? 'Tempo 0x76 Pipelined Subcontracting' : 'Evaluation payment plan',
           subcontractorCount: subcontractors.length,
           totalCostPathUsd: Number(totalBatchCost.toFixed(5)),
-          escrowSettlement: primaryTxHash ? 'ALL_DELIVERABLES_VERIFIED' : 'DEMO_DELIVERABLES_CONFIRMED',
-          txHash: primaryTxHash,
+          escrowSettlement: allLiveSettled ? 'ALL_DELIVERABLES_VERIFIED' : 'EVALUATION_PLAN_ONLY',
+          txHash: primaryTxHash || null,
         },
         dispatchedWorkers: results,
       };
@@ -434,7 +467,7 @@ export async function executeMcpTool(name: string, args: any): Promise<any> {
       const allServices = [
         {
           id: 'ep_binance',
-          name: 'Binance Orderbook L2 Depth',
+          name: 'Example L2 Market Snapshot',
           url: '/api/v1/data/stock-orderbook',
           pricePathUsd: 0.001,
           category: 'Market Data',
@@ -467,9 +500,16 @@ export async function executeMcpTool(name: string, args: any): Promise<any> {
       ];
 
       const filterCat = args.category;
+      const liveSettlementAvailable = synapseEngine.networkMode === 'LIVE_TESTNET';
       return {
         count: filterCat ? allServices.filter((s) => s.category.includes(filterCat)).length : allServices.length,
-        services: filterCat ? allServices.filter((s) => s.category.includes(filterCat)) : allServices,
+        executionMode: liveSettlementAvailable ? 'LIVE_TESTNET' : 'RESILIENT_SANDBOX',
+        note: 'Registry entries describe the payment route and response shape; provider data still needs upstream verification.',
+        services: (filterCat ? allServices.filter((s) => s.category.includes(filterCat)) : allServices).map((service) => ({
+          ...service,
+          dataStatus: 'PROVIDER_RESPONSE_UNVERIFIED',
+          settlementStatus: liveSettlementAvailable ? 'LIVE_SETTLEMENT_AVAILABLE' : 'EVALUATION_ONLY',
+        })),
       };
     }
 

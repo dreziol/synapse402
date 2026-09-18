@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle2, RotateCcw, 
   ShieldCheck, Check, 
   Copy, Globe, Layers,
   Bot, ArrowLeftRight, Terminal, CheckCheck,
-  Zap, ArrowRight
+  Zap, ArrowRight, ChevronDown
 } from 'lucide-react';
 import { LivePaymentEvent } from '../types/synapse402';
 import { soundEngine } from '../utils/audioEffects';
@@ -41,8 +41,8 @@ interface ScenarioDefinition {
 }
 
 const DEMO_AGENTS: DemoAgent[] = [
-  { id: 'key_quant_alpha', name: 'Market Data Agent', role: 'Real-time market orderbooks & price feeds', dailyLimitUsd: 50.00, spentTodayUsd: 0.000 },
-  { id: 'key_cortex_research', name: 'News Reader Agent', role: 'Financial news & disclosures on-demand', dailyLimitUsd: 50.00, spentTodayUsd: 0.000 },
+  { id: 'key_quant_alpha', name: 'Market Data Agent', role: 'Approved market data snapshots & feeds', dailyLimitUsd: 50.00, spentTodayUsd: 0.000 },
+  { id: 'key_cortex_research', name: 'Lead Research Agent', role: 'Private documents & approved sources on-demand', dailyLimitUsd: 50.00, spentTodayUsd: 0.000 },
   { id: 'key_sec_audit', name: 'Audit Agent', role: 'Smart contract vulnerability scanning', dailyLimitUsd: 25.00, spentTodayUsd: 0.000 },
   { id: 'key_polyglot_translator', name: 'Translator Agent', role: 'Technical document translation', dailyLimitUsd: 25.00, spentTodayUsd: 0.000 },
 ];
@@ -50,11 +50,11 @@ const DEMO_AGENTS: DemoAgent[] = [
 const DEMO_RESOURCES: DemoResource[] = [
   {
     id: 'res_market_depth',
-    name: 'Live Price Feed',
+    name: 'Licensed market snapshot',
     costUsd: 0.0010,
     provider: 'api.market-depth-mesh.io',
-    sampleSummary: 'Real-time L2 orderbook snapshot (Market Data Provider)',
-    simulatedData: { symbol: 'ETH/pathUSD', price: '$2,640.50', liveSpread: '$0.02', depthBids: 1420 },
+    sampleSummary: 'Example normalized L2 snapshot (licensed provider)',
+    simulatedData: { symbol: 'ETH/pathUSD', price: '$2,640.50', sampleSpread: '$0.02', depthBids: 1420 },
   },
   {
     id: 'res_ai_reasoning',
@@ -89,11 +89,11 @@ const PRODUCTION_SCENARIOS: ScenarioDefinition[] = [
     title: '1. Pay & Receive',
     tag: 'SUCCESS',
     tagStyle: 'text-[#d7ff4f] bg-[#d7ff4f]/10 border-[#d7ff4f]/30',
-    description: 'The agent asks for data → the provider asks for payment → the rules are checked → payment is confirmed after you run the test.',
+    description: 'The agent requests a private document search → the rules approve the cost → the result and payment status are returned.',
     outcomeType: 'SUCCESS',
-    outcomeLabel: '200 OK ($0.0010 paid)',
-    presetAgentId: 'key_quant_alpha',
-    presetResourceId: 'res_market_depth',
+    outcomeLabel: 'Response preview (no chain payment)',
+    presetAgentId: 'key_cortex_research',
+    presetResourceId: 'res_vector_search',
   },
   {
     id: 'sc_budget',
@@ -188,7 +188,7 @@ interface JuryInteractiveDemoProps {
 export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
   onSimulatePayments,
   onNavigateToTab,
-  currentBlockHeight = 35183138,
+  currentBlockHeight = 0,
   vaultTvl = 244.44,
   isRealWalletConnected = false,
   walletAddress = null,
@@ -315,17 +315,19 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
           pricePathUsd: activeResource.costUsd,
           category: 'RESEARCH & DATA',
           allowDynamicWhitelist: true,
+          evaluationOnly: true,
         }),
       });
       const elapsed = Math.max(11, Math.round(performance.now() - t0));
       const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.trace || data.trace.status !== 'SETTLED') {
+      if (!res.ok || !data?.trace || !['SETTLED', 'SIMULATED_PASS'].includes(data.trace.status)) {
         throw new Error(data?.error || `Settlement failed (HTTP ${res.status})`);
       }
 
-      soundEngine.playSettlementChime();
+      const isLiveSettlement = data.trace.status === 'SETTLED' && data.trace.executionMode === 'LIVE_TESTNET' && Boolean(data.trace.txHash);
+      if (isLiveSettlement) soundEngine.playSettlementChime();
       setFlowStep(5); // 05 Result
-      setSpentAmount((prev) => prev + activeResource.costUsd);
+      setSpentAmount((prev) => prev + (isLiveSettlement ? activeResource.costUsd : 0));
 
       const realTx = data.trace.txHash;
       onSimulatePayments([
@@ -337,29 +339,30 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
           serviceUrl: `https://${activeResource.provider}`,
           amountUsd: activeResource.costUsd,
           latencyMs: elapsed,
-          status: 'SETTLED',
-          blockNumber: currentBlockHeight,
-          txHash: realTx,
+          status: data.trace.status,
+          executionMode: data.trace.executionMode || 'RESILIENT_SANDBOX',
+          blockNumber: data.trace.blockNumber || currentBlockHeight,
+          txHash: realTx || '',
         },
       ], activeResource.costUsd);
 
       setExecutionResult({
         status: 'SUCCESS',
         httpCode: 200,
-        httpLabel: 'HTTP 200 OK',
-        scenarioTitle: 'Scenario 1: Pay & Receive → 200 OK SUCCESS',
-        heroMetric: `+$${activeResource.costUsd.toFixed(4)} Paid · Resource Delivered (Policy check <15ms · L1 Confirmed)`,
+        httpLabel: isLiveSettlement ? 'HTTP 200 OK' : 'HTTP 200 OK · evaluation response',
+        scenarioTitle: isLiveSettlement ? 'Scenario 1: Pay & Receive → 200 OK SUCCESS' : 'Scenario 1: Request approved → preview returned',
+        heroMetric: `${isLiveSettlement ? `+$${activeResource.costUsd.toFixed(4)} Paid` : `Planned $${activeResource.costUsd.toFixed(4)} payment step`} · ${isLiveSettlement ? 'Resource delivered' : 'Resource preview returned'} (${isLiveSettlement ? 'L1 confirmed' : 'no chain write'})`,
         whatHappened: `Agent requested "${activeResource.name}" from ${activeResource.provider} for $${activeResource.costUsd.toFixed(4)}.`,
-        systemResponse: `Provider returned HTTP 402 challenge. Gateway verified policy rules (<15ms), signed credential, and confirmed settlement on Tempo L1.`,
+        systemResponse: `Provider returned an HTTP 402 challenge. The gateway checked the policy and returned the resource; ${isLiveSettlement ? 'the payment is confirmed on Tempo L1.' : 'this evaluation did not submit a blockchain transaction.'}`,
         whatThisProves: `An AI agent can independently acquire a paid resource via HTTP 402 without manual card checkout.`,
-        businessBenefit: `Autonomous operation unlocked within spending limits. Provider earned $${activeResource.costUsd.toFixed(4)} instantly.`,
+        businessBenefit: `Autonomous operation unlocked within spending limits. The provider receives the configured amount when the confirmed trace is available.`,
         payload: {
           statusCode: 200,
           statusText: 'OK',
           unlockedData: activeResource.simulatedData,
           settlement: {
-            tempoTxHash: realTx,
-            blockNumber: currentBlockHeight,
+            tempoTxHash: isLiveSettlement ? realTx : '',
+            blockNumber: data.trace.blockNumber || currentBlockHeight,
             policyLatencyMs: elapsed,
             costPathUsd: activeResource.costUsd,
             protocolFeeUsd: 0.000001,
@@ -380,7 +383,7 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
         heroMetric: '$0.00 charged · Resource not delivered',
         whatHappened: `The agent requested "${activeResource.name}" but settlement could not be confirmed.`,
         systemResponse: message,
-        whatThisProves: 'The demo reports an unconfirmed payment instead of claiming success.',
+        whatThisProves: 'The walkthrough reports an unconfirmed payment instead of claiming success.',
         businessBenefit: 'Unconfirmed requests do not appear as successful spend.',
         payload: null,
         stoppedStepIndex: 4,
@@ -566,8 +569,8 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
     setFlowStep(0);
     setSpentAmount(0);
     setSelectedScenarioId('sc_normal');
-    setSelectedAgentId('key_quant_alpha');
-    setSelectedResourceId('res_market_depth');
+    setSelectedAgentId('key_cortex_research');
+    setSelectedResourceId('res_vector_search');
     setExecutionResult({
       status: 'IDLE',
       httpCode: 0,
@@ -587,21 +590,24 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
   const currentProviderHost = activeScenario.customTargetDomain || activeResource.provider;
 
   return (
-    <div className="space-y-4 font-sans text-zinc-200 w-full">
+    <div className="space-y-7 font-sans text-zinc-200 w-full">
       
       {/* 1. HEADER (QUIET, DIRECT, NO SIMULATOR JARGON) */}
-      <div className="bg-white/[.03] backdrop-blur-md border border-white/[.08] rounded-2xl p-6 shadow-sm space-y-2.5 relative overflow-hidden">
+      <div className="bg-[#151b23] border border-white/[.09] rounded-3xl p-6 sm:p-8 space-y-3 relative overflow-hidden shadow-[0_18px_60px_rgba(0,0,0,0.18)]">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#d7ff4f] shadow-[0_0_8px_rgba(215,255,79,0.8)]" />
+              <span className="w-2 h-2 rounded-full bg-[#d7ff4f]" />
               <span className="text-[10px] font-mono font-black uppercase tracking-widest text-[#d7ff4f]">
-                1-CLICK DEMO
+                PAYMENT SCENARIO TESTS
               </span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-              1-Click Demo — Test What Happens When an AI Needs to Pay
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight">
+              Test how the system handles AI payment scenarios
             </h1>
+             <p className="text-sm sm:text-base text-zinc-300 max-w-3xl leading-relaxed">
+               This is a demo simulation. Pick a scenario to see how the agent, provider, and payment system react.
+             </p>
           </div>
 
           <button
@@ -615,9 +621,6 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
           </button>
         </div>
 
-        <p className="text-xs text-slate-300 max-w-3xl leading-relaxed">
-          What does the system do when the AI pays — or breaks a rule? Choose a situation below to see what the agent, provider, and payment system do next.
-        </p>
         {executionResult.txHash && executionResult.status === 'SUCCESS' && (
           <a
             href={`https://explore.tempo.xyz/tx/${executionResult.txHash}`}
@@ -630,63 +633,61 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
         )}
       </div>
 
-      {/* 2. THE SCENARIOS: PRIMARY DEMO + GUARDRAILS */}
-      <div className="bg-white/[.03] backdrop-blur-md border border-white/[.08] rounded-2xl p-6 shadow-sm space-y-4 relative overflow-hidden">
-        <div className="flex items-center justify-between text-xs font-mono relative z-10">
-          <span className="font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
-            <Layers className="w-3.5 h-3.5 text-zinc-400" />
-            <span>Select Situation to Test</span>
-          </span>
-          <span className="text-zinc-400 font-mono text-[10px] bg-white/[0.04] px-2.5 py-0.5 rounded-lg border border-white/10">1 Live Flow + 5 Guardrails</span>
+      {/* 2. THE SCENARIOS: MAIN FLOW + GUARDRAILS */}
+      <div className="rounded-3xl border border-white/[.09] bg-[#121820] p-5 sm:p-7 shadow-[0_18px_60px_rgba(0,0,0,0.18)] space-y-5 relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 text-xs font-mono relative z-10">
+          <div>
+            <div className="font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+              <Layers className="h-4 w-4 text-[#d7ff4f]" />
+              <span>CHOOSE A SCENARIO TO TEST</span>
+            </div>
+            <div className="mt-3 max-w-4xl border-l-2 border-zinc-500 bg-white/[0.035] rounded-r-xl px-4 py-3 text-base sm:text-lg font-semibold font-sans normal-case tracking-normal leading-snug text-white">
+               <strong className="text-[#d7ff4f]">Demo:</strong> pick a case. In the full version, tell the agent what you need. It picks the team and steps.
+            </div>
+          </div>
+          <span className="text-zinc-500 text-[10px] font-mono uppercase tracking-wider">6 scenarios · 1 payment flow</span>
         </div>
 
-        {/* Featured Primary Demo (Happy Path) */}
         {(() => {
-          const happySc = PRODUCTION_SCENARIOS.find((s) => s.id === 'sc_normal')!;
-          const isSelected = happySc.id === selectedScenarioId;
+          const happySc = PRODUCTION_SCENARIOS.find((scenario) => scenario.id === 'sc_normal')!;
+          const isSelected = selectedScenarioId === happySc.id;
           return (
             <button
-              key={happySc.id}
               type="button"
               onClick={() => handleSelectScenario(happySc)}
-              className={`w-full p-4.5 rounded-xl border text-left transition-all cursor-pointer relative group ${
+              className={`w-full rounded-xl border p-4 text-left transition-all cursor-pointer ${
                 isSelected
-                  ? 'bg-white/[.08] border-[#d7ff4f] shadow-[0_0_24px_rgba(215,255,79,0.2)] ring-1 ring-[#d7ff4f]/60 backdrop-blur-sm'
-                  : 'bg-white/[.04] hover:bg-white/[.07] border-[#d7ff4f]/40 hover:border-[#d7ff4f]/70 backdrop-blur-sm'
+                  ? 'bg-[#1b232d] border-white/15 border-l-4 border-l-[#d7ff4f] shadow-sm'
+                  : 'bg-white/[0.025] border-white/10 hover:border-white/20'
               }`}
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5">
-                  <span className={`px-2 py-0.5 rounded font-mono text-[11px] font-black tracking-tight ${
-                    isSelected ? 'bg-[#d7ff4f] text-[#08090c]' : 'bg-[#d7ff4f]/20 text-[#d7ff4f] border border-[#d7ff4f]/40'
-                  }`}>
-                    PRIMARY DEMO
-                  </span>
-                  <span className="text-sm font-black tracking-tight text-white">
-                    {happySc.title}
-                  </span>
+                  <span className="px-2 py-0.5 rounded bg-[#d7ff4f]/15 text-[#d7ff4f] border border-[#d7ff4f]/25 font-mono text-[10px] font-black">PRIMARY DEMO</span>
+                  <span className="text-sm font-black text-white">{happySc.title}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded border bg-[#d7ff4f]/15 text-[#d7ff4f] border-[#d7ff4f]/30">
-                      {executionResult.status === 'SUCCESS' && executionResult.txHash ? 'SUCCESS' : 'READY'}
-                  </span>
-                  <span className="text-[10.5px] font-mono text-[#d7ff4f] font-black bg-[#d7ff4f]/10 px-2.5 py-0.5 rounded border border-[#d7ff4f]/30">
-                    {executionResult.status === 'SUCCESS' && executionResult.txHash ? happySc.outcomeLabel : 'Run test to confirm payment'}
-                  </span>
-                </div>
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded border bg-white/[.05] text-zinc-300 border-white/10">
+                  {executionResult.status === 'SUCCESS' && executionResult.txHash ? 'SUCCESS' : 'READY'}
+                </span>
               </div>
-              <p className="text-xs text-zinc-300 font-sans leading-relaxed mt-2">
-                {happySc.description}
-              </p>
+              <p className="mt-2 text-xs text-zinc-300 leading-relaxed">{happySc.description}</p>
             </button>
           );
         })()}
-
-        {/* Sub-section: 5 Guardrail Scenarios */}
-        <div className="space-y-2 pt-2 border-t border-white/[0.06]">
-          <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold">
-            Test the Guardrails (Security, Limits, Edge Cases)
-          </div>
+        {/* Secondary cases stay available without competing with the main flow. */}
+        <details open={false} className="group space-y-2 pt-3 border-t border-white/[0.06]">
+          <summary className="cursor-pointer list-none rounded-xl border border-white/10 bg-white/[0.035] hover:bg-white/[0.06] hover:border-[#d7ff4f]/30 px-3.5 py-3 text-[11px] font-mono uppercase tracking-wider text-zinc-200 font-bold flex items-center justify-between gap-3 transition">
+            <span className="flex items-center gap-2.5">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/[0.06] border border-white/10 text-zinc-300">
+                <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" />
+              </span>
+              <span>
+                <span className="block">OPEN SAFETY SCENARIOS</span>
+                <span className="mt-0.5 block text-[10px] normal-case tracking-normal font-sans font-normal text-zinc-500">See what gets blocked, rejected, cancelled, or reused</span>
+              </span>
+            </span>
+            <span className="text-[10px] normal-case tracking-normal text-zinc-400 shrink-0">5 cases · Open</span>
+          </summary>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {PRODUCTION_SCENARIOS.filter((sc) => sc.id !== 'sc_normal').map((sc, idx) => {
               const isSelected = sc.id === selectedScenarioId;
@@ -720,9 +721,7 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
                   </div>
 
                   <p className="text-[11px] text-zinc-300 font-sans leading-relaxed line-clamp-2">
-                    {sc.id === 'sc_normal' && !(executionResult.status === 'SUCCESS' && executionResult.txHash)
-                      ? 'AI requests resource → 402 challenge → Policy check → Waiting for payment confirmation.'
-                      : sc.description}
+                    {sc.description}
                   </p>
 
                   <div className="text-[10px] font-mono pt-1.5 border-t border-white/[0.06] flex items-center justify-between">
@@ -735,33 +734,23 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
               );
             })}
           </div>
-        </div>
+        </details>
       </div>
 
       {/* 3. EXECUTION STAGE: BUYER ➔ RUN CTA ➔ SELLER */}
-      <div className="bg-white/[.03] backdrop-blur-md border border-white/[.08] rounded-2xl p-6 shadow-sm space-y-4 relative overflow-hidden">
-        <div className="flex items-center justify-between border-b border-white/[0.06] pb-3 text-xs font-mono relative z-10">
-          <div className="text-zinc-200 font-semibold flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#d7ff4f] shadow-[0_0_8px_rgba(215,255,79,0.8)]" />
-            <span>Active Situation: <strong className="text-white font-bold">{activeScenario.title}</strong></span>
-          </div>
-          <span className="text-zinc-400 text-[10.5px] font-mono bg-white/[0.03] px-2.5 py-0.5 rounded border border-white/10">
-            {executionResult.status === 'SUCCESS' && executionResult.txHash ? 'Policy checked · Payment confirmed' : 'Policy checked · Awaiting payment'}
-          </span>
-        </div>
-        
+      <div className="rounded-3xl border border-white/[.09] bg-[#151b23] p-5 sm:p-7 shadow-[0_22px_70px_rgba(0,0,0,0.22)] space-y-5 relative overflow-hidden">
         {/* Dynamic Motion Stage: Contoured Buyer Card vs Contoured Seller Card */}
         <div className="grid grid-cols-1 md:grid-cols-11 gap-4 items-center relative z-10">
           
           {/* Buyer Card */}
-          <div className="md:col-span-4 p-5 rounded-xl bg-white/[.025] backdrop-blur-md border border-white/[.08] space-y-3 relative overflow-hidden shadow-sm">
+          <div className="md:col-span-4 p-5 rounded-xl bg-[#1b222c] border border-white/[.08] space-y-3 relative overflow-hidden shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono font-black text-sky-300 uppercase tracking-wider flex items-center gap-1.5">
-                <Bot className="w-3.5 h-3.5 text-sky-400" />
+              <span className="text-[10px] font-mono font-black text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Bot className="w-3.5 h-3.5 text-zinc-400" />
                 <span>AI AGENT</span>
               </span>
               <span className="text-[9.5px] font-mono font-bold px-2 py-0.5 rounded border border-white/10 text-zinc-300 bg-white/[0.04]">
-                {flowStep === 5 ? '✓ SETTLED' : flowStep >= 1 ? 'AUTHORIZING' : 'READY'}
+                {flowStep === 5 ? (executionResult.txHash ? '✓ SETTLED' : '✓ PREPARED') : flowStep >= 1 ? 'AUTHORIZING' : 'READY'}
               </span>
             </div>
 
@@ -769,7 +758,7 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
               <div className="flex items-center justify-between">
                 <span className="text-base font-black text-white tracking-tight">{activeAgent.name}</span>
                 <span className="text-xs font-mono text-[#d7ff4f] font-bold px-2 py-0.5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/20 shadow-[0_0_10px_rgba(215,255,79,0.15)]">
-                  Spending Cap: ${activeAgent.dailyLimitUsd.toFixed(2)}
+                  Job limit: ${activeAgent.dailyLimitUsd.toFixed(2)}
                 </span>
               </div>
               <div className="text-xs text-slate-300 line-clamp-1">{activeAgent.role}</div>
@@ -777,7 +766,7 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
 
             <div className="p-3 rounded-xl bg-white/[.03] border border-white/[.06] space-y-1.5">
               <div className="flex justify-between items-center text-xs font-mono">
-                <span className="text-slate-300 uppercase text-[9.5px] font-bold">Remaining Daily Budget</span>
+                <span className="text-slate-300 uppercase text-[9.5px] font-bold">Remaining limit</span>
                 <span className="text-white font-bold text-sm">
                   ${(activeAgent.dailyLimitUsd - (activeScenario.ruleKey === 'over_budget' ? 50.00 : spentAmount)).toFixed(2)}
                 </span>
@@ -790,7 +779,7 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
               </div>
               <div className="flex justify-between items-center text-[10px] font-mono text-slate-400">
                 <span>Spent Today: <strong className="text-zinc-100 font-semibold">${(activeScenario.ruleKey === 'over_budget' ? 50.00 : spentAmount).toFixed(4)}</strong></span>
-                <span>Budget access: limited</span>
+                <span>Approved providers only</span>
               </div>
             </div>
           </div>
@@ -803,12 +792,14 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
               </div>
             ) : flowStep === 5 ? (
               <div className="px-3.5 py-1.5 rounded-lg bg-white/[0.06] border border-white/20 text-zinc-100 font-bold text-xs font-mono shadow-sm">
-                {activeScenario.ruleKey === 'normal' ? '✓ Delivered (<15ms check)' : '✓ $0.00 Protected'}
+                {activeScenario.ruleKey === 'normal'
+                  ? (executionResult.txHash ? '✓ Delivered (<15ms check)' : '✓ Result prepared')
+                  : '✓ $0.00 Protected'}
               </div>
             ) : (
               <div className="text-slate-300 text-xs font-mono flex items-center gap-1.5">
-                <ArrowLeftRight className="w-3.5 h-3.5 text-sky-400" />
-                <span className="font-semibold text-slate-200">Payment network</span>
+                <ArrowLeftRight className="w-3.5 h-3.5 text-zinc-500" />
+                <span className="font-semibold text-slate-200">Payment step</span>
               </div>
             )}
 
@@ -819,19 +810,19 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
               className="w-full py-3.5 px-5 rounded-xl bg-[#d7ff4f] hover:bg-[#cbf540] text-[#090b10] font-black text-xs font-mono uppercase tracking-wider transition-all cursor-pointer shadow-[0_0_24px_rgba(215,255,79,0.35),inset_0_1px_0_rgba(255,255,255,0.5),0_4px_16px_rgba(0,0,0,0.5)] hover:shadow-[0_0_36px_rgba(215,255,79,0.55),inset_0_1px_0_rgba(255,255,255,0.6)] hover:scale-[1.02] active:scale-98 flex items-center justify-center gap-2 relative overflow-hidden"
             >
               <Zap className="w-4 h-4 fill-current shrink-0" />
-              <span>{isRunning ? 'Processing...' : 'Run Test'}</span>
+              <span>{isRunning ? 'Processing...' : 'Run selected flow'}</span>
             </button>
           </div>
 
           {/* Seller Card (API Merchant Terminal Motif) */}
-          <div className="md:col-span-4 p-5 rounded-xl bg-white/[.025] backdrop-blur-md border border-white/[.08] space-y-3 relative overflow-hidden shadow-sm">
+          <div className="md:col-span-4 p-5 rounded-xl bg-[#1b222c] border border-white/[.08] space-y-3 relative overflow-hidden shadow-sm">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono font-black text-sky-300 uppercase tracking-wider flex items-center gap-1.5">
-                <Globe className="w-3.5 h-3.5 text-sky-400" />
-                <span>DATA SOURCE</span>
+              <span className="text-[10px] font-mono font-black text-zinc-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-zinc-400" />
+                <span>EXAMPLE PROVIDER</span>
               </span>
-              <span className="text-[9.5px] font-mono font-bold text-[#d7ff4f] px-2 py-0.5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 shadow-[0_0_10px_rgba(215,255,79,0.15)]">
-                PAYMENT REQUIRED
+                <span className="text-[9.5px] font-mono font-bold text-[#d7ff4f] px-2 py-0.5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 shadow-[0_0_10px_rgba(215,255,79,0.15)]">
+                {executionResult.status === 'SUCCESS' ? 'RESPONSE READY' : 'REQUEST NEEDS APPROVAL'}
               </span>
             </div>
 
@@ -845,14 +836,14 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
               <div className="text-xs text-zinc-400 line-clamp-1">{activeResource.sampleSummary}</div>
             </div>
 
-            <div className="p-2.5 rounded-xl bg-black/60 border border-white/[0.06] space-y-1 text-xs font-mono">
+            <div className="p-2.5 rounded-xl bg-[#11161d] border border-white/[0.08] space-y-1 text-xs font-mono">
               <div className="flex justify-between items-center text-[10px]">
                 <span className="text-zinc-500 uppercase font-bold">API Endpoint</span>
                 <span className="text-zinc-300 font-medium truncate max-w-[140px]">{currentProviderHost}</span>
               </div>
               <div className="flex justify-between items-center text-[10px]">
-                <span className="text-zinc-500 uppercase font-bold">Delivery Status</span>
-                <span className="text-[#d7ff4f] font-bold">402 Protected & Ready</span>
+                <span className="text-zinc-500 uppercase font-bold">Access status</span>
+                <span className="text-[#d7ff4f] font-bold">Protected · ready</span>
               </div>
             </div>
           </div>
@@ -864,7 +855,7 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
           
           {/* STEP 1: REQUEST */}
           <div className={`p-3 rounded-xl border space-y-1 transition-all ${
-            flowStep >= 1 ? 'bg-white/[0.04] border-[#d7ff4f]/40 text-white shadow-sm' : 'bg-black/30 border-white/[0.05] text-zinc-600'
+            flowStep >= 1 ? 'bg-white/[0.04] border-[#d7ff4f]/40 text-white shadow-sm' : 'bg-[#121820] border-white/[0.05] text-zinc-600'
           }`}>
             <div className="font-bold flex items-center justify-between text-xs">
               <span className="flex items-center gap-1.5">
@@ -882,7 +873,7 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
 
           {/* STEP 2: 402 CHALLENGE */}
           <div className={`p-3 rounded-xl border space-y-1 transition-all ${
-            flowStep >= 2 ? 'bg-white/[0.04] border-[#d7ff4f]/40 text-white shadow-sm' : 'bg-black/30 border-white/[0.05] text-zinc-600'
+            flowStep >= 2 ? 'bg-white/[0.04] border-[#d7ff4f]/40 text-white shadow-sm' : 'bg-[#121820] border-white/[0.05] text-zinc-600'
           }`}>
             <div className="font-bold flex items-center justify-between text-xs">
               <span className="flex items-center gap-1.5">
@@ -904,7 +895,7 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
               ? 'bg-white/[0.04] border-white/20 text-white shadow-sm'
               : flowStep >= 3
               ? 'bg-white/[0.04] border-[#d7ff4f]/40 text-white shadow-sm'
-              : 'bg-black/30 border-white/[0.05] text-zinc-600'
+              : 'bg-[#121820] border-white/[0.05] text-zinc-600'
           }`}>
             <div className="font-bold flex items-center justify-between text-xs">
               <span className="flex items-center gap-1.5">
@@ -929,12 +920,12 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
           {/* STEP 4: PAYMENT */}
           <div className={`p-3 rounded-xl border space-y-1 transition-all ${
             executionResult.stoppedStepIndex === 3
-              ? 'bg-black/20 border-white/[0.03] text-zinc-600 opacity-40'
+              ? 'bg-[#121820] border-white/[0.04] text-zinc-600 opacity-50'
               : executionResult.stoppedStepIndex === 4
               ? 'bg-white/[0.04] border-white/20 text-white shadow-sm'
               : flowStep >= 4
               ? 'bg-white/[0.04] border-[#d7ff4f]/40 text-white shadow-sm'
-              : 'bg-black/30 border-white/[0.05] text-zinc-600'
+              : 'bg-[#121820] border-white/[0.05] text-zinc-600'
           }`}>
             <div className="font-bold flex items-center justify-between text-xs">
               <span className="flex items-center gap-1.5">
@@ -965,14 +956,14 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
           {/* STEP 5: RESULT */}
           <div className={`p-3 rounded-xl border space-y-1 transition-all ${
             executionResult.stoppedStepIndex === 3 || executionResult.stoppedStepIndex === 4
-              ? 'bg-black/20 border-white/[0.03] text-zinc-600 opacity-40'
+              ? 'bg-[#121820] border-white/[0.03] text-zinc-600 opacity-50'
               : executionResult.status === 'SUCCESS'
               ? 'bg-white/[0.04] border-[#d7ff4f] text-white shadow-[0_0_15px_rgba(215,255,79,0.15)]'
               : executionResult.status === 'CACHED'
               ? 'bg-white/[0.04] border-white/20 text-white'
               : executionResult.status !== 'IDLE'
               ? 'bg-white/[0.03] border-white/20 text-white'
-              : 'bg-black/30 border-white/[0.05] text-zinc-600'
+              : 'bg-[#121820] border-white/[0.05] text-zinc-600'
           }`}>
             <div className="font-bold flex items-center justify-between text-xs">
               <span className="flex items-center gap-1.5">
@@ -999,7 +990,7 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
               {executionResult.stoppedStepIndex === 3 || executionResult.stoppedStepIndex === 4
                 ? 'No funds transferred'
                 : executionResult.status === 'SUCCESS'
-                ? '200 OK + L1 receipt'
+                ? (executionResult.payload?.settlement?.tempoTxHash ? '200 OK + L1 receipt' : '200 OK · evaluation response')
                 : executionResult.status === 'CACHED'
                 ? 'Cached ($0.00 extra)'
                 : executionResult.status === 'VOIDED'
@@ -1012,7 +1003,7 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
 
         {/* 4. DYNAMIC RESULT CARD (WITH EXPLICIT "WHAT THIS PROVES" ANCHOR) */}
         {executionResult.status !== 'IDLE' && (
-          <div className="p-6 sm:p-8 rounded-3xl bg-black/70 border border-white/[0.12] space-y-5 text-xs animate-in fade-in shadow-2xl">
+            <div className="p-6 sm:p-8 rounded-3xl bg-[#1a2028] border border-white/[0.10] space-y-5 text-xs animate-in fade-in shadow-xl">
             
             {/* Top Result Banner */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.08] pb-4">
@@ -1079,9 +1070,9 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
               </div>
             </div>
 
-            {/* RETURNED PAYLOAD BOX (OBSIDIAN DARK TERMINAL) */}
+            {/* Returned payload: keep it readable without a separate black terminal block. */}
             {executionResult.payload && (
-              <div className="p-4 sm:p-5 rounded-2xl bg-[#06080c] border border-white/[0.08] space-y-2 font-mono">
+              <div className="p-4 sm:p-5 rounded-2xl bg-[#1a2028] border border-white/[0.08] space-y-2 font-mono">
                 <div className="flex items-center justify-between text-[10.5px]">
                   <span className="font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
                     <Terminal className="w-3 h-3 text-[#d7ff4f]" />
@@ -1104,7 +1095,7 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
                   </button>
                 </div>
 
-                <pre className="p-2.5 rounded-lg bg-black/60 text-[11px] text-zinc-300 overflow-x-auto border border-white/[0.04] leading-relaxed">
+                <pre className="p-2.5 rounded-lg bg-[#11161d] text-[11px] text-zinc-300 overflow-x-auto border border-white/[0.08] leading-relaxed">
                   {JSON.stringify(executionResult.payload, null, 2)}
                 </pre>
               </div>
@@ -1118,16 +1109,16 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
                   <span className="font-bold text-[#d7ff4f]">AI CONTINUES:</span>
                   <span className="text-zinc-200 font-sans">
                     {activeResource.id === 'res_market_depth'
-                      ? 'Live orderbook received → Market Data Agent evaluated spread and executed trades.'
+                      ? 'Example market snapshot reviewed → no live trade was executed.'
                       : activeResource.id === 'res_ai_reasoning'
-                      ? 'Inference answer received → News Reader Agent finalized autonomous report.'
+                      ? 'Example model response returned → the result is ready for review.'
                       : activeResource.id === 'res_vector_search'
-                      ? '3 matching documents found → Translator Agent proceeded with verified context.'
-                      : 'All test assertions verified → Audit Agent completed execution.'}
+                      ? '3 matching private documents found → Lead Research Agent prepared the result.'
+                      : 'Evaluation result prepared → no live settlement was submitted.'}
                   </span>
                 </div>
                 <span className="text-[10px] text-zinc-400 font-mono shrink-0 font-semibold uppercase tracking-wider">
-                  ✓ Task Unblocked
+                  ✓ Result ready
                 </span>
               </div>
             )}
@@ -1138,7 +1129,7 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
       </div>
 
       {/* 4. WHY THIS MATTERS (4 HUMAN BUSINESS PERSPECTIVES) */}
-      <div className="bg-white/[.03] backdrop-blur-md border border-white/[.08] rounded-2xl p-6 shadow-sm space-y-3.5 font-sans relative overflow-hidden">
+      <div className="rounded-3xl border border-white/[.08] bg-[#0e1318] p-5 sm:p-7 shadow-sm space-y-3.5 font-sans relative overflow-hidden">
         <div className="flex items-center justify-between text-xs font-mono">
           <span className="font-bold text-white uppercase tracking-wider flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f] shadow-[0_0_8px_rgba(215,255,79,0.8)]" />
@@ -1152,7 +1143,7 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-white font-black text-xs">
                 <Bot className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                <span>AI Companies</span>
+                <span>Agent owners</span>
               </div>
               <span className="text-[9px] font-mono font-bold text-[#d7ff4f] bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 px-1.5 py-0.5 rounded">
                 NO MANUAL CHECKOUT
@@ -1167,7 +1158,7 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-white font-black text-xs">
                 <ShieldCheck className="w-3.5 h-3.5 text-zinc-300" />
-                <span>Finance Teams</span>
+                <span>People who set limits</span>
               </div>
               <span className="text-[9px] font-mono font-bold text-zinc-200 bg-white/10 border border-white/20 px-1.5 py-0.5 rounded">
                 HARD CAPS
@@ -1185,11 +1176,11 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
                 <span>Website Owners</span>
               </div>
               <span className="text-[9px] font-mono font-bold text-zinc-300 bg-white/[0.06] border border-white/10 px-1.5 py-0.5 rounded">
-                PAID MACHINE ACCESS
+                PAY PER REQUEST
               </span>
             </div>
             <p className="text-zinc-300 text-[11.5px] leading-relaxed">
-              Instead of blocking AI scrapers with empty 403 errors, turn bot visits into instant paid machine access.
+              Instead of returning an empty block, a service can ask an agent to pay for the exact resource it requests.
             </p>
           </div>
 
@@ -1197,14 +1188,14 @@ export const JuryInteractiveDemo: React.FC<JuryInteractiveDemoProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-white font-black text-xs">
                 <Zap className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                <span>Payment network</span>
+                <span>Rules + payment</span>
               </div>
               <span className="text-[9px] font-mono font-bold text-[#d7ff4f] bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 px-1.5 py-0.5 rounded">
-                POLICY &amp; L1 SETTLEMENT
+                RULE CHECK + RECEIPT
               </span>
             </div>
             <p className="text-zinc-300 text-[11.5px] leading-relaxed">
-              Policy check in &lt;15ms off-chain; Tempo L1 on-chain confirmation with verifiable cryptographic receipts.
+              Policy check happens before delivery; a live on-chain confirmation and receipt appear only when the backend provides them.
             </p>
           </div>
         </div>
