@@ -1,6 +1,5 @@
 ﻿import React, { useState } from 'react';
 import { Bot, X } from 'lucide-react';
-import { ethers } from 'ethers';
 import { AgentAccount } from '../types/synapse402';
 import { soundEngine } from '../utils/audioEffects';
 import { InfoBadge } from './InfoBadge';
@@ -18,13 +17,13 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
 }) => {
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
-  const [dailyLimit, setDailyLimit] = useState('1.50');
+  const [reusableLimit, setReusableLimit] = useState('1.50');
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const parsedLimit = parseFloat(dailyLimit);
+    const parsedLimit = parseFloat(reusableLimit);
     if (!name || isNaN(parsedLimit) || parsedLimit <= 0) return;
 
     const colors = [
@@ -35,26 +34,25 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
       'bg-[#d8ff63]',
       'bg-white/80',
     ];
-    // Cryptographically generate a real Secp256k1 keypair using ethers
-    const newWallet = ethers.Wallet.createRandom();
-    const sessionKey = newWallet.address;
-    const avatarColor = colors[Math.abs(parseInt(sessionKey.slice(2, 6), 16)) % colors.length];
+    // The gateway derives and registers the session address. Do not create a
+    // throwaway browser wallet that the backend will immediately ignore.
+    const avatarColor = colors[Math.abs([...name].reduce((sum, char) => sum + char.charCodeAt(0), 0)) % colors.length];
 
     const newAgent: AgentAccount = {
       id: `agent_${Date.now()}`,
       name,
       role: role || 'Autonomous Micro-Agent',
-      dailyLimitUsd: parseFloat(dailyLimit),
-      spentTodayUsd: 0,
+      reusableCapUsd: parseFloat(reusableLimit),
+      cumulativeUsageUsd: 0,
       status: 'ACTIVE',
-      sessionKey,
+      sessionKey: '',
       avatarColor,
     };
 
     onCreate(newAgent);
     setName('');
     setRole('');
-    setDailyLimit('1.50');
+    setReusableLimit('1.50');
     onClose();
   };
 
@@ -67,10 +65,10 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
               <Bot className="w-4 h-4" />
             </div>
             <h3 className="font-bold text-base text-[#f5f5f2] flex items-center">
-              <span>Create Agent Spending Account</span>
+              <span>Create Reusable Safety Rule</span>
               <InfoBadge
                 title="EIP-712 Session Key Delegation"
-                text="Generates an isolated Secp256k1 keypair bound to SynapseVault with a hard daily spending limit and validBefore expiration."
+                text="Generates an isolated session key for repeated or background runs with a hard total limit and expiration. One-off missions do not require this form."
               />
             </h3>
           </div>
@@ -85,7 +83,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
             <input
               type="text"
               required
-              placeholder="e.g. Crypto Research Bot"
+              placeholder="e.g. Crypto Research Agent"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full bg-black/40 border border-white/[.08] rounded-lg p-2.5 text-[#f5f5f2] outline-none focus:border-[#d7ff4f] font-sans text-xs"
@@ -104,19 +102,19 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
           </div>
 
           <div>
-            <label className="text-zinc-400 font-sans block mb-1 text-[11px] uppercase font-medium">Daily Spending Limit (USD)</label>
+            <label className="text-zinc-400 font-sans block mb-1 text-[11px] uppercase font-medium">Reusable Total Limit (USD)</label>
             <input
               type="number"
               step="0.1"
               required
-              value={dailyLimit}
-              onChange={(e) => setDailyLimit(e.target.value)}
+              value={reusableLimit}
+              onChange={(e) => setReusableLimit(e.target.value)}
               className="w-full bg-black/40 border border-white/[.08] rounded-lg p-2.5 text-[#f5f5f2] outline-none focus:border-[#d7ff4f] text-xs"
             />
           </div>
 
           <div className="bg-black/40 p-3 rounded-lg border border-white/[.08] text-xs text-zinc-300 leading-relaxed font-sans">
-            <strong className="text-zinc-100">Smart Contract Protection:</strong> The generated session key is constrained by <code className="text-[#d7ff4f]">SynapseVault.sol</code> on Tempo. The bot cannot spend more than this daily limit.
+            <strong className="text-zinc-100">Advanced setting:</strong> A mission uses the selected reusable rule as its approved provider permission, then applies the one-time job maximum you enter on the mission page. This rule is for repeated or background runs; it is not a separate wallet or budget. In live mode, it is registered on <code className="text-[#d7ff4f]">SynapseVault.sol</code> on the first live payment; evaluation mode stays local.
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
@@ -131,7 +129,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({
               type="submit"
               className="px-4 py-2 bg-[#d7ff4f] text-[#0c0f12] font-bold rounded-lg hover:bg-[#bce63b]"
             >
-              Create Agent Account
+              Create Reusable Rule
             </button>
           </div>
         </form>

@@ -10,7 +10,7 @@ export const OurMissionCard: React.FC<OurMissionCardProps> = ({ onJumpToDemo }) 
   return (
     <section 
       aria-label="Our Mission"
-      className="relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/80 p-5 sm:p-6"
+      className="ui-section relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/80 p-5 sm:p-6"
     >
       {/* Header bar */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-white/[.08] pb-3">
@@ -31,7 +31,7 @@ export const OurMissionCard: React.FC<OurMissionCardProps> = ({ onJumpToDemo }) 
         {onJumpToDemo && (
           <button
             onClick={onJumpToDemo}
-            className="flex items-center gap-1.5 rounded-lg bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 px-3 py-1 text-xs font-semibold text-[#d7ff4f] hover:bg-[#d7ff4f] hover:text-[#08090c] transition cursor-pointer"
+            className="ui-interactive flex items-center gap-1.5 rounded-lg bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 px-3 py-1 text-xs font-semibold text-[#d7ff4f] hover:bg-[#d7ff4f] hover:text-[#08090c] transition cursor-pointer"
           >
             <span>Walk through one payment</span>
             <ArrowRight className="h-3 w-3" />
@@ -43,7 +43,7 @@ export const OurMissionCard: React.FC<OurMissionCardProps> = ({ onJumpToDemo }) 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
         
         {/* Pillar 1: The Problem */}
-        <div className="rounded-xl border border-white/10 bg-black/50 p-4 flex flex-col justify-between">
+        <div className="ui-meta rounded-xl border border-white/10 bg-black/50 p-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 mb-2">
               <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white/5 border border-white/10 text-zinc-300">
@@ -54,7 +54,7 @@ export const OurMissionCard: React.FC<OurMissionCardProps> = ({ onJumpToDemo }) 
               </span>
             </div>
             <h3 className="text-xs font-semibold text-white mb-2">
-              Websites Waste Millions Blocking AI Bots
+              Websites block AI bots and earn nothing from the request
             </h3>
             <ul className="space-y-2 text-[11px] text-zinc-300">
               <li className="flex items-start gap-2">
@@ -77,7 +77,7 @@ export const OurMissionCard: React.FC<OurMissionCardProps> = ({ onJumpToDemo }) 
         </div>
 
         {/* Pillar 2: The Solution */}
-        <div className="rounded-xl border border-[#d7ff4f]/25 bg-zinc-950/70 p-4 flex flex-col justify-between">
+        <div className="ui-meta rounded-xl border border-[#d7ff4f]/25 bg-zinc-950/70 p-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 mb-2">
               <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 text-[#d7ff4f]">
@@ -115,7 +115,7 @@ export const OurMissionCard: React.FC<OurMissionCardProps> = ({ onJumpToDemo }) 
         </div>
 
         {/* Pillar 3: The Protection */}
-        <div className="rounded-xl border border-white/10 bg-zinc-950/70 p-4 flex flex-col justify-between">
+        <div className="ui-meta rounded-xl border border-white/10 bg-zinc-950/70 p-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 mb-2">
               <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white/[0.05] border border-white/10 text-zinc-300">
@@ -129,13 +129,13 @@ export const OurMissionCard: React.FC<OurMissionCardProps> = ({ onJumpToDemo }) 
               <span>Controlled Accounts with Hard Limits</span>
               <InfoBadge
                 title="EIP-712 & Merkle Tree Guardrails"
-                text="Enforced by SynapseVault.sol smart contracts on Tempo Moderato (42431). Bots cannot exceed their allocated daily cap or pay unapproved vendors."
+                text="Enforced by SynapseVault.sol smart contracts on Tempo Moderato (42431). Every run gets one job limit; temporary session rules and approved vendors stop unapproved spending."
               />
             </h3>
             <ul className="space-y-2 text-[11px] text-zinc-300">
               <li className="flex items-start gap-2">
                 <ShieldCheck className="w-3.5 h-3.5 text-zinc-300 shrink-0 mt-0.5" />
-                <span><strong>Hard Daily Caps:</strong> Set strict $5/day budgets per bot.</span>
+                <span><strong>One job limit:</strong> Set one maximum for the run; recurring bot rules stay optional.</span>
               </li>
               <li className="flex items-start gap-2">
                 <Lock className="w-3.5 h-3.5 text-zinc-300 shrink-0 mt-0.5" />
@@ -148,7 +148,7 @@ export const OurMissionCard: React.FC<OurMissionCardProps> = ({ onJumpToDemo }) 
             </ul>
           </div>
           <div className="mt-3 pt-2 border-t border-white/10 text-[10px] font-mono text-zinc-400">
-            Safety: Zero financial exposure risk
+            Safety: rules block spend beyond the job limit
           </div>
         </div>
 

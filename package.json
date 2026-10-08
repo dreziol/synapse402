@@ -4,10 +4,12 @@
   "description": "Synapse402 — Autonomous AI Agent Payments on Tempo L1",
   "scripts": {
     "postinstall": "npm --prefix contracts install && npm --prefix premium_site install",
-    "test": "npm --prefix contracts test && npm --prefix premium_site run test:defense",
+    "test": "npm --prefix contracts test && npm --prefix premium_site run test:defense && npm --prefix premium_site run test:tempo-receipt && npm --prefix premium_site run test:sdk-receipt",
     "test:contracts": "npm --prefix contracts test",
     "test:defense": "npm --prefix premium_site run test:defense",
+    "test:sdk-receipt": "npm --prefix premium_site run test:sdk-receipt",
     "verify:contracts": "npm --prefix contracts test",
+    "package:safe": "powershell -ExecutionPolicy Bypass -File ./premium_site/scripts/package-submission.ps1",
     "demo": "npm --prefix premium_site run demo",
     "dev": "npm --prefix premium_site run dev",
     "build": "npm --prefix premium_site run build"

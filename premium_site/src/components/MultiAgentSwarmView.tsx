@@ -1,4 +1,6 @@
-﻿import React, { useState, useRef } from 'react';
+import { TEMPO_CHAIN_ID, TEMPO_EXPLORER_URL, TEMPO_VAULT_ADDRESS, tempoTransactionUrl } from '../config/network';
+import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Bot, 
   Layers, 
@@ -76,7 +78,6 @@ import {
   Scales,
   ChartLineUp,
   Devices,
-  SealCheck,
   Translate,
   TrendUp,
   Buildings,
@@ -88,12 +89,13 @@ import {
   Lightning,
   Target,
   PenNib,
-  FileCode,
-  CheckCircle as PhCheckCircle
+  FileCode
 } from '@phosphor-icons/react';
 import { soundEngine } from '../utils/audioEffects';
 import { InfoBadge } from './InfoBadge';
 import { CryptoInspectorModal } from './CryptoInspectorModal';
+import { useSynapseState } from '../shared/SynapseStateContext';
+import { SynapseStatusBadge } from './shared/SynapseStatusBadge';
 
 export interface SubcontractorConfig {
   id: string;
@@ -200,9 +202,9 @@ const getSubcontractorIcon = (subId: string): React.ComponentType<{ className?: 
       return ({ className }) => <PhFileText className={className || "w-4 h-4"} weight="duotone" />;
     case 'sub_m18': // Budget & Micro-Payment Auditor
       return ({ className }) => <CurrencyCircleDollar className={className || "w-4 h-4"} weight="duotone" />;
-    case 'sub_m19': // Tempo L1 Cryptographic Notary
-    case 'sub_4':
-      return ({ className }) => <SealCheck className={className || "w-4 h-4"} weight="duotone" />;
+    case 'sub_m19': // Tempo L1 payment and provenance record
+    case 'sub_4': // Payment and verification proof record
+      return ({ className }) => <Receipt className={className || "w-4 h-4"} weight="duotone" />;
 
     case 'lead_orchestrator':
       return ({ className }) => (
@@ -256,10 +258,10 @@ const SUBCONTRACTOR_RESULT_PILLS: Record<string, string> = {
   sub_6: 'Cash 2.4x · Low Debt',
   sub_7: 'Example trade rules result',
   sub_16: '2x Liability Cap Safe',
-  sub_17: 'Solvency Safe (4.12 Score)',
+  sub_17: 'Example stress result (4.12)',
   sub_1: '7/7 Feeds Match',
   sub_2: 'Corporate Law Met',
-  sub_3: 'Score: 94/100 (Grade A)',
+  sub_3: 'Example score: 94/100',
   sub_4: 'Proof recorded for review',
   sub_13: 'Dossier Compiled',
   sub_14: '1-Page Memo Ready',
@@ -289,9 +291,14 @@ const SUBCONTRACTOR_RESULT_PILLS: Record<string, string> = {
   sub_c3: 'Voice Audio Generated',
   sub_c4: 'Subtitles Transcribed',
   sub_a1: 'Sample Market Inputs Reviewed',
-  sub_a2: 'Momentum Score: +0.84',
+  sub_a2: 'Example momentum: +0.84',
   sub_a3: 'Solvency Test Passed',
   sub_a4: '0 Watchlist Flags',
+  sol_bybit_free: 'Weekly candles received · $0',
+  sol_local_analysis: 'Trend + zones calculated locally · $0',
+  sol_amberdata_depth: 'Market depth snapshot purchased · $0.001',
+  sol_coinglass_skipped: 'Liquidation data needed · $0 revenue',
+  sol_final_report: 'SOL/USDT report ready',
 };
 
 const NODE_HUMAN_JOBS: Record<string, string> = {
@@ -309,7 +316,7 @@ const NODE_HUMAN_JOBS: Record<string, string> = {
   sub_17: 'Simulates 10,000 crisis scenarios to test bankruptcy risk (0.04%)',
   sub_1: 'Cross-checks records across all 7 external feeds for full concordance',
   sub_2: 'Confirms statutory corporate law compliance (DGCL § 101/102)',
-  sub_3: 'Computes overall supplier safety score (94/100 · Low Risk)',
+  sub_3: 'Computes an example supplier safety score (94/100)',
   sub_4: 'Records a cryptographic proof digest for the completed work',
   sub_13: 'Assembles the supplied evidence into a review pack',
   sub_14: 'Drafts a 1-page decision memo for human review',
@@ -337,7 +344,66 @@ const NODE_HUMAN_JOBS: Record<string, string> = {
   sub_a1: 'Reviews a sample orderbook depth and bid-ask spread',
   sub_a2: 'Infers market momentum score and volatility probabilities',
   sub_a3: 'Sandboxes financial risk calculations in Python',
-  sub_a4: 'Screens entity against AML and international sanctions watchlists',
+  sub_a4: 'Prepares an example AML and sanctions report',
+  sol_bybit_free: 'Fetches free SOL/USDT weekly candles and volume from the public market feed',
+  sol_local_analysis: 'Calculates trend, support, resistance, volatility, and volume context locally',
+  sol_amberdata_depth: 'Buys one market-depth snapshot from the Amberdata demo integration',
+  sol_coinglass_skipped: 'Needs liquidation heatmap data, but CoinGlass has no Synapse402 SDK route for a payable request',
+  sol_final_report: 'Combines free data, local analysis, paid depth, and missing-data notes into one report',
+};
+
+// Plain-language explanations used by the SOL/USDT inspector.  The pipeline
+// already shows the technical route; these sentences explain the human reason
+// for each unit so a reviewer can follow the job without knowing the internals.
+const SOL_NODE_EXPLANATIONS: Record<string, {
+  purpose: string;
+  why: string;
+  returns: string;
+  next: string;
+  cost: string;
+}> = {
+  lead_orchestrator: {
+    purpose: 'Coordinates the SOL/USDT job, chooses the approved inputs, and keeps every request inside one job maximum.',
+    why: 'One lead turns separate provider responses into one decision you can review instead of a pile of disconnected cards.',
+    returns: 'A short market brief with the direction, price zones, paid context, and any missing data stated clearly.',
+    next: 'Sends the completed brief to the human reviewer. It does not place a trade.',
+    cost: 'Free · policy and routing step',
+  },
+  sol_bybit_free: {
+    purpose: 'Reads SOL/USDT weekly candles and volume from a public market endpoint.',
+    why: 'This gives the lead a current price history without spending the job budget on the first input.',
+    returns: 'Weekly candles, the latest close, and volume context. The card labels whether the source is live or a sample fallback.',
+    next: 'Passes the market history to Local Analysis for calculations.',
+    cost: 'Free · public market data',
+  },
+  sol_local_analysis: {
+    purpose: 'Calculates trend, support, resistance, average move, and volume context inside Synapse402.',
+    why: 'The useful baseline can be produced locally, so the agent only pays for an extra input when it adds value.',
+    returns: 'A direction label, observed price zones, volatility context, and a setup worth watching.',
+    next: 'Uses those results to decide whether one paid depth snapshot is useful.',
+    cost: 'Free · local computation',
+  },
+  sol_amberdata_depth: {
+    purpose: 'Requests one market-depth snapshot through the Synapse402 demo payment route.',
+    why: 'It demonstrates pay-per-request access: the agent buys one premium input instead of committing to a recurring data plan.',
+    returns: 'A clearly marked sample provider response with the extra market-depth context. It is a demo provider response, not a claimed partnership.',
+    next: 'Adds the paid context to the final brief when the job maximum allows the request.',
+    cost: '$0.001 once · only when approved by the job cap',
+  },
+  sol_coinglass_skipped: {
+    purpose: 'Represents the liquidation data the lead wants for a fuller risk picture.',
+    why: 'CoinGlass has no Synapse402 SDK route, so this request cannot become a machine purchase and earns the provider $0.',
+    returns: 'A visible missing-insight record. The system does not invent liquidation data it could not buy.',
+    next: 'Shows the business opportunity: with the SDK, the agent could buy only this query (for example $0.002) and CoinGlass could earn per request without a full subscription.',
+    cost: 'No route · $0 paid · $0 provider revenue',
+  },
+  sol_final_report: {
+    purpose: 'Combines the free market input, local calculations, paid depth, and the missing-data note into one result.',
+    why: 'The user receives one understandable answer with its limits and costs, rather than having to interpret every worker separately.',
+    returns: 'A SOL/USDT brief with direction, zones, source labels, spend, settlement state, and the next decision to review.',
+    next: 'Hands the brief to the human reviewer. No order or trade is submitted.',
+    cost: 'Free · final synthesis',
+  },
 };
 
 const NODE_CAUSAL_DEPENDENCY: Record<string, { waitingFor: string; handoffTo: string }> = {
@@ -444,7 +510,12 @@ const NODE_CAUSAL_DEPENDENCY: Record<string, { waitingFor: string; handoffTo: st
   sub_a1: { waitingFor: 'Lead AI market session authorization ($0.0010)', handoffTo: 'Unit a2 (Prediction Model)' },
   sub_a4: { waitingFor: 'Lead AI compliance authorization ($0.0010)', handoffTo: 'Unit a3 (Risk Sandbox)' },
   sub_a2: { waitingFor: 'Example orderbook snapshot from Unit a1', handoffTo: 'Unit a3 (Risk Sandbox)' },
-  sub_a3: { waitingFor: 'Momentum analysis (Unit a2) & AML check (Unit a4)', handoffTo: 'Settlement engine' },
+  sub_a3: { waitingFor: 'Momentum analysis (Unit a2) & example compliance report (Unit a4)', handoffTo: 'Settlement engine' },
+  sol_bybit_free: { waitingFor: 'SOL/USDT mission selected', handoffTo: 'Local technical analysis' },
+  sol_local_analysis: { waitingFor: 'Public weekly candles and volume', handoffTo: 'Amberdata demo market-depth request' },
+  sol_amberdata_depth: { waitingFor: 'Local analysis identifies the useful extra market signal', handoffTo: 'CoinGlass availability check' },
+  sol_coinglass_skipped: { waitingFor: 'Liquidation data is needed, but CoinGlass has no Synapse402 SDK route', handoffTo: 'Lead Agent final report with the missing-data and revenue note' },
+  sol_final_report: { waitingFor: 'Free data, local analysis, paid depth, and skipped-provider note', handoffTo: 'Human reviewer' },
 };
 
 
@@ -454,6 +525,25 @@ const NODE_CAUSAL_DEPENDENCY: Record<string, { waitingFor: string; handoffTo: st
 const getWorkerWalletAddress = (_subId: string): string => '';
 
 const PRESET_SWARMS = [
+  {
+    id: 'swarm_sol_analysis',
+    title: 'SOL/USDT Market Analysis',
+    missionType: 'Crypto Market Brief',
+    goal: 'Analyze SOL/USDT with free market data, one paid depth snapshot, and a clear report under $0.005.',
+    goalDesc: 'The lead agent combines free market data, local calculations, one paid depth input, and shows why missing CoinGlass SDK access blocks a useful paid liquidation query.',
+    budgetLimit: '$0.0050 job maximum',
+    budgetEst: '$0.0010',
+    rules: 'One paid data request · Free local analysis · No subscriptions',
+    description: 'Starts with free market context, adds local analysis, may buy one market-depth snapshot, records the CoinGlass gap, and returns the final SOL/USDT brief.',
+    subcontractors: [
+      { id: 'lead_orchestrator', role: 'Lead Market Analyst', shortName: 'Lead Analyst', targetUrl: '/api/v1/lead-agent', providerLabel: 'Synapse402 Mission Lead', costPathUsd: 0, avatarColor: 'bg-zinc-800', category: 'Mission Lead', team: 'Lead Orchestrator', savingsVsSubscription: 'One job maximum controls the run', deliverablePreview: 'SOL/USDT Market Brief', currentTask: 'Combining approved market inputs under the job maximum', taskInput: 'Analyze SOL/USDT and identify zones and a setup to watch', taskOutput: 'One concise market report with paid and missing-data notes', workingAction: 'Planning the market-analysis steps...', generatedValueUsd: 2.5, nodeType: 'ORCHESTRATOR' as const, waveGroup: 0, queryPrompt: 'Coordinate the SOL/USDT market-analysis pipeline', verifiedBadge: '✓ Report Plan Ready', samplePayload: 'SOL/USDT Market Brief assembled from free, local, paid, and skipped inputs.' },
+      { id: 'sol_bybit_free', role: 'Public Market Data', shortName: 'Market Data · FREE', targetUrl: '/api/v1/market/bybit-solusdt', providerLabel: 'Public market data', costPathUsd: 0, avatarColor: 'bg-sky-900', category: 'Free Market Data', team: 'Market Inputs', savingsVsSubscription: 'Public candles · no payment', deliverablePreview: 'SOL/USDT weekly candles + volume', workingAction: 'Fetching free SOL/USDT weekly candles...', generatedValueUsd: 0.8, nodeType: 'PROVIDER', waveGroup: 1 },
+      { id: 'sol_local_analysis', role: 'Local Technical Analysis', shortName: 'Local Analysis · FREE', targetUrl: '/api/v1/market/sol-analysis', providerLabel: 'Synapse402 local computation', costPathUsd: 0, avatarColor: 'bg-emerald-900', category: 'Local Analysis', team: 'Market Analysis', savingsVsSubscription: 'No external call or payment', deliverablePreview: 'Trend, support, resistance & volatility', workingAction: 'Calculating zones and volume context locally...', generatedValueUsd: 1.2, nodeType: 'WORKER', waveGroup: 2 },
+      { id: 'sol_amberdata_depth', role: 'Amberdata Market Depth', shortName: 'Amberdata · PAID', targetUrl: '/api/v1/market/sol-orderbook', providerLabel: 'Amberdata — Synapse402 demo integration', costPathUsd: 0.001, avatarColor: 'bg-amber-900', category: 'Paid Market Data', team: 'Premium Input', savingsVsSubscription: 'One request instead of a recurring plan', deliverablePreview: 'Sample provider response: SOL/USDT market-depth snapshot', workingAction: 'Requesting one paid depth snapshot ($0.001)...', generatedValueUsd: 1.8, nodeType: 'PROVIDER', waveGroup: 2 },
+      { id: 'sol_coinglass_skipped', role: 'CoinGlass Liquidation Heatmap', shortName: 'CoinGlass · SDK NOT INTEGRATED', targetUrl: '/api/v1/demo/coinglass-liquidation-heatmap', providerLabel: 'CoinGlass — hypothetical SDK opportunity', costPathUsd: 0, avatarColor: 'bg-zinc-700', category: 'Unavailable Provider', team: 'Missing Input', savingsVsSubscription: 'Potential pay-per-request channel if SDK is added', deliverablePreview: 'Liquidation data needed · no route · request revenue $0', workingAction: 'Checking the SDK route and the missed request revenue...', generatedValueUsd: 0, nodeType: 'PROVIDER', waveGroup: 3 },
+      { id: 'sol_final_report', role: 'Final SOL/USDT Report', shortName: 'Final Report', targetUrl: '/api/v1/lead-agent', providerLabel: 'Lead Analyst synthesis', costPathUsd: 0, avatarColor: 'bg-violet-900', category: 'Final Result', team: 'Report', savingsVsSubscription: 'One report for the user to review', deliverablePreview: 'Market, zones, paid insight, and missing insight', workingAction: 'Writing the final market brief...', generatedValueUsd: 3.0, nodeType: 'WORKER', waveGroup: 3 },
+    ],
+  },
   {
     id: 'swarm_media_creative',
     title: 'Viral Ad Campaign',
@@ -496,7 +586,7 @@ const PRESET_SWARMS = [
         role: 'TikTok Viral Trends', 
         shortName: 'TikTok Radar', 
         targetUrl: '/api/v1/media/tiktok-trends', 
-        providerLabel: 'Licensed Trend Feed (Sample provider)', 
+        providerLabel: 'Licensed Trend Feed (Demo Provider)', 
         costPathUsd: 0.0015, 
         avatarColor: 'bg-zinc-700', 
         category: 'Market Data', 
@@ -519,7 +609,7 @@ const PRESET_SWARMS = [
         role: 'Twitter / X Topic Pulse', 
         shortName: 'X Pulse', 
         targetUrl: '/api/v1/media/x-trends', 
-        providerLabel: 'Licensed Social Pulse (Sample provider)', 
+        providerLabel: 'Licensed Social Pulse (Demo Provider)', 
         costPathUsd: 0.0010, 
         avatarColor: 'bg-zinc-700', 
         category: 'Market Data', 
@@ -542,7 +632,7 @@ const PRESET_SWARMS = [
         role: 'Competitor Ad Library', 
         shortName: 'Ad Spy API', 
         targetUrl: '/api/v1/media/competitor-ads', 
-        providerLabel: 'Licensed Competitor Ad Library (Sample provider)', 
+        providerLabel: 'Licensed Competitor Ad Library (Demo Provider)', 
         costPathUsd: 0.0015, 
         avatarColor: 'bg-zinc-700', 
         category: 'Competitive Intelligence', 
@@ -565,7 +655,7 @@ const PRESET_SWARMS = [
         role: 'Flux Visual Concept Feed', 
         shortName: 'Flux Visual Engine', 
         targetUrl: '/api/v1/media/flux-render', 
-        providerLabel: 'Visual Asset Cluster (Sample provider)', 
+        providerLabel: 'Visual Asset Cluster (Demo Provider)', 
         costPathUsd: 0.0025, 
         avatarColor: 'bg-zinc-700', 
         category: 'Generative Visuals', 
@@ -588,7 +678,7 @@ const PRESET_SWARMS = [
         role: 'Neural Voiceover Studio', 
         shortName: 'Voice Cloud', 
         targetUrl: '/api/stream/inference', 
-        providerLabel: 'Neural Speech API (Sample provider)', 
+        providerLabel: 'Neural Speech API (Demo Provider)', 
         costPathUsd: 0.0015, 
         avatarColor: 'bg-zinc-700', 
         category: 'Audio Synthesis', 
@@ -611,7 +701,7 @@ const PRESET_SWARMS = [
         role: 'Trending Music Beats', 
         shortName: 'Beat Stems API', 
         targetUrl: '/api/v1/media/music-beats', 
-        providerLabel: 'Royalty-Free Audio Stems (Sample provider)', 
+        providerLabel: 'Royalty-Free Audio Stems (Demo Provider)', 
         costPathUsd: 0.0010, 
         avatarColor: 'bg-zinc-700', 
         category: 'Audio Licensing', 
@@ -634,7 +724,7 @@ const PRESET_SWARMS = [
         role: 'Audience Demographics', 
         shortName: 'Buyer Segments', 
         targetUrl: '/api/v1/media/audience-data', 
-        providerLabel: 'Consumer Graph Registry (Sample provider)', 
+        providerLabel: 'Consumer Graph Registry (Demo Provider)', 
         costPathUsd: 0.0010, 
         avatarColor: 'bg-zinc-700', 
         category: 'Targeting Data', 
@@ -726,7 +816,7 @@ const PRESET_SWARMS = [
       { 
         id: 'sub_m11', 
         role: 'Audio-Visual Storyboard Engine', 
-        shortName: 'Video Sync Bot', 
+        shortName: 'Video Sync Worker', 
         targetUrl: '/api/v1/media/video-sync', 
         providerLabel: 'Automated Storyboard Editor', 
         costPathUsd: 0.0015, 
@@ -930,7 +1020,7 @@ const PRESET_SWARMS = [
         waveGroup: 3, 
         queryPrompt: 'Record the campaign asset hash with the session key',
         verifiedBadge: '✓ Proof record ready',
-        samplePayload: 'Payment Proof: Campaign bundle record prepared; live wallet required for a chain receipt.' 
+        samplePayload: 'Payment Proof: Campaign bundle record prepared; live settlement produces the chain receipt.' 
       },
     ],
   },
@@ -1054,7 +1144,7 @@ const PRESET_SWARMS = [
         deliverablePreview: 'Example Credit Snapshot', 
         currentTask: 'Providing commercial credit score & payment history',
         taskInput: 'Commercial credit index request',
-        taskOutput: 'Score: 88/100 (Grade A- · 34-day payment avg)',
+        taskOutput: 'Example score: 88/100 · example payment average: 34 days',
         workingAction: 'Querying commercial credit index ($0.0015)...', 
         generatedValueUsd: 0.50, 
         nodeType: 'PROVIDER' as const, 
@@ -1099,9 +1189,9 @@ const PRESET_SWARMS = [
         savingsVsSubscription: 'Sub-cent check — zero retainer', 
         deliverablePreview: 'Example Watchlist Snapshot', 
         currentTask: 'Providing international sanctions watchlist checks',
-        taskInput: 'OFAC, EU, UN sanctions watchlist screening',
+        taskInput: 'Example sanctions and watchlist report',
         taskOutput: 'Example watchlist result for review',
-        workingAction: 'Checking OFAC, EU, UN global watchlists ($0.0020)...', 
+        workingAction: 'Preparing an example watchlist response ($0.0020)...', 
         generatedValueUsd: 0.60, 
         nodeType: 'PROVIDER' as const, 
         waveGroup: 1, 
@@ -1171,7 +1261,7 @@ const PRESET_SWARMS = [
         deliverablePreview: 'Cash 2.4x · Debt: 0.42 (Low)', 
         currentTask: 'Auditing cash reserves, debt ratio & liquidity buffer',
         taskInput: 'Audited SEC 10-K filings from provider',
-        taskOutput: 'Liquidity: 2.4x cash coverage · Debt: 0.42 (Low Risk)',
+        taskOutput: 'Example liquidity: 2.4x cash coverage · Example debt: 0.42',
         workingAction: '10-K received ➔ Auditing cash reserves & debt leverage...', 
         generatedValueUsd: 0.45, 
         nodeType: 'WORKER' as const, 
@@ -1237,17 +1327,17 @@ const PRESET_SWARMS = [
         category: 'Quantitative Risk', 
         team: 'Analysis & Risk', 
         savingsVsSubscription: 'On-demand simulation — zero idle server cost', 
-        deliverablePreview: 'Safe Zone (Solvency: 4.12)', 
+        deliverablePreview: 'Example stress result: 4.12', 
         currentTask: 'Running 10,000 Monte Carlo bankruptcy stress cycles in Python',
         taskInput: 'Financial ratios, debt structure & revenue volatility',
-        taskOutput: 'Solvency Score 4.12 (Safe Zone) · 1-yr default risk 0.04%',
+        taskOutput: 'Example stress score 4.12 · Example 1-year risk 0.04%',
         workingAction: 'Executing 10,000 Monte Carlo stress cycles in Python...', 
         generatedValueUsd: 0.80, 
         nodeType: 'WORKER' as const, 
         waveGroup: 2, 
         queryPrompt: 'Run 10,000-cycle Monte Carlo financial bankruptcy stress test',
-        verifiedBadge: '✓ Safe Zone (Solvency: 4.12)',
-        samplePayload: 'Bankruptcy Risk Model: Solvency simulation completed. Safe zone confirmed (Score 4.12). 1-year default risk: 0.04%.' 
+        verifiedBadge: '✓ Example stress result: 4.12',
+        samplePayload: 'Example bankruptcy-risk output: stress score 4.12 and 1-year risk 0.04%. This is a fixture, not a live rating.' 
       },
 
       // PHASE 3: 7 Synthesis & Decision Workers ($0.0070 total) - Specialist synthesis & reporting workers
@@ -1308,17 +1398,17 @@ const PRESET_SWARMS = [
         category: 'Synthesis & Proof', 
         team: 'Synthesis & Reporting', 
         savingsVsSubscription: 'Pay per score calculation', 
-        deliverablePreview: 'Safety Score: 94/100 (Grade A)', 
+        deliverablePreview: 'Example safety score: 94/100', 
         currentTask: 'Weighting corporate, financial & legal vectors into composite score',
         taskInput: 'Corporate (98), Financials (92), Sanctions (100), Contract (86)',
-        taskOutput: 'Composite Safety Score: 94/100 (Grade A / Low Risk)',
+        taskOutput: 'Example composite safety score: 94/100',
         workingAction: 'Weighting corporate, financial & legal findings into composite score...', 
         generatedValueUsd: 0.40, 
         nodeType: 'WORKER' as const, 
         waveGroup: 3, 
         queryPrompt: 'Weight corporate, financial & legal findings into composite score',
-        verifiedBadge: '✓ Score: 94/100 (Grade A)',
-        samplePayload: 'Composite Safety Score: 94/100 (Grade A / Low Risk). Company: 98 | Financials: 92 | Sanctions: 100 | Contract: 86.' 
+        verifiedBadge: '✓ Example score: 94/100',
+        samplePayload: 'Example safety output: 94/100. Company: 98 | Financials: 92 | Sanctions: 100 | Contract: 86. This is a fixture, not a live rating.' 
       },
       { 
         id: 'sub_4', 
@@ -1449,23 +1539,187 @@ const PRESET_SWARMS = [
         samplePayload: 'Market Comparison Plan: review the TEMPO/USD sample spread across two example venues. No trade submitted. Budget allocated: $0.0060.' 
       },
       { id: 'sub_a1', role: 'Market Data Reader', shortName: 'Orderbook', targetUrl: '/api/v1/data/stock-orderbook', providerLabel: 'Example L2 Market Feed', costPathUsd: 0.001, avatarColor: 'bg-zinc-700', category: 'Market Data', team: 'Market Analysis', savingsVsSubscription: 'Evaluation fixture — no live exchange claim', deliverablePreview: 'Sample Orderbook Depth Matrix', workingAction: 'Reviewing market snapshot...', generatedValueUsd: 0.80, nodeType: 'PROVIDER', waveGroup: 1 },
-      { id: 'sub_a2', role: 'Market Prediction Bot', shortName: 'Market Prediction', targetUrl: '/api/v1/data/ai-market-analysis', providerLabel: 'Example Prediction Model', costPathUsd: 0.002, avatarColor: 'bg-zinc-700', category: 'AI Inferences', team: 'Market Analysis', savingsVsSubscription: 'Evaluation fixture — no live model claim', deliverablePreview: 'Market Momentum Score & Analysis', workingAction: 'Running example model...', generatedValueUsd: 2.50, nodeType: 'WORKER', waveGroup: 2 },
-      { id: 'sub_a3', role: 'Safe Code Runner Bot', shortName: 'Code Runner', targetUrl: '/api/v1/data/python-sandbox', providerLabel: 'Python Execution Sandbox API', costPathUsd: 0.002, avatarColor: 'bg-zinc-700', category: 'Code Execution', team: 'Security & Code', savingsVsSubscription: 'Ephemeral sandbox — zero idle server cost', deliverablePreview: 'Verified Financial Risk Calculations', workingAction: 'Sandboxing verification script...', generatedValueUsd: 1.50, nodeType: 'WORKER', waveGroup: 3 },
-      { id: 'sub_a4', role: 'Sanctions & Fraud Screener', shortName: 'Sanctions Check', targetUrl: '/api/v1/test-provider-data', providerLabel: 'Sanctions Screening API', costPathUsd: 0.001, avatarColor: 'bg-zinc-700', category: 'Compliance & Safety', team: 'Security & Code', savingsVsSubscription: 'Sub-cent check — zero compliance retainer', deliverablePreview: 'Official AML & Sanctions Clearance', workingAction: 'Checking sanctions watchlist...', generatedValueUsd: 1.20, nodeType: 'PROVIDER', waveGroup: 1 },
+      { id: 'sub_a2', role: 'Market Prediction Worker', shortName: 'Market Prediction', targetUrl: '/api/v1/data/ai-market-analysis', providerLabel: 'Example Prediction Model', costPathUsd: 0.002, avatarColor: 'bg-zinc-700', category: 'AI Inferences', team: 'Market Analysis', savingsVsSubscription: 'Evaluation fixture — no live model claim', deliverablePreview: 'Example momentum and risk report', workingAction: 'Running example model...', generatedValueUsd: 2.50, nodeType: 'WORKER', waveGroup: 2 },
+      { id: 'sub_a3', role: 'Safe Code Runner Worker', shortName: 'Code Runner', targetUrl: '/api/v1/data/python-sandbox', providerLabel: 'Python Execution Sandbox API', costPathUsd: 0.002, avatarColor: 'bg-zinc-700', category: 'Code Execution', team: 'Security & Code', savingsVsSubscription: 'Ephemeral sandbox — zero idle server cost', deliverablePreview: 'Verified Financial Risk Calculations', workingAction: 'Sandboxing verification script...', generatedValueUsd: 1.50, nodeType: 'WORKER', waveGroup: 3 },
+      { id: 'sub_a4', role: 'Sanctions & Fraud Screener', shortName: 'Sanctions Check', targetUrl: '/api/v1/test-provider-data', providerLabel: 'Example compliance provider', costPathUsd: 0.001, avatarColor: 'bg-zinc-700', category: 'Compliance & Safety', team: 'Security & Code', savingsVsSubscription: 'Example response — no live screening claim', deliverablePreview: 'Example compliance report', workingAction: 'Preparing example compliance response...', generatedValueUsd: 1.20, nodeType: 'PROVIDER', waveGroup: 1 },
     ],
   },
 ];
 
+function SolCandlestickChart({
+  candles,
+  support,
+  resistance,
+  supportZoneLow,
+  supportZoneHigh,
+  resistanceZoneLow,
+  resistanceZoneHigh,
+  latestClose,
+}: {
+  candles: Array<Record<string, any>>;
+  support: number | null;
+  resistance: number | null;
+  supportZoneLow: number | null;
+  supportZoneHigh: number | null;
+  resistanceZoneLow: number | null;
+  resistanceZoneHigh: number | null;
+  latestClose: number;
+}) {
+  const displayCandles = candles.slice(-24);
+  if (displayCandles.length < 2) return null;
+
+  const highs = displayCandles.map((c) => Number(c.high)).filter((v) => Number.isFinite(v) && v > 0);
+  const lows = displayCandles.map((c) => Number(c.low)).filter((v) => Number.isFinite(v) && v > 0);
+
+  const minVal = Math.min(...lows, supportZoneLow ?? Infinity) * 0.96;
+  const maxVal = Math.max(...highs, resistanceZoneHigh ?? -Infinity) * 1.04;
+  const range = maxVal - minVal || 1;
+
+  const width = 560;
+  const height = 180;
+  const padding = { top: 18, bottom: 22, left: 10, right: 64 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+
+  const getY = (val: number) => padding.top + chartHeight * (1 - (val - minVal) / range);
+  const candleSpacing = chartWidth / displayCandles.length;
+  const candleWidth = Math.max(3, candleSpacing * 0.65);
+
+  const currentPriceY = getY(latestClose);
+  const supportY = support !== null ? getY(support) : null;
+  const resistanceY = resistance !== null ? getY(resistance) : null;
+
+  const suppBandTop = supportZoneHigh !== null ? getY(supportZoneHigh) : null;
+  const suppBandBottom = supportZoneLow !== null ? getY(supportZoneLow) : null;
+
+  const resBandTop = resistanceZoneHigh !== null ? getY(resistanceZoneHigh) : null;
+  const resBandBottom = resistanceZoneLow !== null ? getY(resistanceZoneLow) : null;
+
+  const formatChartDate = (time: unknown): string => {
+    const ts = Number(time);
+    if (!Number.isFinite(ts) || ts <= 0) return '—';
+    return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  return (
+    <div className="w-full rounded-xl border border-slate-600/60 bg-[#1e2630] p-3 my-3">
+      <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 mb-2 px-1">
+        <span className="font-bold text-slate-200">WEEKLY CANDLESTICK STRUCTURE ({displayCandles.length}W)</span>
+        <div className="flex items-center gap-3 text-[9px]">
+          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 bg-emerald-400 rounded-sm"></span> Bull</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 bg-rose-400 rounded-sm"></span> Bear</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-1 bg-[#d7ff4f]"></span> Price</span>
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible select-none">
+        <line x1={padding.left} y1={padding.top} x2={width - padding.right} y2={padding.top} stroke="#334155" strokeWidth="0.5" strokeDasharray="3 3" />
+        <line x1={padding.left} y1={padding.top + chartHeight / 2} x2={width - padding.right} y2={padding.top + chartHeight / 2} stroke="#334155" strokeWidth="0.5" strokeDasharray="3 3" />
+        <line x1={padding.left} y1={padding.top + chartHeight} x2={width - padding.right} y2={padding.top + chartHeight} stroke="#334155" strokeWidth="0.5" strokeDasharray="3 3" />
+
+        {resBandTop !== null && resBandBottom !== null && (
+          <g>
+            <rect
+              x={padding.left}
+              y={Math.min(resBandTop, resBandBottom)}
+              width={chartWidth}
+              height={Math.max(4, Math.abs(resBandBottom - resBandTop))}
+              fill="#f43f5e"
+              fillOpacity="0.15"
+            />
+            {resistanceY !== null && (
+              <line x1={padding.left} y1={resistanceY} x2={width - padding.right} y2={resistanceY} stroke="#f43f5e" strokeWidth="1" strokeDasharray="4 3" opacity="0.8" />
+            )}
+            <text x={width - padding.right + 4} y={(resistanceY ?? resBandTop) + 3} fill="#fda4af" fontSize="9" fontFamily="monospace" fontWeight="600">
+              {`Res $${resistance?.toFixed(1)}`}
+            </text>
+          </g>
+        )}
+
+        {suppBandTop !== null && suppBandBottom !== null && (
+          <g>
+            <rect
+              x={padding.left}
+              y={Math.min(suppBandTop, suppBandBottom)}
+              width={chartWidth}
+              height={Math.max(4, Math.abs(suppBandBottom - suppBandTop))}
+              fill="#10b981"
+              fillOpacity="0.15"
+            />
+            {supportY !== null && (
+              <line x1={padding.left} y1={supportY} x2={width - padding.right} y2={supportY} stroke="#10b981" strokeWidth="1" strokeDasharray="4 3" opacity="0.8" />
+            )}
+            <text x={width - padding.right + 4} y={(supportY ?? suppBandBottom) + 3} fill="#6ee7b7" fontSize="9" fontFamily="monospace" fontWeight="600">
+              {`Supp $${support?.toFixed(1)}`}
+            </text>
+          </g>
+        )}
+
+        <line x1={padding.left} y1={currentPriceY} x2={width - padding.right} y2={currentPriceY} stroke="#d7ff4f" strokeWidth="1.2" strokeDasharray="2 2" />
+        <rect x={width - padding.right + 2} y={currentPriceY - 7} width="58" height="14" rx="3" fill="#d7ff4f" />
+        <text x={width - padding.right + 5} y={currentPriceY + 3.5} fill="#08090c" fontSize="9" fontFamily="monospace" fontWeight="bold">
+          {`$${latestClose.toFixed(1)}`}
+        </text>
+
+        {displayCandles.map((c, idx) => {
+          const open = Number(c.open);
+          const close = Number(c.close);
+          const high = Number(c.high);
+          const low = Number(c.low);
+          if (!Number.isFinite(open) || !Number.isFinite(close) || !Number.isFinite(high) || !Number.isFinite(low)) return null;
+
+          const cx = padding.left + idx * candleSpacing + candleSpacing / 2;
+          const isBull = close >= open;
+          const bodyColor = isBull ? '#34d399' : '#f87171';
+          const wickColor = isBull ? '#10b981' : '#ef4444';
+
+          const yOpen = getY(open);
+          const yClose = getY(close);
+          const yHigh = getY(high);
+          const yLow = getY(low);
+
+          const bodyTop = Math.min(yOpen, yClose);
+          const bodyHeight = Math.max(2, Math.abs(yClose - yOpen));
+
+          return (
+            <g key={idx}>
+              <line x1={cx} y1={yHigh} x2={cx} y2={yLow} stroke={wickColor} strokeWidth="1.2" />
+              <rect
+                x={cx - candleWidth / 2}
+                y={bodyTop}
+                width={candleWidth}
+                height={bodyHeight}
+                fill={bodyColor}
+                rx="1"
+              />
+            </g>
+          );
+        })}
+      </svg>
+      <div className="flex justify-between items-center text-[9px] font-mono text-slate-400 mt-1 px-1">
+        <span>Start: {formatChartDate(displayCandles[0]?.time)}</span>
+        <span>{`Observed extremes: $${minVal.toFixed(1)} – $${maxVal.toFixed(1)}`}</span>
+        <span>Latest: {formatChartDate(displayCandles[displayCandles.length - 1]?.time)}</span>
+      </div>
+    </div>
+  );
+}
+
 export function MultiAgentSwarmView({ 
   onSwarmSettled,
   initialSubView = 'swarm',
-  onSubViewChange
+  onSubViewChange,
+  executionMode = 'LIVE_TESTNET',
+  agents = [],
 }: { 
   onSwarmSettled?: () => void;
   initialSubView?: 'swarm' | 'stream' | 'mcp' | 'reality';
   onSubViewChange?: (val: 'swarm' | 'stream' | 'mcp' | 'reality') => void;
+  executionMode?: 'LIVE_TESTNET' | 'RESILIENT_SANDBOX';
+  agents?: Array<{ id: string; status?: string }>;
 }) {
   const [subView, setSubViewInternal] = useState<'swarm' | 'stream' | 'mcp' | 'reality'>(initialSubView);
+  const { recordJobExpense, setJobBudgetLimit, executePayment } = useSynapseState();
+  const isLiveExecution = executionMode === 'LIVE_TESTNET';
 
   React.useEffect(() => {
     if (initialSubView) {
@@ -1478,10 +1732,19 @@ export function MultiAgentSwarmView({
     if (onSubViewChange) onSubViewChange(val);
   };
   const [selectedPreset, setSelectedPreset] = useState(PRESET_SWARMS[0]);
+  const getPresetBudgetUsd = (preset: typeof PRESET_SWARMS[number]) =>
+    Number(String(preset.budgetLimit || '').match(/[0-9]+(?:\.[0-9]+)?/)?.[0] || 0.05);
+  const [jobBudgetInput, setJobBudgetInput] = useState(() => getPresetBudgetUsd(PRESET_SWARMS[0]).toFixed(4));
   const [customDirective, setCustomDirective] = useState<string>((PRESET_SWARMS[0] as any).goal || 'Investigate this supplier before we sign the contract.');
   const [selectedSubId, setSelectedSubId] = useState<string>(PRESET_SWARMS[0].subcontractors[0].id);
+  const [solMarketSnapshot, setSolMarketSnapshot] = useState<any>(null);
   const [settledWorkerIds, setSettledWorkerIds] = useState<Set<string>>(new Set());
   const [isExecuting, setIsExecuting] = useState(false);
+  // The live batch has to confirm its payment steps before the visual workforce
+  // timeline can mark individual workers as settled. Keep that waiting phase
+  // explicit so a live run never looks frozen at 0/20.
+  const [executionPhase, setExecutionPhase] = useState<'idle' | 'authorizing' | 'rendering'>('idle');
+  const [executionElapsedSec, setExecutionElapsedSec] = useState(0);
   const [workerLiveStates, setWorkerLiveStates] = useState<Record<string, { status: 'STANDBY' | 'REQUESTING' | 'PAYING' | 'DONE'; displayNote: string }>>({});
   const [executionLog, setExecutionLog] = useState<string[]>([]);
   const [agentDialogues, setAgentDialogues] = useState<Array<{
@@ -1498,7 +1761,20 @@ export function MultiAgentSwarmView({
   }>>([]);
   const [swarmViewMode, setSwarmViewMode] = useState<'saas' | 'pipeline' | 'topology' | 'grid'>('saas');
   const [lastBatchResult, setLastBatchResult] = useState<any>(null);
-  const batchTxHash = lastBatchResult?.batchExecution?.txHash || '';
+  const candidateBatchTxHash = lastBatchResult?.batchExecution?.txHash;
+  const batchTxHash = lastBatchResult?.batchExecution?.receiptVerified === true
+    && typeof candidateBatchTxHash === 'string'
+    && /^0x[a-fA-F0-9]{64}$/.test(candidateBatchTxHash)
+    ? candidateBatchTxHash
+    : '';
+  const allDeliverablesReceived = lastBatchResult?.batchExecution?.allDeliverablesReceived !== false;
+  const paymentStatusText = batchTxHash
+    ? (allDeliverablesReceived
+        ? 'PAYMENT CONFIRMED · RESOURCE RECEIVED · Tempo L1 receipt below'
+        : 'PAYMENT CONFIRMED · RESOURCE FAILED · check failed steps below')
+    : lastBatchResult
+      ? (isLiveExecution ? 'live settlement not confirmed · no payment sent' : 'evaluation preview · no payment sent')
+      : (isLiveExecution ? 'live payment on run · Tempo L1 receipt appears below' : 'evaluation preview · no payment sent');
   const evaluationCopy = (value: string, confirmed = Boolean(batchTxHash)) => confirmed ? value : value
     .replace(/\bpaid\b/gi, 'planned')
     .replace(/\bdelivered\b/gi, 'prepared')
@@ -1506,7 +1782,7 @@ export function MultiAgentSwarmView({
     .replace(/\bconfirmed\b/gi, 'reported')
     .replace(/settled on Tempo L1/gi, 'planned for live settlement')
     .replace(/settling at <15ms latency/gi, 'checked against the payment policy')
-    .replace(/on Tempo L1/gi, 'after a live wallet is connected')
+    .replace(/on Tempo L1/gi, 'after live settlement is enabled')
     .replace(/Tempo L1/gi, 'the live settlement network');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copiedDossier, setCopiedDossier] = useState(false);
@@ -1514,6 +1790,7 @@ export function MultiAgentSwarmView({
   const [showRawJson, setShowRawJson] = useState(false);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [selectedTraceForInspector, setSelectedTraceForInspector] = useState<any>(null);
+  const [showReceiptsBreakdown, setShowReceiptsBreakdown] = useState(false);
 
   const inspectWorkerCryptoProof = (worker: SubcontractorConfig) => {
     soundEngine.playClick();
@@ -1538,7 +1815,7 @@ export function MultiAgentSwarmView({
       merkleProof: [],
       nonce2D: '',
       tip20Memo: `SWARM_EXEC::${worker.id.toUpperCase()}`,
-      deliverablePreview: worker.taskOutput || worker.deliverablePreview || worker.samplePayload || 'Verified deliverable delivered via HTTP 402 payment channel.',
+      deliverablePreview: worker.taskOutput || worker.deliverablePreview || worker.samplePayload || 'Sample deliverable preview from the evaluation workflow.',
     });
     setIsInspectorOpen(true);
   };
@@ -1546,6 +1823,17 @@ export function MultiAgentSwarmView({
   const [activeStageNum, setActiveStageNum] = useState<number>(0);
   const [actualExecutionTimeSec, setActualExecutionTimeSec] = useState<number>(24.8);
   const batchStartTimeRef = useRef<number>(0);
+
+  React.useEffect(() => {
+    if (!isExecuting) {
+      setExecutionElapsedSec(0);
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setExecutionElapsedSec(Math.max(0, Math.floor((Date.now() - (batchStartTimeRef.current || Date.now())) / 1000)));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [isExecuting]);
   const [phaseExpanded, setPhaseExpanded] = useState<Record<number, boolean>>({ 1: false, 2: false, 3: false });
   const [activeConsoleTab, setActiveConsoleTab] = useState<'summary' | 'inspector' | 'receipt' | 'logs'>('summary');
   const [visibleStageFilter, setVisibleStageFilter] = useState<number | 'all'>('all');
@@ -1677,11 +1965,312 @@ export function MultiAgentSwarmView({
     ]);
   };
 
+  // Dynamic Budget-Aware Workforce Planning
+  const rawPlannedCostUsd = selectedPreset.subcontractors.reduce((total, item) => total + item.costPathUsd, 0);
+  const budgetCapUsd = Number(jobBudgetInput) || 0;
+  const isFlagshipMediaSwarm = selectedPreset.id === 'swarm_media_creative';
+  const isSolAnalysis = selectedPreset.id === 'swarm_sol_analysis';
+  const solRunComplete = isSolAnalysis
+    && !isExecuting
+    && selectedPreset.subcontractors.filter((sub) => sub.id !== 'lead_orchestrator').every((sub) => settledWorkerIds.has(sub.id));
+  const MIN_FLAGSHIP_BUDGET = 0.0120;
+  const FULL_FLAGSHIP_BUDGET = 0.0245;
+
+  const budgetPlanType: 'FULL' | 'REDUCED' | 'INSUFFICIENT' = !isFlagshipMediaSwarm
+    ? (budgetCapUsd >= rawPlannedCostUsd ? 'FULL' : 'INSUFFICIENT')
+    : (budgetCapUsd >= FULL_FLAGSHIP_BUDGET ? 'FULL' : (budgetCapUsd >= MIN_FLAGSHIP_BUDGET ? 'REDUCED' : 'INSUFFICIENT'));
+
+  const prunedUnitIds = React.useMemo(() => new Set<string>(
+    isFlagshipMediaSwarm && budgetPlanType === 'REDUCED'
+      ? ['sub_m6', 'sub_m7', 'sub_m13', 'sub_m14', 'sub_m15']
+      : []
+  ), [isFlagshipMediaSwarm, budgetPlanType]);
+
+  const activeSubcontractors = React.useMemo(() => selectedPreset.subcontractors.filter(
+    (s) => !prunedUnitIds.has(s.id)
+  ), [selectedPreset.subcontractors, prunedUnitIds]);
+
+  const plannedCostUsd = activeSubcontractors.reduce((total, item) => total + item.costPathUsd, 0);
+  const solAmberdataCostUsd = 0.001;
+  const solAmberdataWithinBudget = isSolAnalysis && budgetCapUsd >= solAmberdataCostUsd;
+  const solPaidStepSkippedForBudget = isSolAnalysis && budgetCapUsd > 0 && !solAmberdataWithinBudget;
+  const effectivePlannedCostUsd = isSolAnalysis && solPaidStepSkippedForBudget ? 0 : plannedCostUsd;
+  const displayPaidStepCount = isSolAnalysis && solPaidStepSkippedForBudget ? 0 : selectedPreset.subcontractors.filter((s) => s.costPathUsd > 0).length;
+  const displayJobBudget = `$${budgetCapUsd.toFixed(4)}`;
+  // SOL is one orchestrated agent with a five-unit delivery pipeline. Keep the
+  // internal worker list intact for execution, but never present it as six bots
+  // to the person reviewing the mission.
+  const solPipelineUnitCount = 5;
+  const displayPipelineUnitCount = isSolAnalysis ? solPipelineUnitCount : selectedPreset.subcontractors.length;
+  const displayWorkforceLabel = isFlagshipMediaSwarm
+    ? '1 Lead Agent · 12 Workers · 7 Providers'
+    : isSolAnalysis
+    ? '1 Lead Agent · 5 pipeline units'
+    : `${selectedPreset.subcontractors.length} Mission Units`;
+  const solMarketDirection = solMarketSnapshot?.analysis?.direction || 'Trend pending';
+  const solSupportLabel = solMarketSnapshot?.analysis?.support?.toFixed?.(2) || '—';
+  const solResistanceLabel = solMarketSnapshot?.analysis?.resistance?.toFixed?.(2) || '—';
+  const solAnalysisCandleCount = Number(solMarketSnapshot?.analysis?.candleCount || solMarketSnapshot?.candles?.length || 0);
+  const solRangeWindowLabel = solAnalysisCandleCount
+    ? `${solAnalysisCandleCount} ${solMarketSnapshot?.dataStatus === 'LIVE_PUBLIC_MARKET_DATA' ? 'weekly candles' : 'sample candles'}`
+    : 'Available candles';
+  const solRangeBasisLabel = solMarketSnapshot?.analysis?.rangeBasis || 'observed range';
+  const solDataSourceLabel = solMarketSnapshot?.dataStatus === 'LIVE_PUBLIC_MARKET_DATA' ? 'Public market candles · LIVE' : 'Labelled evaluation sample';
+  const solCandleRows: Array<Record<string, any>> = Array.isArray(solMarketSnapshot?.candles)
+    ? solMarketSnapshot.candles.filter(Boolean)
+    : [];
+  const toFiniteNumber = (value: unknown): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const formatCompactVolume = (value: number | null): string => {
+    if (value === null) return '—';
+    if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+    if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+    return value.toFixed(0);
+  };
+  const formatCandleDate = (time: unknown): string => {
+    const timestamp = toFiniteNumber(time);
+    if (timestamp === null) return '—';
+    return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+  const firstSolCandle = solCandleRows[0];
+  const latestSolCandle = solCandleRows[solCandleRows.length - 1];
+  const firstSolClose = toFiniteNumber(firstSolCandle?.close);
+  const latestSolOpen = toFiniteNumber(latestSolCandle?.open);
+  const latestSolHigh = toFiniteNumber(latestSolCandle?.high);
+  const latestSolLow = toFiniteNumber(latestSolCandle?.low);
+  const latestSolVolume = toFiniteNumber(latestSolCandle?.volume);
+  const solLatestClose = toFiniteNumber(latestSolCandle?.close) ?? NaN;
+  const solLatestCloseLabel = Number.isFinite(solLatestClose) ? `$${solLatestClose.toFixed(2)}` : '—';
+  const solAverageMoveLabel = Number.isFinite(Number(solMarketSnapshot?.analysis?.averageMovePct)) ? `${Number(solMarketSnapshot.analysis.averageMovePct).toFixed(2)}%` : '—';
+  const solOverallChangePct = firstSolClose !== null && Number.isFinite(solLatestClose) && firstSolClose !== 0
+    ? ((solLatestClose - firstSolClose) / firstSolClose) * 100
+    : null;
+  const solOverallChangeLabel = solOverallChangePct === null ? '—' : `${solOverallChangePct >= 0 ? '+' : ''}${solOverallChangePct.toFixed(1)}%`;
+  const solVolumeValues = solCandleRows.map((candle) => toFiniteNumber(candle.volume)).filter((value): value is number => value !== null);
+  const solAverageVolume = solVolumeValues.length ? solVolumeValues.reduce((sum, value) => sum + value, 0) / solVolumeValues.length : null;
+  const solLatestVolumeVsAveragePct = latestSolVolume !== null && solAverageVolume ? ((latestSolVolume / solAverageVolume) - 1) * 100 : null;
+  const solCloseSeries = solCandleRows.map((candle) => toFiniteNumber(candle.close)).filter((value): value is number => value !== null);
+  const solSma20Window = solCloseSeries.slice(-20);
+  const solSma20 = solSma20Window.length >= 5 ? solSma20Window.reduce((sum, value) => sum + value, 0) / solSma20Window.length : null;
+  const solRecentChanges = solCloseSeries.slice(-15).slice(1).map((close, index) => close - solCloseSeries.slice(-15)[index]);
+  const solGains = solRecentChanges.filter((change) => change > 0);
+  const solLosses = solRecentChanges.filter((change) => change < 0).map((change) => Math.abs(change));
+  const solRsi14 = solRecentChanges.length >= 14
+    ? solLosses.length === 0
+      ? 100
+      : 100 - (100 / (1 + ((solGains.reduce((sum, value) => sum + value, 0) / 14) / (solLosses.reduce((sum, value) => sum + value, 0) / 14))))
+    : null;
+  const solSmaDistancePct = solSma20 !== null && Number.isFinite(solLatestClose) && solSma20 !== 0 ? ((solLatestClose - solSma20) / solSma20) * 100 : null;
+  const solBullishWeeks = solCandleRows.filter((candle) => {
+    const open = toFiniteNumber(candle.open);
+    const close = toFiniteNumber(candle.close);
+    return open !== null && close !== null && close > open;
+  }).length;
+  const solBearishWeeks = solCandleRows.filter((candle) => {
+    const open = toFiniteNumber(candle.open);
+    const close = toFiniteNumber(candle.close);
+    return open !== null && close !== null && close < open;
+  }).length;
+  const solLargestUpPct = solCandleRows.reduce<number | null>((largest, candle) => {
+    const open = toFiniteNumber(candle.open);
+    const close = toFiniteNumber(candle.close);
+    if (open === null || close === null || open === 0) return largest;
+    const move = ((close - open) / open) * 100;
+    return move > 0 && (largest === null || move > largest) ? move : largest;
+  }, null);
+  const solLargestDownPct = solCandleRows.reduce<number | null>((largest, candle) => {
+    const open = toFiniteNumber(candle.open);
+    const close = toFiniteNumber(candle.close);
+    if (open === null || close === null || open === 0) return largest;
+    const move = ((close - open) / open) * 100;
+    return move < 0 && (largest === null || move < largest) ? move : largest;
+  }, null);
+  const solHighestVolumeCandle = solCandleRows.reduce<Record<string, any> | null>((highest, candle) => {
+    const volume = toFiniteNumber(candle.volume);
+    const highestVolume = highest ? toFiniteNumber(highest.volume) : null;
+    return volume !== null && (highest === null || highestVolume === null || volume > highestVolume) ? candle : highest;
+  }, null);
+  const solObservedRangeWidth = toFiniteNumber(solMarketSnapshot?.analysis?.resistance) !== null && toFiniteNumber(solMarketSnapshot?.analysis?.support) !== null
+    ? Number(solMarketSnapshot.analysis.resistance) - Number(solMarketSnapshot.analysis.support)
+    : null;
+  const solLatestRangePositionPct = solObservedRangeWidth && solObservedRangeWidth > 0 && Number.isFinite(solLatestClose)
+    ? ((solLatestClose - Number(solMarketSnapshot.analysis.support)) / solObservedRangeWidth) * 100
+    : null;
+  const solLatestCandleDateLabel = formatCandleDate(latestSolCandle?.time);
+  const solWindowStartLabel = formatCandleDate(firstSolCandle?.time);
+  const solWindowEndLabel = formatCandleDate(latestSolCandle?.time);
+  const solLatestCandleLabel = latestSolOpen !== null && latestSolHigh !== null && latestSolLow !== null
+    ? `O $${latestSolOpen.toFixed(2)} · H $${latestSolHigh.toFixed(2)} · L $${latestSolLow.toFixed(2)} · C ${solLatestCloseLabel}`
+    : `Close ${solLatestCloseLabel}`;
+  const solVolumeComparisonLabel = solLatestVolumeVsAveragePct === null
+    ? '—'
+    : `${solLatestVolumeVsAveragePct >= 0 ? '+' : ''}${solLatestVolumeVsAveragePct.toFixed(0)}% vs average`;
+  const formatZone = (low: unknown, high: unknown): string => {
+    const lowValue = toFiniteNumber(low);
+    const highValue = toFiniteNumber(high);
+    return lowValue === null || highValue === null ? '—' : `$${lowValue.toFixed(2)}–$${highValue.toFixed(2)}`;
+  };
+  const solSupportZoneLabel = formatZone(solMarketSnapshot?.analysis?.supportZoneLow, solMarketSnapshot?.analysis?.supportZoneHigh);
+  const solResistanceZoneLabel = formatZone(solMarketSnapshot?.analysis?.resistanceZoneLow, solMarketSnapshot?.analysis?.resistanceZoneHigh);
+  const solSupportBasisText = solMarketSnapshot?.analysis?.supportMethod || 'recent swing lows and nearby touches';
+  const solResistanceBasisText = solMarketSnapshot?.analysis?.resistanceMethod || 'recent swing highs and nearby touches';
+  const solObservedExtremesText = Number.isFinite(Number(solMarketSnapshot?.analysis?.observedLow)) && Number.isFinite(Number(solMarketSnapshot?.analysis?.observedHigh))
+    ? `The full candle history also contains an observed low of $${Number(solMarketSnapshot.analysis.observedLow).toFixed(2)} and high of $${Number(solMarketSnapshot.analysis.observedHigh).toFixed(2)}; those extremes are kept as history, not presented as nearby trade zones.`
+    : 'The full observed history is kept separate from the nearby zones so one old wick does not dominate the decision.';
+  const solMomentumRead = solRsi14 === null
+    ? 'Momentum needs more candles.'
+    : solRsi14 >= 70
+    ? `Momentum is strong but stretched (RSI ${solRsi14.toFixed(1)}); a pullback or fresh confirmation matters.`
+    : solRsi14 >= 55
+    ? `Momentum is positive (RSI ${solRsi14.toFixed(1)}), but the zone still needs confirmation.`
+    : solRsi14 <= 45
+    ? `Momentum is weak (RSI ${solRsi14.toFixed(1)}); avoid treating a support touch as a guaranteed reversal.`
+    : `Momentum is mixed (RSI ${solRsi14.toFixed(1)}); wait for price and volume to agree.`;
+  const solTrendRead = solSmaDistancePct === null
+    ? `The recent direction is ${solMarketDirection}.`
+    : `The recent direction is ${solMarketDirection}; the latest close is ${solSmaDistancePct >= 0 ? '+' : ''}${solSmaDistancePct.toFixed(1)}% versus the 20-week average.`;
+  const solVolumeRead = solLatestVolumeVsAveragePct === null
+    ? 'Volume comparison is unavailable.'
+    : latestSolVolume !== null && solLatestVolumeVsAveragePct >= 25
+    ? `Volume confirms attention (${solVolumeComparisonLabel}).`
+    : `Volume is ${solLatestVolumeVsAveragePct < -20 ? 'quieter' : 'near its recent baseline'} (${solVolumeComparisonLabel}); treat the move as less confirmed.`;
+  const solMultiFactorRead = `${solTrendRead} ${solMomentumRead} ${solVolumeRead}`;
+  const solSupportZoneHigh = toFiniteNumber(solMarketSnapshot?.analysis?.supportZoneHigh);
+  const solResistanceZoneLow = toFiniteNumber(solMarketSnapshot?.analysis?.resistanceZoneLow);
+  const solTrendConfluence = solMarketDirection === 'uptrend' ? (solSmaDistancePct !== null && solSmaDistancePct >= 0) : solMarketDirection === 'downtrend' ? (solSmaDistancePct !== null && solSmaDistancePct <= 0) : false;
+  const solMomentumConfluence = solRsi14 !== null && solRsi14 >= 50 && solRsi14 < 70;
+  const solVolumeConfluence = solLatestVolumeVsAveragePct !== null && solLatestVolumeVsAveragePct >= 0;
+  const solZoneConfluence = Number.isFinite(solLatestClose) && ((solSupportZoneHigh !== null && solLatestClose <= solSupportZoneHigh) || (solResistanceZoneLow !== null && solLatestClose >= solResistanceZoneLow));
+  const solConfluenceScore = [solTrendConfluence, solMomentumConfluence, solVolumeConfluence, solZoneConfluence].filter(Boolean).length;
+  const solConfluenceDecision = solConfluenceScore >= 3 && solMomentumConfluence ? 'Conditions align · keep monitoring' : 'Wait for confirmation';
+  const solConfluenceRead = `${solConfluenceScore}/4 factors align: trend ${solTrendConfluence ? 'supports' : 'does not confirm'}, momentum ${solMomentumConfluence ? 'supports' : 'is not clean'}, volume ${solVolumeConfluence ? 'confirms' : 'does not confirm'}, price location ${solZoneConfluence ? 'is near a zone' : 'is between zones'}. ${solConfluenceScore >= 3 && solMomentumConfluence ? 'The setup is worth monitoring.' : 'There is no clean confluence for an immediate decision; wait for a reaction, stronger volume, or a fresh data window.'}`;
+  const solZoneActionText = Number.isFinite(solLatestClose) && Number.isFinite(Number(solMarketSnapshot?.analysis?.support)) && Number.isFinite(Number(solMarketSnapshot?.analysis?.resistance))
+    ? `The latest close is ${solLatestCloseLabel}. The practical support zone is ${solSupportZoneLabel} and the practical resistance zone is ${solResistanceZoneLabel}. Support comes from ${solSupportBasisText}; resistance comes from ${solResistanceBasisText}. These are areas to investigate, not automatic buy or sell signals.`
+    : 'The simulation needs a complete market snapshot before it can describe a useful watch area.';
+  const solBriefContent = [
+    'SOL/USDT MARKET BRIEF',
+    '',
+    'MISSION COMPLETE · READY TO REVIEW',
+    `Market direction: ${solMarketDirection}`,
+    `Latest close: ${solLatestCloseLabel}`,
+    `Data used: ${solDataSourceLabel} · ${solRangeWindowLabel} · ${solWindowStartLabel} → ${solWindowEndLabel}`,
+    `Latest weekly candle (${solLatestCandleDateLabel}): ${solLatestCandleLabel} · volume ${formatCompactVolume(latestSolVolume)}`,
+    '',
+    'WHAT THIS MEANS',
+    solZoneActionText,
+    `Average weekly move: ${solAverageMoveLabel}. This shows how much the price has been moving from week to week, so a person can judge whether the range is calm or wide before acting.`,
+    `Across the window, closes changed ${solOverallChangeLabel}; ${solBullishWeeks} weeks closed above their open and ${solBearishWeeks} closed below it. The latest volume was ${solVolumeComparisonLabel}.`,
+    `The practical zones are support ${solSupportZoneLabel} and resistance ${solResistanceZoneLabel}; the latest close sits at ${solLatestRangePositionPct === null ? '—' : `${solLatestRangePositionPct.toFixed(0)}%`} of the selected range.`,
+    solObservedExtremesText,
+    `MULTI-FACTOR PROFILE: ${solMultiFactorRead}`,
+    `CONFLUENCE CHECK: ${solConfluenceRead}`,
+    `Largest single-week candle move: ${solLargestUpPct === null ? '—' : `up ${solLargestUpPct.toFixed(1)}%`} / ${solLargestDownPct === null ? '—' : `down ${Math.abs(solLargestDownPct).toFixed(1)}%`}.`,
+    `Extra indicators: 20-week average close ${solSma20 === null ? '—' : `$${solSma20.toFixed(2)}`} (${solSmaDistancePct === null ? '—' : `${solSmaDistancePct >= 0 ? '+' : ''}${solSmaDistancePct.toFixed(1)}%`} vs latest close) · 14-week RSI ${solRsi14 === null ? '—' : solRsi14.toFixed(1)}. These are context clues, not trade signals.`,
+    '',
+    'OBJECTIVE STRUCTURAL CONDITIONS',
+    `1. Support watch condition (${solSupportZoneLabel}): monitor for price reaction and volume confirmation; invalidation condition if weekly close settles below support.`,
+    `2. Neutral zone (middle of range): no clear directional edge; avoid assuming breakout continuation without volume confirmation.`,
+    `3. Resistance breakout / rejection condition (${solResistanceZoneLabel}): evaluate upper boundary test for absorption or rejection rather than assuming continuation.`,
+    '4. Invalidation rule: if price closes outside a zone or the data window changes, refresh the market candles before using the old levels.',
+    '',
+    'WHAT THE PIPELINE USED',
+    `• Public market data: ${solRangeWindowLabel} with open, high, low, close and volume, free public input. Highest-volume week: ${formatCandleDate(solHighestVolumeCandle?.time)} · ${formatCompactVolume(toFiniteNumber(solHighestVolumeCandle?.volume))}.`,
+    `• Local Analysis: calculated swing zones, direction, momentum, movement and volume context for $0. ${solMultiFactorRead}`,
+    `${solPaidStepSkippedForBudget ? '• Amberdata: skipped because the job maximum was too low; no payment was sent.' : '• Amberdata: one paid demo market-depth snapshot, only when the job maximum allows it.'}`,
+    '• CoinGlass: liquidation data would improve the picture, but its Synapse402 SDK route is not integrated, so no request was made and provider revenue was $0.',
+    '',
+    'LIMITS',
+    'This is a reviewable market-analysis simulation. It does not place a trade, promise a return, or replace a person’s risk decision.',
+    '',
+    `SPEND: $${effectivePlannedCostUsd.toFixed(4)} of ${displayJobBudget} maximum · ${batchTxHash ? 'payment confirmed' : 'evaluation only'}`
+  ].join('\n');
+  const solDeliverableItems = [
+    {
+      label: 'Public market candles',
+      note: solDataSourceLabel,
+      title: 'SOL/USDT Market Input',
+      badge: 'DELIVERABLE 01 · MARKET INPUT',
+      content: `SOL/USDT MARKET INPUT:\n\n• Source: ${solDataSourceLabel}\n• Window: ${solRangeWindowLabel} · ${solWindowStartLabel} → ${solWindowEndLabel}\n• Latest weekly candle (${solLatestCandleDateLabel}): ${solLatestCandleLabel}\n• Latest volume: ${formatCompactVolume(latestSolVolume)} (${solVolumeComparisonLabel})\n• Window change from first close to latest close: ${solOverallChangeLabel}\n• Bullish / bearish candle count: ${solBullishWeeks} / ${solBearishWeeks}\n• Highest-volume week: ${formatCandleDate(solHighestVolumeCandle?.time)} · ${formatCompactVolume(toFiniteNumber(solHighestVolumeCandle?.volume))}\n• 20-week average close: ${solSma20 === null ? '—' : `$${solSma20.toFixed(2)}`}\n• 14-week RSI: ${solRsi14 === null ? '—' : solRsi14.toFixed(1)}\n• Cost: $0\n\nThis is the raw market history the Lead Agent gives to Local Analysis. Open, high, low, close and volume are shown so the reviewer can see what was actually measured. The average and RSI are simple local context indicators, not automatic decisions. It is labelled live or sample so the reviewer knows exactly what was used.`
+    },
+    {
+      label: 'Price zones & meaning',
+      note: `Support ${solSupportZoneLabel} · resistance ${solResistanceZoneLabel}`,
+      title: 'Price Zones in Plain Language',
+      badge: 'DELIVERABLE 02 · LOCAL ANALYSIS',
+      content: `PRICE ZONES & MULTI-FACTOR READ:\n\n• Zone method: ${solRangeBasisLabel}\n• Practical support zone: ${solSupportZoneLabel} · center $${solSupportLabel}\n  Built from ${solSupportBasisText}.\n• Practical resistance zone: ${solResistanceZoneLabel} · center $${solResistanceLabel}\n  Built from ${solResistanceBasisText}.\n• Full observed extremes: $${solMarketSnapshot?.analysis?.observedLow?.toFixed?.(2) || '—'} → $${solMarketSnapshot?.analysis?.observedHigh?.toFixed?.(2) || '—'} (context only)\n• Direction: ${solMarketDirection}\n• Profile: ${solMultiFactorRead}\n• Confluence check: ${solConfluenceRead}\n\n${solZoneActionText}\n\nStructural Conditions:\n1. Support watch condition: wait for structural reaction and volume confirmation; invalidation if close breaks below.\n2. Neutral zone: no directional edge between boundaries; wait for edge test.\n3. Resistance condition: evaluate upper boundary for breakout or rejection.\n4. Invalidation condition: if price breaks and closes outside either zone, market structure invalidates and levels must be recalibrated.`
+    },
+    {
+      label: 'Amberdata depth',
+      note: solPaidStepSkippedForBudget ? 'Skipped · over job maximum' : '$0.001 demo input',
+      title: 'Amberdata Market-Depth Input',
+      badge: 'DELIVERABLE 03 · PAID INPUT',
+      content: `AMBERDATA MARKET-DEPTH INPUT:\n\n• Status: ${solPaidStepSkippedForBudget ? 'SKIPPED — over the job maximum' : batchTxHash ? 'PAID — receipt recorded' : 'PLANNED — evaluation preview'}\n• Amount: ${solPaidStepSkippedForBudget ? '$0.0000' : '$0.0010'}\n• Result: one sample market-depth response\n\nThis adds one extra view of the market only when the job cap allows it. It does not turn the report into a trading order.`
+    },
+    {
+      label: 'CoinGlass opportunity',
+      note: 'SDK not integrated · $0 revenue',
+      title: 'CoinGlass Missing Route',
+      badge: 'DELIVERABLE 04 · BUSINESS GAP',
+      content: `COINGLASS BUSINESS GAP:\n\n• Needed by the AI: liquidation data\n• Current state: CoinGlass has no Synapse402 SDK route in this demo\n• Result: no request, no data, $0 provider revenue\n\nIf CoinGlass added the SDK, the agent could buy only this liquidation query when needed. CoinGlass would gain a per-request revenue channel without forcing a full subscription for this one job.`
+    },
+    {
+      label: 'Final brief & action plan',
+      note: 'One report for human review',
+      title: 'SOL/USDT Market Brief & Action Plan',
+      badge: 'DELIVERABLE 05 · FINAL REPORT',
+      content: solBriefContent
+    }
+  ];
+  const remainingBudgetUsd = Math.max(0, budgetCapUsd - effectivePlannedCostUsd);
+  const plannedBudgetPercent = budgetCapUsd > 0 ? Math.min(100, Math.round((effectivePlannedCostUsd / budgetCapUsd) * 100)) : 0;
+
   // Swarm Batch Execution Handler
   const handleRunSwarmBatch = async () => {
+    if (budgetPlanType === 'INSUFFICIENT' && !isSolAnalysis) {
+      const minNeeded = isFlagshipMediaSwarm ? MIN_FLAGSHIP_BUDGET : rawPlannedCostUsd;
+      setExecutionLog([`[${new Date().toLocaleTimeString()}] [BLOCKED] Minimum needed is $${minNeeded.toFixed(4)}. Increase the job limit before running.`]);
+      return;
+    }
+    const requestedBudget = Number(jobBudgetInput);
+    const minimumRequiredBudget = isSolAnalysis ? 0 : plannedCostUsd;
+    if (!Number.isFinite(requestedBudget) || requestedBudget <= 0 || requestedBudget < minimumRequiredBudget) {
+      setExecutionLog([`[${new Date().toLocaleTimeString()}] [BLOCKED] This job needs a positive maximum${minimumRequiredBudget ? ` of at least $${minimumRequiredBudget.toFixed(4)}` : ''}. Increase the job limit before running.`]);
+      return;
+    }
+    const swarmJobId = `swarm_${selectedPreset.id}_${Date.now()}`;
+    const missionConfig = isSolAnalysis
+      ? {
+          minBudgetUsd: 0.0010,
+          fullBudgetUsd: 0.0050,
+          title: 'SOL/USDT Market Analysis',
+          prunedSteps: ['Paid Amberdata Orderbook Snapshot ($0.0010)'],
+          retainedSteps: ['Public Market Candles (FREE)', 'Local Analysis (FREE)', 'CoinGlass SDK Check', 'Final Market Brief'],
+        }
+      : selectedPreset.id === 'swarm_media_creative'
+      ? {
+          minBudgetUsd: 0.0120,
+          fullBudgetUsd: 0.0245,
+          title: 'Multi-Platform Ad Creative Package',
+          prunedSteps: [
+            '5-Language Audio Dubbing & Localization',
+            'Multi-Platform Re-encoding (TikTok/Reels/Shorts)',
+            'Algorithmic A/B Thumbnails Set',
+          ],
+          retainedSteps: [
+            '4K Master Scene Generation',
+            'Voiceover & Dynamic Audio Bed',
+            'Real-time Caption Rendering',
+          ],
+        }
+      : undefined;
+    setJobBudgetLimit(swarmJobId, requestedBudget, missionConfig);
     soundEngine.playClick();
     batchStartTimeRef.current = Date.now();
     setIsExecuting(true);
+    setExecutionPhase('authorizing');
     setExecutionLog([]);
     setAgentDialogues([]);
     setLastBatchResult(null);
@@ -1696,6 +2285,25 @@ export function MultiAgentSwarmView({
       };
     });
     setWorkerLiveStates(initialWaitStates);
+
+    // Give the click an immediate, truthful visual response.  The first SOL
+    // request is a free market-data read, so show that input as active while the
+    // browser waits for the market endpoint instead of leaving the screen on
+    // an apparently idle lead card.
+    setActiveStageNum(isSolAnalysis ? 1 : 0);
+    setSelectedSubId(isSolAnalysis ? 'sol_bybit_free' : 'lead_orchestrator');
+    setWorkerLiveStates((prev) => ({
+      ...prev,
+      lead_orchestrator: {
+        status: 'REQUESTING',
+        displayNote: isLiveExecution
+          ? 'Authorizing the approved payment steps on Tempo L1...'
+          : 'Preparing the approved payment plan...'
+      },
+      ...(isSolAnalysis ? {
+        sol_bybit_free: { status: 'REQUESTING' as const, displayNote: 'Reading free SOL/USDT market data...' }
+      } : {})
+    }));
 
     const addLog = (msg: string) => {
       setExecutionLog((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
@@ -1721,43 +2329,268 @@ export function MultiAgentSwarmView({
       ]);
     };
 
+    if (isSolAnalysis) {
+      try {
+        const marketResponse = await fetch('/api/v1/market/bybit-solusdt');
+        const marketSnapshot = await marketResponse.json();
+        setSolMarketSnapshot(marketSnapshot);
+        const statusLabel = marketSnapshot?.dataStatus === 'LIVE_PUBLIC_MARKET_DATA' ? 'live public data' : 'evaluation sample';
+        const candleRows = Array.isArray(marketSnapshot?.candles) ? marketSnapshot.candles : [];
+        const closes = candleRows
+          .map((c: any) => Number(c.close))
+          .filter((v: number) => Number.isFinite(v));
+        const lows = candleRows
+          .map((c: any) => Number(c.low))
+          .filter((v: number) => Number.isFinite(v) && v > 0);
+        const highs = candleRows
+          .map((c: any) => Number(c.high))
+          .filter((v: number) => Number.isFinite(v) && v > 0);
+        const firstClose = closes[0];
+        const lastClose = closes[closes.length - 1];
+        const recentCloses = closes.slice(-Math.min(12, closes.length));
+        const recentChangePct = recentCloses.length > 1 && recentCloses[0] !== 0
+          ? ((recentCloses[recentCloses.length - 1] - recentCloses[0]) / recentCloses[0]) * 100
+          : null;
+        const direction = Number.isFinite(firstClose) && Number.isFinite(lastClose)
+          ? ((recentChangePct ?? 0) > 4 && lastClose > firstClose
+            ? 'uptrend'
+            : (recentChangePct ?? 0) < -4 && lastClose < firstClose
+            ? 'downtrend'
+            : 'range')
+          : 'market structure';
+
+        // A full-window min/max is technically correct but is usually a bad
+        // trading zone: one old wick can make the range look unusably wide.
+        // Build zones from recent (up to 104-week) swing pivots, then keep the
+        // old observed extremes as context in the report. This gives the
+        // reviewer a nearby level with a reason behind it.
+        const structureRows = candleRows
+          .filter((c: any) => Number.isFinite(Number(c.high)) && Number.isFinite(Number(c.low)) && Number.isFinite(Number(c.close)))
+          .slice(-Math.min(104, candleRows.length));
+        const structureHighs = structureRows.map((c: any) => Number(c.high)).filter((v: number) => v > 0);
+        const structureLows = structureRows.map((c: any) => Number(c.low)).filter((v: number) => v > 0);
+        const trueRanges = structureRows
+          .map((c: any) => Number(c.high) - Number(c.low))
+          .filter((v: number) => Number.isFinite(v) && v > 0);
+        const sortedTrueRanges = [...trueRanges].sort((a, b) => a - b);
+        const medianTrueRange = sortedTrueRanges.length
+          ? sortedTrueRanges[Math.floor(sortedTrueRanges.length / 2)]
+          : null;
+        const zoneHalfWidth = Number.isFinite(lastClose) && lastClose > 0
+          ? Math.max(lastClose * 0.03, (medianTrueRange ?? lastClose * 0.04) * 0.35)
+          : null;
+        const quantile = (values: number[], fraction: number): number | null => {
+          if (!values.length) return null;
+          const sorted = [...values].sort((a, b) => a - b);
+          return sorted[Math.min(sorted.length - 1, Math.max(0, Math.round((sorted.length - 1) * fraction)))];
+        };
+        const swingLevels = (field: 'low' | 'high') => {
+          const levels: Array<{ level: number; touches: number; age: number }> = [];
+          for (let index = 2; index < structureRows.length - 2; index += 1) {
+            const level = Number(structureRows[index]?.[field]);
+            if (!Number.isFinite(level) || level <= 0) continue;
+            const neighbours = structureRows.slice(index - 2, index + 3)
+              .filter((_row: any, neighbourIndex: number) => neighbourIndex !== 2)
+              .map((row: any) => Number(row?.[field]))
+              .filter((value: number) => Number.isFinite(value));
+            const isPivot = field === 'low'
+              ? neighbours.every((value) => level <= value)
+              : neighbours.every((value) => level >= value);
+            if (!isPivot) continue;
+            const tolerance = zoneHalfWidth ?? level * 0.03;
+            const touches = structureRows.filter((row: any) => {
+              const low = Number(row?.low);
+              const high = Number(row?.high);
+              const close = Number(row?.close);
+              return [low, high, close].some((value) => Number.isFinite(value) && Math.abs(value - level) <= tolerance);
+            }).length;
+            levels.push({ level, touches, age: structureRows.length - 1 - index });
+          }
+          return levels;
+        };
+        const chooseZone = (field: 'low' | 'high', side: 'below' | 'above', fallback: number | null) => {
+          const reference = Number.isFinite(lastClose) ? lastClose : null;
+          const candidates = swingLevels(field)
+            .filter((candidate) => reference === null || (side === 'below' ? candidate.level < reference : candidate.level > reference))
+            .sort((a, b) => {
+              const distanceA = reference === null ? 0 : Math.abs(reference - a.level);
+              const distanceB = reference === null ? 0 : Math.abs(reference - b.level);
+              const scoreA = a.touches * 3 + Math.max(0, 4 - a.age / 26) - distanceA / Math.max(reference ?? 1, 1);
+              const scoreB = b.touches * 3 + Math.max(0, 4 - b.age / 26) - distanceB / Math.max(reference ?? 1, 1);
+              return scoreB - scoreA;
+            });
+          const selected = candidates[0];
+          const level = selected?.level ?? fallback;
+          return {
+            level,
+            touches: selected?.touches ?? 0,
+            method: selected ? `recent ${field === 'low' ? 'swing lows' : 'swing highs'} · ${selected.touches} nearby touches` : 'recent percentile fallback',
+          };
+        };
+        const lowsBelowLast = Number.isFinite(lastClose) ? structureLows.filter((value) => value < lastClose) : structureLows;
+        const highsAboveLast = Number.isFinite(lastClose) ? structureHighs.filter((value) => value > lastClose) : structureHighs;
+        const lowQuantile = quantile(structureLows, 0.25);
+        const highQuantile = quantile(structureHighs, 0.75);
+        const recentFallbackSupport = lowQuantile !== null && (!Number.isFinite(lastClose) || lowQuantile < lastClose)
+          ? lowQuantile
+          : lowsBelowLast.length ? Math.max(...lowsBelowLast) : lowQuantile;
+        const recentFallbackResistance = highQuantile !== null && (!Number.isFinite(lastClose) || highQuantile > lastClose)
+          ? highQuantile
+          : highsAboveLast.length ? Math.min(...highsAboveLast) : highQuantile;
+        const supportZone = chooseZone('low', 'below', Number.isFinite(recentFallbackSupport) ? recentFallbackSupport : (lows.length ? Math.min(...lows) : null));
+        const resistanceZone = chooseZone('high', 'above', Number.isFinite(recentFallbackResistance) ? recentFallbackResistance : (highs.length ? Math.max(...highs) : null));
+        const support = supportZone.level;
+        const resistance = resistanceZone.level;
+        const rangeBasis = structureRows.length && support !== null && resistance !== null
+          ? 'recent swing pivots from up to 104 weekly OHLC candles'
+          : lows.length && highs.length ? 'weekly high/low range' : 'closing-price range';
+        const observedLow = lows.length ? Math.min(...lows) : null;
+        const observedHigh = highs.length ? Math.max(...highs) : null;
+        const averageMovePct = closes.length > 1
+          ? (closes.slice(1).reduce((sum: number, close: number, index: number) => {
+              const previous = closes[index];
+              return sum + (previous ? Math.abs((close - previous) / previous) * 100 : 0);
+            }, 0) / (closes.length - 1))
+          : null;
+        const volatilityLabel = averageMovePct === null ? 'not enough history' : averageMovePct >= 8 ? 'wide weekly moves' : averageMovePct >= 4 ? 'moderate weekly moves' : 'contained weekly moves';
+        const volumeTotal = Array.isArray(marketSnapshot?.candles)
+          ? marketSnapshot.candles.reduce((sum: number, candle: any) => sum + (Number(candle.volume) || 0), 0)
+          : 0;
+        const supportZoneWidth = zoneHalfWidth ?? (support !== null ? support * 0.03 : null);
+        const resistanceZoneWidth = zoneHalfWidth ?? (resistance !== null ? resistance * 0.03 : null);
+        setSolMarketSnapshot({
+          ...marketSnapshot,
+          analysis: {
+            direction,
+            support,
+            resistance,
+            supportZoneLow: support === null || supportZoneWidth === null ? null : Math.max(0, support - supportZoneWidth),
+            supportZoneHigh: support === null || supportZoneWidth === null ? null : support + supportZoneWidth,
+            resistanceZoneLow: resistance === null || resistanceZoneWidth === null ? null : Math.max(0, resistance - resistanceZoneWidth),
+            resistanceZoneHigh: resistance === null || resistanceZoneWidth === null ? null : resistance + resistanceZoneWidth,
+            supportTouches: supportZone.touches,
+            resistanceTouches: resistanceZone.touches,
+            supportMethod: supportZone.method,
+            resistanceMethod: resistanceZone.method,
+            observedLow,
+            observedHigh,
+            recentChangePct,
+            volatilityLabel,
+            averageMovePct,
+            volumeTotal,
+            rangeBasis,
+            candleCount: candleRows.length
+          }
+        });
+        addLog(`[FREE DATA] SOL/USDT weekly candles received (${statusLabel}) → ${direction}; $0 paid.`);
+        addLog(`[LOCAL ANALYSIS] ${rangeBasis}: support $${support?.toFixed(2) ?? '—'} · resistance $${resistance?.toFixed(2) ?? '—'} · average weekly move ${averageMovePct?.toFixed(2) ?? '—'}% · volume context ${volumeTotal ? 'available' : 'unavailable'}; $0 paid.`);
+      } catch {
+        setSolMarketSnapshot({ dataStatus: 'SAMPLE_FALLBACK', source: 'Public market feed' });
+        addLog('[FREE DATA] Public market response unavailable in the browser; continuing with the clearly marked evaluation sample. $0 paid.');
+        addLog('[LOCAL ANALYSIS] Trend, support, resistance, volatility, and volume context are calculated locally from the evaluation sample. $0 paid.');
+      }
+      addLog('[PROVIDER CHECK] CoinGlass liquidation heatmap is needed for the risk picture, but CoinGlass has no Synapse402 SDK route. No request was made, so this request generated $0 revenue. If the SDK were added, the agent could buy only this query instead of requiring a full API plan.');
+    }
+
+    // Keep the lead visible during authorization.  For SOL the input phase is
+    // already shown above so it does not jump back to a blank planning state
+    // after the market request returns.
+    setPhaseExpanded({ 1: true, 2: false, 3: false });
+    if (!isSolAnalysis) {
+      setActiveStageNum(0);
+      setSelectedSubId('lead_orchestrator');
+    }
+
     try {
       addLog(`[ORCHESTRATOR] Received Mission: "${selectedPreset.title}"`);
-      addLog(selectedPreset.id === 'swarm_arbitrage'
+      addLog(isLiveExecution
+        ? `[PAYMENT GATE] Confirming ${isSolAnalysis ? displayPipelineUnitCount : selectedPreset.subcontractors.length} approved pipeline units on Tempo L1 before the workforce timeline advances.`
+        : `[PAYMENT GATE] Preparing ${isSolAnalysis ? displayPipelineUnitCount : selectedPreset.subcontractors.length} approved pipeline units inside the evaluation budget.`);
+      addLog(isSolAnalysis
+        ? solPaidStepSkippedForBudget
+          ? `[BUDGET] One job maximum of ${displayJobBudget}. Market data and local analysis remain free; the $0.0010 Amberdata demo step is skipped because it exceeds this limit.`
+          : `[BUDGET] One job maximum of ${displayJobBudget}. Market data and local analysis are free; one $0.0010 Amberdata demo request is the only paid step.`
+        : selectedPreset.id === 'swarm_arbitrage'
         ? `[BUDGET] Bounded Treasury Card pre-authorized. Allocating $${(selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0)).toFixed(4)} USD budget across market feeds, prediction model, and execution sandbox.`
         : `[BUDGET] Bounded Treasury Card pre-authorized. Allocating $${(selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0)).toFixed(4)} USD budget across 12 workers and 7 providers.`
       );
 
       addDialogue({
-        fromName: selectedPreset.id === 'swarm_media_creative' ? 'Campaign Director' : selectedPreset.id === 'swarm_arbitrage' ? 'Trading Desk Lead' : 'Lead Orchestrator',
+        fromName: selectedPreset.id === 'swarm_media_creative' ? 'Campaign Director' : selectedPreset.id === 'swarm_arbitrage' ? 'Trading Desk Lead' : isSolAnalysis ? 'Lead Market Analyst' : 'Lead Orchestrator',
         fromRole: 'Unit 01 (Lead Agent)',
-        toName: selectedPreset.id === 'swarm_media_creative' ? 'Creative Workforce (12 Workers · 7 Providers)' : selectedPreset.id === 'swarm_arbitrage' ? 'Quantitative Workforce (4 Units)' : 'Autonomous Workforce (12 Workers · 7 Providers)',
+        toName: selectedPreset.id === 'swarm_media_creative' ? 'Creative Workforce (12 Workers · 7 Providers)' : selectedPreset.id === 'swarm_arbitrage' ? 'Quantitative Workforce (4 Units)' : isSolAnalysis ? 'SOL/USDT Pipeline (5 Steps)' : 'Autonomous Workforce (12 Workers · 7 Providers)',
         message: selectedPreset.id === 'swarm_media_creative' 
-          ? 'Campaign launched: Producing viral ad bundle for new product. $0.0245 allocated under the $0.0500 budget cap.'
+          ? `Campaign launched: Producing viral ad bundle for new product. $0.0245 allocated under the ${displayJobBudget} budget cap.`
           : selectedPreset.id === 'swarm_arbitrage'
-          ? 'Market Comparison mission launched: Scanning cross-venue liquidity, predicting momentum & executing in sandbox. $0.0060 allocated under the $0.0100 budget cap.'
-          : 'Mission launched: Investigating Apex Foundry Ltd before contract signing. $0.0270 allocated under the $0.0300 budget cap.',
+          ? `Market Comparison mission launched: Scanning cross-venue liquidity, predicting momentum & executing in sandbox. $0.0060 allocated under the ${displayJobBudget} budget cap.`
+          : isSolAnalysis
+          ? `SOL/USDT mission launched: market data FREE → local analysis FREE → ${solPaidStepSkippedForBudget ? 'Amberdata SKIPPED (over budget)' : 'Amberdata demo PAID $0.0010'} → CoinGlass data needed but SDK not integrated ($0 revenue) → final report under the ${displayJobBudget} job maximum.`
+          : `Mission launched: Investigating Apex Foundry Ltd before contract signing. $0.0270 allocated under the ${displayJobBudget} budget cap.`,
         stepType: 'DIRECTIVE',
         highlightBadge: 'Mission Initialized',
         nodeId: 'lead_orchestrator'
       });
 
-      const payableSubs = selectedPreset.subcontractors.filter(s => s.costPathUsd > 0);
-      const resp = await fetch('/api/swarm/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          taskDescription: selectedPreset.title,
-          subcontractors: payableSubs,
-          evaluationOnly: true,
-        }),
-      });
-
-      const data = await resp.json();
-
-      if (!resp.ok) {
-        throw new Error(data.error || 'Swarm execution failed');
+      if (budgetPlanType === 'REDUCED') {
+        addLog(`▶ [DYNAMIC BUDGET ADAPTATION] Limit ${displayJobBudget} detected (under full $0.0245).`);
+        addLog(`  Lead Director dynamically pruned 5 optional steps to fit budget ($${plannedCostUsd.toFixed(4)} planned).`);
+        addDialogue({
+          fromName: 'Campaign Director',
+          fromRole: 'Unit 01 (Lead Agent)',
+          toName: 'Creative Workforce',
+          message: `Budget optimized for ${displayJobBudget}: Pruned 5 optional units. Retained 4K Master Visuals, Viral Script, Neural Narration, Policy Audit, and Master Bundle for $${plannedCostUsd.toFixed(4)}.`,
+          stepType: 'DIRECTIVE',
+          highlightBadge: 'Dynamic Plan: Reduced Viable',
+          nodeId: 'lead_orchestrator'
+        });
       }
+
+      const payableSubs = activeSubcontractors.filter(s => s.costPathUsd > 0 && (!isSolAnalysis || solAmberdataWithinBudget));
+      const preferredLeadIds = isSolAnalysis
+        ? ['key_quant_alpha', 'key_sec_audit']
+        : selectedPreset.id === 'swarm_media_creative'
+        ? ['key_vision_craft', 'key_chronicle_news']
+        : selectedPreset.id === 'swarm_arbitrage'
+          ? ['key_quant_alpha', 'key_cortex_research']
+          : ['key_cortex_research', 'key_sec_audit'];
+      const leadKeyId = preferredLeadIds
+        .map((id) => agents.find((agent) => agent.id === id))
+        .find((agent) => agent?.status === 'ACTIVE')?.id
+        || agents.find((agent) => agent.status === 'ACTIVE')?.id;
+      const data = payableSubs.length === 0
+        ? {
+            batchExecution: {
+              batchType: 'Free analysis plan',
+              subcontractorCount: 0,
+              executionMode: isLiveExecution ? 'LIVE_TESTNET' : 'RESILIENT_SANDBOX',
+              liveSettledCount: 0,
+              evaluationStepCount: 0,
+              txHashes: [],
+              totalCostPathUsd: 0,
+              escrowSettlement: 'EVALUATION_PLAN_ONLY',
+              txHash: null,
+              receiptVerified: false,
+              paymentReceiver: null,
+            },
+            dispatchedWorkers: [],
+          }
+        : await (async () => {
+            const resp = await fetch('/api/swarm/execute', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                taskDescription: selectedPreset.title,
+                subcontractors: payableSubs,
+                leadKeyId,
+                jobId: swarmJobId,
+                jobBudgetPathUsd: requestedBudget,
+                evaluationOnly: !isLiveExecution,
+              }),
+            });
+            const responseData = await resp.json();
+            if (!resp.ok) throw new Error(responseData.error || 'Swarm execution failed');
+            return responseData;
+          })();
       const confirmedWorkers = Array.isArray(data?.dispatchedWorkers) ? data.dispatchedWorkers : [];
       if (!data?.batchExecution || confirmedWorkers.length !== payableSubs.length) {
         throw new Error('Swarm response did not confirm every requested worker payment.');
@@ -1767,7 +2600,12 @@ export function MultiAgentSwarmView({
       if (!Number.isFinite(confirmedCost) || Math.abs(confirmedCost - requestedCost) > 0.000001) {
         throw new Error('Swarm response cost does not match the requested worker budget.');
       }
-      const liveSettlementConfirmed = data.batchExecution.escrowSettlement === 'ALL_DELIVERABLES_VERIFIED';
+      const liveSettlementConfirmed = data.batchExecution.escrowSettlement === 'ALL_PAYMENTS_CONFIRMED'
+        && data.batchExecution.receiptVerified === true
+        && typeof data.batchExecution.txHash === 'string'
+        && /^0x[a-fA-F0-9]{64}$/.test(data.batchExecution.txHash);
+      recordJobExpense(swarmJobId, confirmedCost, liveSettlementConfirmed);
+      setExecutionPhase('rendering');
 
       const allIds = new Set<string>();
 
@@ -1935,8 +2773,8 @@ export function MultiAgentSwarmView({
               },
               { 
                 id: 'sub_m18', startDelay: 4200, workTime: 2200,
-                queryMsg: 'Auditing micro-transaction spend against $0.0500 budget cap...',
-                responseMsg: 'Spend audit verified: $0.0245 total of $0.0500 budget cap.',
+                queryMsg: `Auditing micro-transaction spend against ${displayJobBudget} budget cap...`,
+                responseMsg: `Spend audit verified: $0.0245 total of ${displayJobBudget} budget cap.`,
                 badge: 'Spend: $0.0245'
               },
               { 
@@ -1973,7 +2811,7 @@ export function MultiAgentSwarmView({
               { 
                 id: 'sub_11', startDelay: 2600, workTime: 2200,
                 queryMsg: 'Checking commercial credit rating and payment track record...',
-                responseMsg: 'Evaluation result: Grade A- risk score (88/100) ($0.0015 planned).',
+                responseMsg: 'Example evaluation result: score 88/100 ($0.0015 planned).',
                 badge: 'Risk Score: 88/100'
               },
               { 
@@ -2027,8 +2865,8 @@ export function MultiAgentSwarmView({
               { 
                 id: 'sub_17', startDelay: 1500, workTime: 4200,
                 queryMsg: 'Executing 10,000 Monte Carlo bankruptcy stress simulations...',
-                responseMsg: 'Simulation passed: Solvency Score 4.12 (Safe Zone). 1-yr default risk: 0.04%.',
-                badge: 'Solvency Safe (4.12)'
+                responseMsg: 'Example stress result prepared: score 4.12; example 1-year risk 0.04%.',
+                badge: 'Example stress result (4.12)'
               },
             ],
           },
@@ -2051,8 +2889,8 @@ export function MultiAgentSwarmView({
               { 
                 id: 'sub_3', startDelay: 1800, workTime: 2200,
                 queryMsg: 'Weighting corporate, financial & legal findings into composite score...',
-                responseMsg: 'Composite Safety Score calculated: 94 / 100 (Grade A / Low Risk).',
-                badge: 'Safety Score: 94/100'
+                responseMsg: 'Example safety score calculated: 94 / 100 (illustrative result).',
+                badge: 'Example score: 94/100'
               },
               { 
                 id: 'sub_4', startDelay: 2600, workTime: 2200,
@@ -2134,6 +2972,17 @@ export function MultiAgentSwarmView({
               const sub = selectedPreset.subcontractors.find((s) => s.id === cfg.id);
               if (!sub) return;
 
+              if (prunedUnitIds.has(cfg.id)) {
+                allIds.add(cfg.id);
+                setSettledWorkerIds(new Set(allIds));
+                setWorkerLiveStates((prev) => ({
+                  ...prev,
+                  [cfg.id]: { status: 'DONE', displayNote: 'Pruned (Budget Optimization)' }
+                }));
+                addLog(`  ⊘ [${sub.shortName || sub.role}] Pruned: optional task removed to fit under ${displayJobBudget} budget limit.`);
+                return;
+              }
+
               // Step 1: Initial stagger delay before requesting
               if (cfg.startDelay > 0) {
                 await new Promise((resolve) => setTimeout(resolve, cfg.startDelay));
@@ -2176,12 +3025,12 @@ export function MultiAgentSwarmView({
               setSettledWorkerIds(new Set(allIds));
               setWorkerLiveStates((prev) => ({
                 ...prev,
-                [cfg.id]: { status: 'DONE', displayNote: `${liveSettlementConfirmed ? '✓ Delivered' : '✓ Result prepared'}: ${SUBCONTRACTOR_RESULT_PILLS[cfg.id] || sub.deliverablePreview}` }
+                [cfg.id]: { status: 'DONE', displayNote: `${liveSettlementConfirmed ? '✓ Payment confirmed' : '✓ Result prepared'} · Sample output: ${SUBCONTRACTOR_RESULT_PILLS[cfg.id] || sub.deliverablePreview}` }
               }));
               const wAddr = getWorkerWalletAddress(sub.id);
               const shortAddr = wAddr ? `${wAddr.slice(0, 6)}...${wAddr.slice(-4)}` : 'evaluation session key';
               const nonceNum = (sub.id.charCodeAt(0) * 17) + 1042;
-              addLog(`  ✓ [${sub.shortName || sub.role}] Planned $${sub.costPathUsd.toFixed(4)} USD ➔ ${shortAddr} · Request checked · ${liveSettlementConfirmed ? 'Delivered' : 'Result prepared'}: ${SUBCONTRACTOR_RESULT_PILLS[cfg.id] || sub.deliverablePreview}`);
+              addLog(`  ✓ [${sub.shortName || sub.role}] ${liveSettlementConfirmed ? 'Payment confirmed' : 'Payment planned'} $${sub.costPathUsd.toFixed(4)} USD ➔ ${shortAddr} · Request checked · Sample output: ${SUBCONTRACTOR_RESULT_PILLS[cfg.id] || sub.deliverablePreview}`);
 
               // Emit response dialogue
               addDialogue({
@@ -2263,7 +3112,7 @@ export function MultiAgentSwarmView({
               fromName: 'Campaign Director',
               fromRole: 'Unit 01 (Lead Agent)',
               toName: 'Human Reviewer / Marketing Team',
-              message: 'Mission flow complete: multi-platform campaign plan is ready to review. Planned spend: $0.0245 under the $0.0500 limit.',
+                message: `Mission flow complete: multi-platform campaign plan is ready to review. ${liveSettlementConfirmed ? 'Paid' : 'Planned'} spend: $0.0245 under the $0.0500 limit.`,
               stepType: 'APPROVAL',
               highlightBadge: 'CAMPAIGN READY ($0.0245)',
               costUsd: 0.0245,
@@ -2275,16 +3124,16 @@ export function MultiAgentSwarmView({
               lead_orchestrator: { status: 'DONE', displayNote: '✓ Evaluation recommendation ready: Apex Foundry Ltd' }
             }));
             addLog(`▶ [FINAL SYNTHESIS] Lead Agent compiled all 19 specialist deliverables.`);
-            addLog(`[DECISION] Evaluation recommendation ready for "Apex Foundry Ltd" contract review. Composite sample score: 94/100 (Low Risk).`);
+            addLog(`[DECISION] Example recommendation ready for "Apex Foundry Ltd" review. Sample score: 94/100 (not a live rating).`);
             addLog(`[DOSSIER] Executive clearance report, C-Suite decision memo, and trilingual briefs compiled.`);
 
             addDialogue({
               fromName: 'Lead Orchestrator',
               fromRole: 'Unit 01 (Lead Agent)',
               toName: 'Executive Procurement Board',
-              message: 'Mission flow complete: supplier clearance plan is ready to review. Planned spend: $0.0270 under the $0.0300 limit.',
+              message: `Mission flow complete: supplier clearance plan is ready to review. ${liveSettlementConfirmed ? 'Paid' : 'Planned'} spend: $0.0270 under the $0.0300 limit.`,
               stepType: 'APPROVAL',
-              highlightBadge: 'REVIEW RECOMMENDED (94/100)',
+              highlightBadge: 'EXAMPLE REVIEW (94/100)',
               costUsd: 0.0270,
               nodeId: 'lead_orchestrator'
             });
@@ -2294,6 +3143,19 @@ export function MultiAgentSwarmView({
         setPhaseExpanded({ 1: true, 2: true, 3: true });
       } else {
         // Fallback for smaller swarms (e.g. Market Trading & Risk Market Comparison)
+        const missionLeadName = isSolAnalysis ? 'Lead Market Analyst' : 'Trading Desk Lead';
+        // Give the SOL demo enough time to communicate the causal flow. The
+        // backend work is unchanged; these pauses only let the audience see
+        // planning, each input, the paid check, and the final handoff.
+        const stepRevealDelayMs = isSolAnalysis ? 650 : 350;
+        const paymentRevealDelayMs = isSolAnalysis ? 550 : 350;
+        if (isSolAnalysis) {
+          setWorkerLiveStates((prev) => ({
+            ...prev,
+            lead_orchestrator: { status: 'REQUESTING', displayNote: 'Planning the market-analysis steps...' }
+          }));
+          await new Promise((resolve) => setTimeout(resolve, 350));
+        }
         allIds.add('lead_orchestrator');
         setSettledWorkerIds(new Set(allIds));
         setWorkerLiveStates((prev) => ({
@@ -2305,49 +3167,84 @@ export function MultiAgentSwarmView({
           const sub = selectedPreset.subcontractors[i];
           if (sub.id === 'lead_orchestrator') continue;
           setActiveStageNum(sub.waveGroup || 1);
+          const isFreeStep = sub.costPathUsd === 0;
+          const isCoinGlassSkipped = sub.id === 'sol_coinglass_skipped';
+          const isBudgetSkipped = solPaidStepSkippedForBudget && sub.id === 'sol_amberdata_depth';
+          const isSkippedStep = isCoinGlassSkipped || isBudgetSkipped;
           
           addDialogue({
-            fromName: 'Trading Desk Lead',
+            fromName: missionLeadName,
             fromRole: 'Lead Agent',
             toName: sub.shortName,
-            message: `Executing task: ${sub.role} via ${sub.targetUrl}`,
-            stepType: 'DIRECTIVE',
+            message: isBudgetSkipped
+              ? `Amberdata demo snapshot costs $0.0010, which exceeds the ${displayJobBudget} job maximum, so it is skipped without a request or charge.`
+              : isCoinGlassSkipped
+              ? 'The lead agent needs CoinGlass liquidation data, but CoinGlass has no Synapse402 SDK route. This request cannot become a purchase, so no data returned and revenue from it is $0.'
+              : isFreeStep
+              ? `Reading ${sub.role} locally/publicly. This step costs $0 and does not create a payment request.`
+              : `Requesting ${sub.role} through the approved Synapse402 route. The job maximum remains ${displayJobBudget}.`,
+            stepType: isSkippedStep || isFreeStep ? 'DATA_PAYLOAD' : 'HTTP_402',
             costUsd: sub.costPathUsd,
             nodeId: sub.id
           });
 
-          setWorkerLiveStates((prev) => ({ ...prev, [sub.id]: { status: 'REQUESTING', displayNote: 'Requesting...' } }));
-          await new Promise((resolve) => setTimeout(resolve, 350));
+          setWorkerLiveStates((prev) => ({ ...prev, [sub.id]: { status: 'REQUESTING', displayNote: isBudgetSkipped ? 'Over job maximum · will skip' : isCoinGlassSkipped ? 'SDK route missing · no request' : isFreeStep ? 'Reading free input...' : 'Requesting paid input...' } }));
+          await new Promise((resolve) => setTimeout(resolve, stepRevealDelayMs));
           if (isEmergencyFrozenRef.current) break;
-          if (liveSettlementConfirmed) soundEngine.playSettlementChime();
-          setWorkerLiveStates((prev) => ({ ...prev, [sub.id]: { status: 'PAYING', displayNote: `Paying $${sub.costPathUsd.toFixed(4)}` } }));
-          await new Promise((resolve) => setTimeout(resolve, 350));
+          if (!isFreeStep && !isSkippedStep && liveSettlementConfirmed) soundEngine.playSettlementChime();
+          if (!isFreeStep && !isSkippedStep) {
+            setWorkerLiveStates((prev) => ({ ...prev, [sub.id]: { status: 'PAYING', displayNote: `Paying $${sub.costPathUsd.toFixed(4)}` } }));
+            await new Promise((resolve) => setTimeout(resolve, paymentRevealDelayMs));
+          }
           if (isEmergencyFrozenRef.current) break;
           allIds.add(sub.id);
           setSettledWorkerIds(new Set(allIds));
           setSelectedSubId(sub.id);
-          setWorkerLiveStates((prev) => ({ ...prev, [sub.id]: { status: 'DONE', displayNote: liveSettlementConfirmed ? '✓ Delivered' : '✓ Result prepared' } }));
-          addLog(`  ✓ [${sub.shortName}] ${liveSettlementConfirmed ? 'Delivered' : 'Result prepared'}: ${sub.deliverablePreview} • ${liveSettlementConfirmed ? 'Paid' : 'Planned'} $${sub.costPathUsd.toFixed(4)}`);
+          const finalStepNote = isBudgetSkipped
+            ? '✓ Skipped · over job maximum'
+            : isCoinGlassSkipped
+            ? '✓ No route · $0 revenue'
+            : isFreeStep
+            ? '✓ Free input ready · $0 paid'
+            : liveSettlementConfirmed
+            ? '✓ Payment confirmed'
+            : '✓ Payment planned';
+          setWorkerLiveStates((prev) => ({ ...prev, [sub.id]: { status: 'DONE', displayNote: finalStepNote } }));
+          addLog(isBudgetSkipped
+            ? `  ✓ [${sub.shortName}] Skipped safely: $0.0010 exceeds the ${displayJobBudget} job maximum; no request or charge.`
+            : isCoinGlassSkipped
+            ? `  ✓ [${sub.shortName}] No Synapse402 SDK route: no liquidation request or charge; provider revenue from this request is $0.`
+            : isFreeStep
+            ? `  ✓ [${sub.shortName}] Free input ready: ${sub.deliverablePreview} · $0 paid.`
+            : `  ✓ [${sub.shortName}] ${liveSettlementConfirmed ? 'Payment confirmed' : 'Payment planned'} $${sub.costPathUsd.toFixed(4)}: ${sub.deliverablePreview}`);
 
           addDialogue({
             fromName: sub.shortName,
-            fromRole: sub.nodeType === 'PROVIDER' ? 'Data Provider' : 'Worker Bot',
-            toName: 'Trading Desk Lead',
-            message: `${liveSettlementConfirmed ? 'Delivered output' : 'Prepared result preview'}: ${sub.deliverablePreview}. Planned payment: $${sub.costPathUsd.toFixed(4)} USD.`,
-            stepType: 'DATA_PAYLOAD',
+            fromRole: sub.nodeType === 'PROVIDER' ? 'Data Provider' : 'Worker',
+            toName: missionLeadName,
+            message: isBudgetSkipped
+              ? `Amberdata demo snapshot skipped because it exceeds the ${displayJobBudget} job maximum; the report will state that paid depth was unavailable.`
+            : isCoinGlassSkipped
+              ? 'CoinGlass liquidation data was needed, but its SDK is not integrated. No request was payable, so the report records the missing insight and $0 provider revenue. With Synapse402 SDK, the agent could buy only this query and CoinGlass could earn per request.'
+              : isFreeStep
+              ? `Free result ready: ${sub.deliverablePreview}. No payment was sent.`
+              : `${liveSettlementConfirmed ? 'Paid result received' : 'Paid result prepared'}: ${sub.deliverablePreview}. ${liveSettlementConfirmed ? 'Tempo receipt confirmed.' : 'Payment remains an evaluation plan.'}`,
+            stepType: isSkippedStep || isFreeStep ? 'DATA_PAYLOAD' : 'TEMPO_SETTLE',
             costUsd: sub.costPathUsd,
-            highlightBadge: liveSettlementConfirmed ? '✓ Delivered' : '✓ Prepared',
+            highlightBadge: isBudgetSkipped ? 'OVER BUDGET' : isCoinGlassSkipped ? 'SKIPPED' : isFreeStep ? 'FREE' : liveSettlementConfirmed ? '✓ PAID' : 'PLANNED',
             nodeId: sub.id
           });
         }
         addDialogue({
-          fromName: 'Trading Desk Lead',
+          fromName: missionLeadName,
           fromRole: 'Unit 01 (Lead Agent)',
-          toName: 'Trading Desk Operator',
-          message: 'Market check complete: price differences and risk were reviewed. Planned spend: $0.0060 under the $0.0100 limit.',
+          toName: isSolAnalysis ? 'Human Reviewer' : 'Trading Desk Operator',
+            message: isSolAnalysis
+              ? `SOL/USDT brief ready: market data FREE, local analysis FREE, Amberdata demo ${solPaidStepSkippedForBudget ? `SKIPPED over ${displayJobBudget}` : liveSettlementConfirmed ? 'PAID $0.0010' : 'planned at $0.0010'}, CoinGlass liquidation data needed but SDK not integrated — no data and $0 revenue. One report is ready for review.`
+              : `Market check complete: price differences and risk were reviewed. ${liveSettlementConfirmed ? 'Paid' : 'Planned'} spend: $0.0060 under the $0.0100 limit.`,
           stepType: 'APPROVAL',
-            highlightBadge: liveSettlementConfirmed ? 'MARKET REPORT READY ($0.0060)' : 'MARKET REVIEW ($0.0060)',
-          costUsd: 0.0060,
+            highlightBadge: isSolAnalysis ? 'SOL/USDT BRIEF READY' : liveSettlementConfirmed ? 'MARKET REPORT READY ($0.0060)' : 'MARKET REVIEW ($0.0060)',
+          costUsd: isSolAnalysis ? 0 : 0.0060,
           nodeId: 'lead_orchestrator'
         });
         setActiveStageNum(4);
@@ -2359,9 +3256,13 @@ export function MultiAgentSwarmView({
       const finalSec = Math.max(1.0, Number((elapsedMs / 1000).toFixed(1)));
       setActualExecutionTimeSec(finalSec);
 
-      addLog(`[COMPLETED] All ${selectedPreset.subcontractors.length} deliverables ${liveSettlementConfirmed ? 'verified and received' : 'prepared for review'} in ${finalSec}s.`);
-      addLog(`[SETTLEMENT] ${liveSettlementConfirmed ? 'Confirmed' : 'Planned'} $${totalBatchCost.toFixed(4)} USD across ${selectedPreset.subcontractors.length} work steps${liveSettlementConfirmed ? ' on Tempo L1.' : ' in the evaluation flow.'}`);
-      addLog(`[COMPLETE] Executed strictly within approved policy limits. ${selectedPreset.id === 'swarm_media_creative' ? 'Campaign expense receipt' : selectedPreset.id === 'swarm_arbitrage' ? 'Market comparison receipt' : 'Supplier audit receipt'} generated.`);
+      addLog(`[COMPLETED] All ${isSolAnalysis ? displayPipelineUnitCount : selectedPreset.subcontractors.length} pipeline units ${liveSettlementConfirmed ? 'verified and received' : 'prepared for review'} in ${finalSec}s.`);
+      addLog(isSolAnalysis
+        ? solPaidStepSkippedForBudget
+          ? `[SETTLEMENT] No paid step was sent: the $0.0010 Amberdata demo input exceeded the ${displayJobBudget} job maximum. Market data and local analysis were free; CoinGlass data was needed but its missing SDK route produced no request and $0 revenue.`
+          : `[SETTLEMENT] ${liveSettlementConfirmed ? 'Confirmed' : 'Planned'} $${totalBatchCost.toFixed(4)} USD for 1 paid Amberdata step; market data and local analysis were free. CoinGlass data was unavailable because its SDK route is missing, so that request earned $0.`
+        : `[SETTLEMENT] ${liveSettlementConfirmed ? 'Confirmed' : 'Planned'} $${totalBatchCost.toFixed(4)} USD across ${isSolAnalysis ? displayPipelineUnitCount : selectedPreset.subcontractors.length} pipeline units${liveSettlementConfirmed ? ' on Tempo L1.' : ' in the evaluation flow.'}`);
+      addLog(`[COMPLETE] Executed strictly within approved policy limits. ${selectedPreset.id === 'swarm_media_creative' ? 'Campaign expense receipt' : selectedPreset.id === 'swarm_arbitrage' ? 'Market comparison receipt' : isSolAnalysis ? 'SOL/USDT market brief' : 'Supplier audit receipt'} generated.`);
       setLastBatchResult(data);
       if (liveSettlementConfirmed) soundEngine.playSettlementChime();
       if (onSwarmSettled) onSwarmSettled();
@@ -2370,6 +3271,7 @@ export function MultiAgentSwarmView({
       soundEngine.playDefenseIntercept();
     } finally {
       setIsExecuting(false);
+      setExecutionPhase('idle');
     }
   };
 
@@ -2416,46 +3318,43 @@ export function MultiAgentSwarmView({
       }
     };
 
-    // 2. Run Synapse402 payment flow (live settlement only when a wallet is available)
+    // 2. Run Synapse402 payment flow (live settlement uses the configured Treasury relayer)
     const runSynapse = async () => {
       const settleStart = Date.now();
       try {
-        const res = await fetch('/api/mpp/settle', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            targetUrl: realityTarget,
-            pricePathUsd: realityPrice,
-            category: 'Market Data & Scraping',
-            allowDynamicWhitelist: true,
-            evaluationOnly: true,
-          }),
+        const liveKeyId = agents.find((agent) => agent.status === 'ACTIVE')?.id || agents[0]?.id || 'key_quant_alpha';
+        const liveJobBudget = Math.max(realityPrice, Number(jobBudgetInput) || realityPrice);
+        const liveJobId = `reality_${Date.now()}`;
+        // Local showcase routes are fixtures, not approved external providers;
+        // keep them evaluation-only even when the dashboard is connected to
+        // Tempo testnet so the result cannot be mistaken for a live receipt.
+        const runAsEvaluation = !isLiveExecution || realityTarget.startsWith('/');
+        const settleRes = await executePayment({
+          keyId: liveKeyId,
+          targetUrl: realityTarget,
+          pricePathUsd: realityPrice,
+          category: 'Market Data & Scraping',
+          evaluationOnly: runAsEvaluation,
+          jobId: liveJobId,
+          jobBudgetPathUsd: liveJobBudget,
+          serviceName: 'Reality test settlement',
+          providerName: realityTarget,
         });
-        const settleDuration = Date.now() - settleStart;
-        const data = await res.json();
-        if (res.ok && ['SETTLED', 'SIMULATED_PASS'].includes(data?.trace?.status)) {
-          if (data.trace.status === 'SETTLED') soundEngine.playSettlementChime();
-          return {
-            status: 200,
-            durationMs: data.trace?.latencyMs || Math.max(14, settleDuration),
-            txHash: data.trace?.txHash || '',
-            executionMode: data.trace?.executionMode || 'RESILIENT_SANDBOX',
-            costUsd: realityPrice,
-            publisherEarned: data.trace.status === 'SETTLED'
-              ? `$${(realityPrice * 0.999).toFixed(6)} USD (99.9% to seller after 0.1% fee)`
-              : `$${(realityPrice * 0.999).toFixed(6)} USD planned (evaluation only)`,
-            payload: data.trace.liveProxyPayload || null,
-            dataReceivedBytes: data.trace.liveProxyPayload ? JSON.stringify(data.trace.liveProxyPayload).length : 0,
-            outcome: 'UNLOCKED'
-          };
-        } else {
-          return {
-            status: res.status,
-            durationMs: settleDuration,
-            error: data.error || 'Settlement failed',
-            outcome: 'FAILED'
-          };
-        }
+        const settleDuration = settleRes.latencyMs;
+        if (settleRes.trace.status === 'SETTLED' && settleRes.trace.receiptVerified === true) soundEngine.playSettlementChime();
+        return {
+          status: 200,
+          durationMs: settleDuration || Math.max(14, Date.now() - settleStart),
+          txHash: settleRes.txHash || '',
+          executionMode: settleRes.trace?.executionMode || 'RESILIENT_SANDBOX',
+          costUsd: realityPrice,
+          publisherEarned: settleRes.status === 'CONFIRMED'
+            ? `$${(realityPrice * 0.999).toFixed(6)} USD illustrative provider payout (production payee model)`
+            : `$${(realityPrice * 0.999).toFixed(6)} USD illustrative provider payout (evaluation only)`,
+          payload: settleRes.trace.liveProxyPayload || null,
+          dataReceivedBytes: settleRes.trace.liveProxyPayload ? JSON.stringify(settleRes.trace.liveProxyPayload).length : 0,
+          outcome: 'UNLOCKED'
+        };
       } catch (err: any) {
         return {
           status: 500,
@@ -2486,7 +3385,8 @@ export function MultiAgentSwarmView({
     abortControllerRef.current = controller;
 
     try {
-      const response = await fetch(`/api/stream/inference?topic=${streamTopic}&pricePerToken=0.00002`, {
+      const streamKeyId = agents.find((agent) => agent.status === 'ACTIVE')?.id || 'key_quant_alpha';
+      const response = await fetch(`/api/stream/inference?keyId=${encodeURIComponent(streamKeyId)}&topic=${streamTopic}&pricePerToken=0.00002&evaluationOnly=true`, {
         signal: controller.signal,
       });
 
@@ -2568,6 +3468,7 @@ export function MultiAgentSwarmView({
           arguments:
             mcpToolName === 'synapse_call_paid_api'
               ? {
+                  keyId: agents.find((agent) => agent.status === 'ACTIVE')?.id || 'key_quant_alpha',
                   targetUrl: mcpTargetUrl,
                   maxBudgetPathUsd: Number(mcpMaxCost),
                   proofOfExecutionRequired: true,
@@ -2576,7 +3477,7 @@ export function MultiAgentSwarmView({
                   evaluationOnly: true,
                 }
               : mcpToolName === 'synapse_check_agent_budget'
-              ? {}
+              ? { keyId: agents.find((agent) => agent.status === 'ACTIVE')?.id || 'key_quant_alpha' }
               : { category: 'Market Data' },
         };
       }
@@ -2626,10 +3527,6 @@ export function MultiAgentSwarmView({
     2
   );
 
-  const plannedCostUsd = selectedPreset.subcontractors.reduce((total, item) => total + item.costPathUsd, 0);
-  const budgetCapUsd = Number(String(selectedPreset.budgetLimit || '').match(/[0-9]+(?:\.[0-9]+)?/)?.[0] || 0.05);
-  const remainingBudgetUsd = Math.max(0, budgetCapUsd - plannedCostUsd);
-  const plannedBudgetPercent = budgetCapUsd > 0 ? Math.round((plannedCostUsd / budgetCapUsd) * 100) : 0;
 
   return (
     <div id="section-swarm-view" className="space-y-6">
@@ -2641,15 +3538,17 @@ export function MultiAgentSwarmView({
               <Cpu className="w-5 h-5 text-[#d7ff4f]" />
               AI Workforce — Mission walkthrough
             </h2>
-            <span className="px-2 py-0.5 rounded bg-[#d7ff4f]/15 text-[#d7ff4f] border border-[#d7ff4f]/30 text-[10px] font-mono font-bold">
-              EVALUATION
+              <span className="px-2 py-0.5 rounded bg-[#d7ff4f]/15 text-[#d7ff4f] border border-[#d7ff4f]/30 text-[10px] font-mono font-bold">
+              {isLiveExecution ? 'LIVE TESTNET' : 'EVALUATION'}
             </span>
           </div>
-          <p className="text-xs text-white/50 mt-0.5">
-            One goal. One spending cap. Follow how mission units are coordinated under human guardrails.
+          <p className="ui-explainer text-xs text-white/50 mt-0.5">
+            You choose the question and the maximum. The Lead Agent gathers only the evidence needed for that question, and the finished brief shows both the useful answer and the data it could not buy.
           </p>
-          <p className="text-[11px] text-amber-200/80 mt-1">
-            Evaluation mode: job outputs are examples until a live wallet confirms a receipt.
+          <p className={`ui-meta text-[11px] mt-1 ${isLiveExecution ? 'text-emerald-200/90' : 'text-amber-200/80'}`}>
+            {isLiveExecution
+              ? 'Live mode: the configured Treasury relayer settles approved steps through the shared demo receiver on Tempo L1; only a confirmed receipt appears as payment proof.'
+              : 'Evaluation mode: the same checks and result are shown without sending a blockchain payment.'}
           </p>
         </div>
 
@@ -2700,10 +3599,10 @@ export function MultiAgentSwarmView({
             }`}
           >
             <Radio className="w-3.5 h-3.5" />
-            <span>Payment stream</span>
+            <span>Token stream</span>
             <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold ${
               subView === 'stream' ? 'bg-black/25 text-[#08090c]' : 'bg-white/5 text-[#d7ff4f]'
-            }`}>FLOW</span>
+            }`}>EVAL</span>
           </button>
 
           <button
@@ -2724,56 +3623,176 @@ export function MultiAgentSwarmView({
         </div>
       </div>
 
+      <div className="ui-explainer rounded-xl border border-white/[.08] bg-white/[.025] px-4 py-3 text-xs text-zinc-300">
+        <span className="font-bold text-[#d7ff4f]">The point of this demo:</span>{' '}
+        you give one Lead Agent a real job and one spending limit. It gathers the useful inputs, pays only for an approved request when the job needs it, and brings the evidence back as one result you can check.
+      </div>
+
       {/* VIEW 1: AGENT SWARM (AGENT HIRES AGENT) */}
       {subView === 'swarm' && (
         <div className="space-y-6">
           {/* 1. HERO AREA: Mission Objective & Dispatch Panel */}
-          <div className="p-5 sm:p-7 rounded-3xl bg-gradient-to-br from-[#d7ff4f]/[0.08] via-white/[.035] to-transparent backdrop-blur-md border border-[#d7ff4f]/25 shadow-[0_22px_70px_rgba(0,0,0,0.26)] space-y-5 relative overflow-hidden">
+          <div className="ui-section p-5 sm:p-7 rounded-3xl bg-gradient-to-br from-[#d7ff4f]/[0.08] via-white/[.035] to-transparent backdrop-blur-md border border-[#d7ff4f]/25 shadow-[0_22px_70px_rgba(0,0,0,0.26)] space-y-5 relative overflow-hidden">
             
-            {/* Top Bar: Eyebrow + Preset Selector */}
-            <div className="flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-3 border-b border-white/[0.08] pb-4">
+            {/* Top Bar: simple explanation of the flow */}
+            <div className="flex items-center justify-between gap-3 border-b border-white/[0.08] pb-4">
               <div className="flex items-center gap-2 shrink-0">
                 <span className="w-2 h-2 rounded-full bg-[#d7ff4f] shadow-[0_0_10px_rgba(215,255,79,0.4)]" aria-hidden="true" />
                 <span className="text-[11px] font-mono font-bold tracking-widest text-[#d7ff4f] uppercase">
-                  CHOOSE A JOB • SET A LIMIT • REVIEW THE RESULT
+                  CHOOSE JOB • CHECK CAP • PAY • RECEIVE RESULT
                 </span>
               </div>
+            </div>
 
-              {/* Mission Presets / Jobs Selector */}
-              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white/[0.04] border border-white/10 flex-wrap">
-                <span className="text-[10px] font-mono text-zinc-400 uppercase px-2 hidden sm:inline font-semibold shrink-0">Scenario:</span>
-                {PRESET_SWARMS.map((preset) => {
-                  const isSelected = selectedPreset.id === preset.id;
-                  return (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      disabled={isExecuting}
-                      onClick={() => {
-                        soundEngine.playClick();
-                        setSelectedPreset(preset as any);
-                        setCustomDirective((preset as any).goal || preset.title);
-                        setSelectedSubId(preset.subcontractors[0].id);
-                        setSettledWorkerIds(new Set());
-                        setWorkerLiveStates({});
-                        setActiveStageNum(0);
-                      }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-all flex items-center gap-1.5 cursor-pointer ${
-                        isSelected
-                          ? 'bg-[#d7ff4f] text-[#08090c] font-bold shadow-[0_0_15px_rgba(215,255,79,0.3)]'
-                          : 'text-zinc-400 hover:text-white hover:bg-white/[0.05]'
-                      }`}
-                    >
-                      <Layers className="w-3.5 h-3.5 shrink-0" />
-                      <span className="whitespace-nowrap">{preset.title}</span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold whitespace-nowrap shrink-0 ${
-                        isSelected ? 'bg-black/25 text-[#08090c]' : 'bg-white/10 text-zinc-300'
-                      }`}>
-                        {preset.budgetEst || '$0.0245'} · {preset.subcontractors.length} steps
+            {/* One visible setup area: choose the job, set its one maximum, then run it. */}
+            <div id="section-swarm-job-setup" className="relative overflow-hidden rounded-2xl border border-[#d7ff4f]/35 bg-[#d7ff4f]/[0.07] p-3.5 sm:p-4 shadow-[0_12px_35px_rgba(0,0,0,0.16)]">
+              <div className="pointer-events-none absolute -top-20 left-1/3 h-40 w-40 rounded-full bg-[#d7ff4f]/[0.08] blur-3xl" aria-hidden="true" />
+              <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-[#d7ff4f]/70 to-transparent" aria-hidden="true" />
+              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(300px,0.45fr)] gap-3 items-start">
+                <div className="relative z-10 space-y-2">
+                  <div className="flex flex-col gap-1 mb-2">
+                    <div className="flex items-center gap-2 text-[11px] font-mono font-bold tracking-widest text-[#d7ff4f] uppercase">
+                      <span className="w-5 h-5 rounded-md bg-[#d7ff4f] text-[#08090c] flex items-center justify-center text-[10px]">1</span>
+                      <span>Job setup</span>
+                    </div>
+                    <p className="text-xs text-zinc-300">Choose the question you want answered, set the most you are willing to spend, then let the Lead Agent handle the steps.</p>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-mono font-bold tracking-widest uppercase text-zinc-300">Choose the job</span>
+                    <span className="text-[10px] font-mono text-zinc-500">Selected: <strong className="text-white">{selectedPreset.title}</strong></span>
+                  </div>
+                  <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-black/[0.22] border border-white/10 flex-wrap shadow-inner shadow-black/20">
+                    {PRESET_SWARMS.map((preset, presetIndex) => {
+                      const isSelected = selectedPreset.id === preset.id;
+                      return (
+                        <button
+                          key={preset.id}
+                          id={preset.id === 'swarm_sol_analysis' ? 'tour-sol-analysis-job' : undefined}
+                          type="button"
+                          disabled={isExecuting}
+                          onClick={() => {
+                            soundEngine.playClick();
+                            setSelectedPreset(preset as any);
+                            const presetBudget = getPresetBudgetUsd(preset as typeof PRESET_SWARMS[number]);
+                            setJobBudgetInput(presetBudget.toFixed(4));
+                            setCustomDirective((preset as any).goal || preset.title);
+                            setSelectedSubId(preset.subcontractors[0].id);
+                            setSettledWorkerIds(new Set());
+                            setWorkerLiveStates({});
+                            setActiveStageNum(0);
+                          }}
+                          className={`ui-interactive group relative px-3 py-2 rounded-lg text-xs font-mono transition-all duration-200 flex items-center gap-1.5 cursor-pointer border hover:-translate-y-px active:translate-y-0 ${
+                            isSelected
+                              ? 'bg-[#d7ff4f] text-[#08090c] font-bold border-[#d7ff4f] shadow-[0_0_18px_rgba(215,255,79,0.32)]'
+                              : 'text-zinc-400 border-transparent hover:text-white hover:bg-white/[0.08] hover:border-white/15'
+                          }`}
+                          aria-pressed={isSelected}
+                          data-selected={isSelected}
+                        >
+                          <span className={`text-[9px] font-bold tracking-wider ${isSelected ? 'text-[#08090c]/60' : 'text-zinc-600 group-hover:text-zinc-400'}`}>
+                            {String(presetIndex + 1).padStart(2, '0')}
+                          </span>
+                          <Layers className="w-3.5 h-3.5 shrink-0" />
+                          <span className="whitespace-nowrap">{preset.title}</span>
+                          {preset.id !== 'swarm_sol_analysis' && (
+                            <span className="text-[8.5px] px-1.5 py-0.5 rounded bg-white/10 text-zinc-400 font-mono tracking-wider font-normal">
+                              SIMULATED
+                            </span>
+                          )}
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold whitespace-nowrap shrink-0 ${
+                            isSelected ? 'bg-black/25 text-[#08090c]' : 'bg-white/10 text-zinc-300'
+                          }`}>
+                            {preset.budgetEst || '$0.0245'} · {preset.id === 'swarm_sol_analysis' ? '5' : preset.subcontractors.length} steps
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="job-budget-field ui-selector relative z-10 flex flex-col xl:flex-col xl:items-stretch justify-start gap-2 rounded-xl bg-black/[0.22] border border-[#d7ff4f]/25 p-3 shadow-inner shadow-black/20 min-w-0">
+                  <label className="flex items-center justify-between gap-3 min-w-0 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono font-bold tracking-widest uppercase text-[#d7ff4f] whitespace-nowrap">02 · One job limit</span>
+                      {isFlagshipMediaSwarm && (
+                        <span className={`text-[9px] px-2 py-0.5 rounded font-mono font-bold uppercase tracking-wider ${
+                          budgetPlanType === 'FULL'
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                            : budgetPlanType === 'REDUCED'
+                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                            : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                        }`}>
+                          {budgetPlanType === 'FULL'
+                            ? 'Full Plan (20 Steps)'
+                            : budgetPlanType === 'REDUCED'
+                            ? 'Reduced Plan (15 Steps · $0.0145)'
+                            : 'Blocked (< $0.0120 min)'}
+                        </span>
+                      )}
+                    </div>
+                    <span className="flex items-center gap-1.5 font-bold text-white text-xl font-mono">
+                      <span className="text-zinc-400 text-sm">$</span>
+                      <input
+                        aria-label="Maximum spend for this workforce job"
+                        title="Enter the maximum amount for this job"
+                        type="number"
+                        min={(isFlagshipMediaSwarm ? MIN_FLAGSHIP_BUDGET : isSolAnalysis ? 0.0001 : plannedCostUsd).toFixed(4)}
+                        step="0.0001"
+                        value={jobBudgetInput}
+                        onChange={(event) => {
+                          const nextValue = event.target.value;
+                          setJobBudgetInput(nextValue);
+                        }}
+                        disabled={isExecuting}
+                        className="job-budget-input w-28 rounded-md border border-[#d7ff4f]/45 bg-[#08090c]/75 px-2 py-1.5 outline-none text-white font-mono text-right cursor-text focus:border-[#d7ff4f] focus:ring-2 focus:ring-[#d7ff4f]/25"
+                      />
+                    </span>
+                  </label>
+                  <p className="text-[10px] leading-relaxed text-zinc-400 xl:hidden">Type the maximum here. Workers and providers follow this limit automatically.</p>
+                  <button
+                    id="btn-execute-swarm-batch"
+                    onClick={handleRunSwarmBatch}
+                    disabled={isExecuting || isEmergencyFrozen || (budgetPlanType === 'INSUFFICIENT' && !isSolAnalysis)}
+                    className={`w-full px-3 py-2.5 rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all border min-w-0 ${
+                      budgetPlanType === 'INSUFFICIENT' && !isSolAnalysis
+                        ? 'bg-white/[0.04] border-white/10 text-zinc-500 cursor-not-allowed'
+                        : 'bg-gradient-to-b from-[#d7ff4f] to-[#b8eb1e] hover:from-[#e2ff6b] hover:to-[#d7ff4f] text-[#08090c] font-black shadow-[0_4px_20px_rgba(215,255,79,0.25)] border-[#d7ff4f] active:scale-[0.98] cursor-pointer'
+                    }`}
+                  >
+                    {isExecuting ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin text-[#08090c]" />
+                        <span aria-live="polite">
+                          {executionPhase === 'authorizing'
+                            ? `Starting job · ${isSolAnalysis ? 'Lead Agent is reading the first input' : `preparing ${isLiveExecution ? 'live payments' : 'payment plan'}`} (${settledWorkerIds.size}/${isSolAnalysis ? 5 : selectedPreset.subcontractors.length})...`
+                            : `Running job (${settledWorkerIds.size}/${isSolAnalysis ? 5 : selectedPreset.subcontractors.length})...`}
+                        </span>
+                        <span className="text-[10px] font-mono opacity-70">{executionElapsedSec}s</span>
+                      </>
+                    ) : budgetPlanType === 'INSUFFICIENT' && !isSolAnalysis ? (
+                      <span>Minimum needed is ${(isFlagshipMediaSwarm ? MIN_FLAGSHIP_BUDGET : plannedCostUsd).toFixed(4)}</span>
+                    ) : settledWorkerIds.size === selectedPreset.subcontractors.length && settledWorkerIds.size > 0 ? (
+                      <><RefreshCw className="w-4 h-4 text-[#08090c]" /><span>Run again ↺</span></>
+                    ) : budgetPlanType === 'REDUCED' && !isSolAnalysis ? (
+                      <><Play className="w-4 h-4 fill-current text-[#08090c]" /><span>Run Reduced Plan · $0.0145 (Under {displayJobBudget})</span></>
+                    ) : (
+                      <><Play className="w-4 h-4 fill-current text-[#08090c]" /><span>Run {selectedPreset.title} · {displayJobBudget}</span></>
+                    )}
+                  </button>
+                  {isExecuting && (
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[10px] font-mono text-zinc-400" aria-live="polite">
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${executionPhase === 'authorizing' ? 'bg-sky-300 animate-ping' : 'bg-[#d7ff4f] animate-pulse'}`} />
+                        <span className="truncate">
+                          {executionPhase === 'authorizing'
+                            ? 'Started · Lead Agent is preparing the first approved step'
+                            : 'In progress · the next approved step is moving through the pipeline'}
+                        </span>
                       </span>
-                    </button>
-                  );
-                })}
+                      <span className="shrink-0 text-zinc-500">{settledWorkerIds.size}/{isSolAnalysis ? 5 : selectedPreset.subcontractors.length} checked</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -2783,65 +3802,86 @@ export function MultiAgentSwarmView({
                 <div>
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider bg-[#d7ff4f]/15 text-[#d7ff4f] border border-[#d7ff4f]/30">
-                      {selectedPreset.id === 'swarm_media_creative' ? 'SOCIAL AD CAMPAIGN' : selectedPreset.id === 'swarm_arbitrage' ? 'MARKET DEPTH & SPREAD ANALYSIS' : 'ENTERPRISE DUE DILIGENCE'}
+                      {selectedPreset.id === 'swarm_media_creative' ? 'SOCIAL AD CAMPAIGN' : selectedPreset.id === 'swarm_arbitrage' ? 'MARKET DEPTH & SPREAD ANALYSIS' : isSolAnalysis ? 'SOL/USDT MARKET BRIEF' : 'ENTERPRISE DUE DILIGENCE'}
                     </span>
                   </div>
                   <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-[1.08]">
-                     Give an AI agent a job.<br />
-                     <span className="text-[#d7ff4f]">Set the spending limit.</span>
+                     Give one agent one job.<br />
+                     <span className="text-[#d7ff4f]">Keep the decision in your hands.</span>
                   </h1>
                   <div className="mt-3 max-w-4xl border-l-2 border-[#d7ff4f] bg-[#d7ff4f]/[0.05] rounded-r-xl px-4 py-3 text-base sm:text-lg font-semibold font-sans normal-case tracking-normal leading-snug text-white">
-                   <strong className="text-[#d7ff4f]">Example job:</strong> choose a scenario to see one lead agent split the work, control spending, and return the finished result.
+                   <strong className="text-[#d7ff4f]">How to read it:</strong> the Lead Agent is the coordinator. The cards show the information it reads, the one input it may buy, and the brief it returns to you.
                   </div>
                   <div className="text-xs sm:text-sm text-zinc-300 font-sans leading-relaxed mt-3 max-w-3xl space-y-2">
                     {selectedPreset.id === 'swarm_media_creative' ? (
                       <>
                         <p className="text-white font-medium text-sm sm:text-base leading-snug">
-                           This example run uses a $0.05 budget cap so the payment flow is easy to inspect.
+                           This run uses a ${Number(jobBudgetInput || 0).toFixed(4)} maximum so the payment flow is easy to inspect and the cost boundary is obvious.
                         </p>
                         <p className="text-zinc-400 text-xs sm:text-[13px] leading-relaxed">
-                           The plan estimates <strong className="text-[#d7ff4f] font-mono">$0.0245</strong>. In the connected product, the person sets the budget for the job.
+                           The plan estimates <strong className="text-[#d7ff4f] font-mono">$0.0245</strong>. In the connected product, the person sets the budget for the job, so the person stays in control.
                         </p>
                       </>
                     ) : selectedPreset.id === 'swarm_arbitrage' ? (
                       <>
                         <p className="text-white font-medium text-sm sm:text-base leading-snug">
-                            One lead agent compares two example market snapshots and prepares a report.
+                            One lead agent compares two example market snapshots and prepares a report, so the recommendation is based on the supplied inputs.
                         </p>
                         <p className="text-zinc-400 text-xs sm:text-[13px] leading-relaxed">
-                           This example is planned at <strong className="text-[#d7ff4f] font-mono">$0.0060</strong>; the person sets the limit in a real run.
+                           This example is planned at <strong className="text-[#d7ff4f] font-mono">$0.0060</strong>; the limit above is the only budget you set, so the spend remains bounded.
                         </p>
+                      </>
+                    ) : isSolAnalysis ? (
+                      <>
+                        <p className="text-white font-medium text-sm sm:text-base leading-snug">
+                          You ask for a SOL/USDT market read. The Lead Agent starts with free public candles, calculates the price zones locally, buys one small market-depth snapshot only when the cap allows it, and turns those pieces into one brief a person can actually review.
+                        </p>
+                        <p className="text-zinc-400 text-xs sm:text-[13px] leading-relaxed">
+                          Why this matters: an AI agent should not need a full subscription or an open wallet for one answer. It can request one useful piece of data, stay inside the limit you set, and leave a clear record of what it received.
+                        </p>
+                        {solRunComplete && <p className="text-zinc-400 text-xs sm:text-[13px] leading-relaxed">
+                          COINGLASS OPPORTUNITY — The final picture is missing liquidation data because CoinGlass has not added our Synapse402 SDK. That means this useful request cannot become a purchase today. If the SDK were there, the agent could pay a small amount for this single query, giving CoinGlass extra income from automated customers who need one answer but would never buy a full API subscription.
+                        </p>}
                       </>
                     ) : (
                       <>
                         <p className="text-white font-medium text-sm sm:text-base leading-snug">
-                           One lead agent combines supplied records and prepares a review memo.
+                           One lead agent combines supplied records and prepares a review memo, so the final decision has evidence behind it.
                         </p>
                         <p className="text-zinc-400 text-xs sm:text-[13px] leading-relaxed">
-                           This example stays under the <strong className="text-[#d7ff4f] font-mono">$0.0300</strong> cap; a real job uses the person’s chosen budget.
+                           This example stays under the limit above; the review stays within the one budget you chose for this job.
                         </p>
                       </>
                     )}
+                    <p className="border-t border-white/[0.08] pt-2 text-[10.5px] text-zinc-500 leading-relaxed">
+                      Provider outputs here are sample workflow data. Payment is separate: only a confirmed Tempo receipt proves a live settlement.
+                    </p>
                   </div>
+
                 </div>
 
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-mono text-zinc-300 pt-1">
+                 {isSolAnalysis && (
+                   <div className="mt-4 grid grid-cols-1 gap-2 rounded-xl border border-white/[0.10] bg-black/[0.14] px-4 py-3 text-xs font-mono sm:grid-cols-3">
+                     <div className="flex items-center justify-between gap-2"><span className="text-zinc-500 uppercase text-[10px]">Job limit</span><strong className="text-[#d7ff4f]">{displayJobBudget}</strong></div>
+                     <div className="flex items-center justify-between gap-2"><span className="text-zinc-500 uppercase text-[10px]">Spent</span><strong className="text-white">{'$' + effectivePlannedCostUsd.toFixed(4)}</strong></div>
+                     <div className="flex items-center justify-between gap-2"><span className="text-zinc-500 uppercase text-[10px]">Payment</span><strong className={batchTxHash ? 'text-[#d7ff4f]' : 'text-zinc-300'}>{batchTxHash ? 'Confirmed' : isLiveExecution ? 'Awaiting confirmation' : 'Evaluation only'}</strong></div>
+                   </div>
+                 )}
+                 {!isSolAnalysis && <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-mono text-zinc-300 pt-1">
                   <div className="flex items-center gap-1.5">
-                     <span className="text-zinc-500 uppercase text-[11px]">Example budget:</span>
-                    <span className="font-bold text-[#d7ff4f]">
-                      {selectedPreset.budgetLimit || '$0.0500 USD'}
-                    </span>
-                     <span className="text-[10.5px] text-zinc-400">(set by the person in a real run)</span>
+                    <span className="text-zinc-500 uppercase text-[11px]">Same job limit:</span>
+                    <span className="font-bold text-[#d7ff4f]">{displayJobBudget}</span>
                   </div>
+                  <span className="text-[10.5px] text-zinc-400">Set above once; every worker and provider follows this same limit.</span>
                   <div className="flex items-center gap-1.5">
-                     <span className="text-zinc-500 uppercase text-[11px]">Payment:</span>
+                    <span className="text-zinc-500 uppercase text-[11px]">Payment:</span>
                     <span className={`font-bold ${batchTxHash ? 'text-[#d7ff4f]' : 'text-zinc-300'}`}>
-                       {batchTxHash ? 'payment confirmed' : 'evaluation only · no live payment'}
+                      {paymentStatusText}
                     </span>
                   </div>
-                </div>
+                </div>}
 
-                <div className="relative flex items-center pt-1">
+                {!isSolAnalysis && <div className="relative flex items-center pt-1">
                   <span className="absolute left-3.5 text-[#d7ff4f] text-[10.5px] font-mono uppercase font-bold tracking-wider">TASK:</span>
                   <input
                     type="text"
@@ -2851,41 +3891,11 @@ export function MultiAgentSwarmView({
                      placeholder="Describe the job the agent should complete..."
                     className="w-full pl-16 pr-3.5 py-2.5 rounded-xl bg-white/[0.04] border border-white/15 focus:border-[#d7ff4f] focus:outline-none text-white text-xs font-sans transition"
                   />
-                </div>
+                </div>}
               </div>
 
-              {/* Main Action Card & Quick Explainer (4 cols) */}
+              {/* Payment state & quick explainer (4 cols). The run control lives in Job setup above. */}
               <div className="lg:col-span-4 flex flex-col gap-3 justify-center lg:pt-4">
-                <button
-                  id="btn-execute-swarm-batch"
-                  onClick={handleRunSwarmBatch}
-                  disabled={isExecuting || isEmergencyFrozen}
-                  className="w-full px-6 py-4 rounded-2xl bg-gradient-to-b from-[#d7ff4f] to-[#b8eb1e] hover:from-[#e2ff6b] hover:to-[#d7ff4f] text-[#08090c] font-black text-sm uppercase tracking-wider flex items-center justify-center gap-3 transition-all shadow-[0_4px_25px_rgba(215,255,79,0.3),inset_0_1px_0_rgba(255,255,255,0.4)] border border-[#d7ff4f] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 cursor-pointer"
-                >
-                  {isExecuting ? (
-                    <>
-                      <RefreshCw className="w-5 h-5 animate-spin text-[#08090c]" />
-                         <span>Running job ({settledWorkerIds.size}/{selectedPreset.subcontractors.length})...</span>
-                    </>
-                  ) : settledWorkerIds.size === selectedPreset.subcontractors.length && settledWorkerIds.size > 0 ? (
-                    <>
-                      <RefreshCw className="w-5 h-5 text-[#08090c]" />
-                       <span>Run again ↺</span>
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-5 h-5 fill-current text-[#08090c]" />
-                      <span>
-                        {selectedPreset.id === 'swarm_media_creative'
-                           ? 'Run campaign · $0.0245 →'
-                          : selectedPreset.id === 'swarm_arbitrage'
-                           ? 'Run market check · $0.0060 →'
-                           : 'Run due diligence · $0.0270 →'}
-                      </span>
-                    </>
-                  )}
-                </button>
-
                 {/* Dynamic On-Chain Execution Telemetry Card */}
                 {isExecuting ? (
                   <div className="p-3.5 rounded-xl bg-white/[.03] backdrop-blur-md border border-[#d7ff4f]/40 space-y-2 text-left font-mono shadow-[0_0_20px_rgba(215,255,79,0.15)]">
@@ -2902,13 +3912,13 @@ export function MultiAgentSwarmView({
                     <div className="flex items-center justify-between text-xs pt-1 border-t border-white/[0.08]">
                       <span className="text-zinc-400">Planned spend:</span>
                       <span className="text-white font-bold font-mono">
-                        ${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)} USD
+                        ${(isSolAnalysis ? effectivePlannedCostUsd : Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0)).toFixed(4)} USD
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-[10.5px] text-zinc-400">
                       <span>Confirmed Units:</span>
                       <span className="text-[#d7ff4f] font-bold">
-                        {settledWorkerIds.size} / {selectedPreset.subcontractors.length} Steps checked
+                        {Math.min(settledWorkerIds.size, isSolAnalysis ? 5 : selectedPreset.subcontractors.length)} / {isSolAnalysis ? 5 : selectedPreset.subcontractors.length} Steps checked
                       </span>
                     </div>
                   </div>
@@ -2917,55 +3927,103 @@ export function MultiAgentSwarmView({
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1.5 text-[11px] font-bold text-[#d7ff4f]">
                         <CheckCircle2 className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                        <span>{batchTxHash ? 'Settled On-Chain (Tempo L1)' : 'Completed in evaluation'}</span>
+                        <span>{batchTxHash ? 'Settled On-Chain (Tempo L1)' : isLiveExecution ? 'Live settlement pending' : 'Completed in evaluation'}</span>
                       </span>
                       <a
-                        href={batchTxHash ? `https://explore.tempo.xyz/tx/${batchTxHash}` : undefined}
+                        href={batchTxHash ? tempoTransactionUrl(batchTxHash) : undefined}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-[10px] text-[#d7ff4f] hover:underline flex items-center gap-0.5"
                       >
-                        <span>Explorer ↗</span>
+                         <span>{batchTxHash ? 'Explorer ↗' : 'Evaluation trace'}</span>
                       </a>
                     </div>
-                    <div className="flex items-center justify-between text-xs pt-1 border-t border-white/[0.08]">
-                      <span className="text-zinc-400">{batchTxHash ? 'Total transferred:' : 'Total planned:'}</span>
-                      <span className="text-[#d7ff4f] font-bold font-mono">
-                        ${selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD
-                      </span>
+                    <div className="pt-1 border-t border-white/[0.08] space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-zinc-400">
+                          {batchTxHash 
+                            ? `${lastBatchResult?.batchExecution?.txHashes?.length || (selectedPreset.subcontractors.filter(s => s.costPathUsd > 0).length || 1)} confirmed payments` 
+                            : 'Total planned:'}
+                        </span>
+                        <span className="text-[#d7ff4f] font-bold font-mono">
+                          {batchTxHash ? '· total ' : ''}${selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD
+                        </span>
+                      </div>
+                      {lastBatchResult?.dispatchedWorkers && lastBatchResult.dispatchedWorkers.length > 0 && (
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              soundEngine.playClick();
+                              setShowReceiptsBreakdown(!showReceiptsBreakdown);
+                            }}
+                            className="text-[10px] text-zinc-400 hover:text-[#d7ff4f] transition flex items-center gap-1 cursor-pointer font-sans"
+                          >
+                            <span>{showReceiptsBreakdown ? '▼ Hide individual receipts' : `▶ View individual receipts (${lastBatchResult.dispatchedWorkers.length})`}</span>
+                          </button>
+                          {showReceiptsBreakdown && (
+                            <div className="mt-1.5 p-2 rounded-lg bg-black/40 border border-white/10 space-y-1.5 max-h-48 overflow-y-auto text-[10px]">
+                              {lastBatchResult.dispatchedWorkers.map((w: any, idx: number) => (
+                                <div key={idx} className="flex flex-col gap-0.5 pb-1 border-b border-white/5 last:border-0 last:pb-0">
+                                  <div className="flex items-center justify-between font-mono">
+                                    <span className="text-zinc-200 font-semibold truncate max-w-[160px]">{w.subcontractorRole}</span>
+                                    <span className="text-[#d7ff4f]">${Number(w.settledCostPathUsd || 0).toFixed(4)} USD</span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-zinc-400 text-[9px] font-mono">
+                                    <span className="truncate max-w-[150px]">{w.targetEndpoint}</span>
+                                    <span className="text-zinc-400 font-mono">{w.traceId ? w.traceId.slice(0, 8) + '...' : (w.proofHash ? w.proofHash.slice(0, 8) + '...' : 'confirmed')}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <button
                       type="button"
                       onClick={() => {
                         soundEngine.playClick();
-                        setSelectedDeliverablePreview({
-                          title: selectedPreset.id === 'swarm_media_creative' 
-                            ? 'Campaign Launch Dossier & 5 Assets' 
-                            : selectedPreset.id === 'swarm_arbitrage'
-                            ? 'Market Comparison Report'
-                            : 'Board Clearance Dossier & Audit Report',
-                          badge: 'MISSION COMPLETE · READY TO DEPLOY',
-                          content: selectedPreset.id === 'swarm_media_creative'
-                            ? `EXECUTIVE BRIEF: MULTI-PLATFORM AD CAMPAIGN LAUNCH\nMission: Multi-Platform Organic & Paid Ad Launch Under $0.05 Budget\nStatus: REVIEW READY (ON-CHAIN TRACE DEPENDS ON LIVE WALLET)\nPlanned Cost: $0.0245 under the $0.0500 policy cap\n\nKey Deliverables:\n1. 15s Video Storyboard & Timing Spec.\n2. Marketing hooks and visual concepts.\n3. Multi-platform layout and language variants.\n\nSummary:\nThe evaluation flow coordinates the work and records the planned payment steps. A live wallet is required for a confirmed Tempo L1 receipt.`
-                            : selectedPreset.id === 'swarm_arbitrage'
-                            ? `MARKET RISK SUMMARY:\n\n• Planned data cost: $0.0060 USD\n• Example spread: 0.42% price difference across sample venues\n• Status: REVIEW READY${batchTxHash ? ' · ATOMIC SETTLEMENT CONFIRMED' : ' · EVALUATION FLOW'}\n• A live wallet is required for a confirmed Tempo L1 receipt.`
-                            : `EXECUTIVE BOARD CLEARANCE DOSSIER:\n\nTarget Entity: Apex Global Logistics B.V.\nRecommendation: REVIEW RECOMMENDED\nRisk Rating: Grade A (evaluation result)\n\nAudit Trail:\n• 19 registry and intelligence steps planned\n• Planned spend: $0.0270 USD (under the $0.0300 budget cap)\n• Delivery proof is available in this evaluation; a live wallet is required for a Tempo receipt.`
-                        });
+                        if (selectedDeliverablePreview) {
+                          setSelectedDeliverablePreview(null);
+                        } else {
+                            setSelectedDeliverablePreview({
+                              title: selectedPreset.id === 'swarm_media_creative' 
+                                ? 'Campaign Launch Dossier & 5 Assets' 
+                                : selectedPreset.id === 'swarm_arbitrage'
+                                ? 'Market Comparison Report'
+                                : isSolAnalysis
+                                ? 'SOL/USDT Market Brief & Action Plan'
+                                : 'Board Clearance Dossier & Audit Report',
+                            badge: isSolAnalysis ? 'MISSION COMPLETE · READY TO REVIEW' : 'MISSION COMPLETE · READY TO DEPLOY',
+                            content: selectedPreset.id === 'swarm_media_creative'
+                              ? `EXECUTIVE BRIEF: MULTI-PLATFORM AD CAMPAIGN LAUNCH\nMission: Multi-Platform Organic & Paid Ad Launch Under ${displayJobBudget} Budget\nStatus: ${batchTxHash ? 'PAYMENT CONFIRMED — TEMPO L1 RECEIPT READY' : isLiveExecution ? 'WORK COMPLETE — LIVE RECEIPT PENDING' : 'REVIEW READY — EVALUATION PREVIEW'}\n${batchTxHash ? 'Paid' : 'Planned'} Cost: $0.0245 under the ${displayJobBudget} policy cap\n\nKey Deliverables:\n1. 15s Video Storyboard & Timing Spec.\n2. Marketing hooks and visual concepts.\n3. Multi-platform layout and language variants.\n\nSummary:\nThe lead agent coordinates the work, keeps every step inside the cap, and returns one campaign bundle. ${batchTxHash ? 'Approved steps were paid on Tempo L1 and the receipt is ready.' : isLiveExecution ? 'The live payment request is still awaiting confirmation.' : 'Evaluation mode shows the planned payment steps without sending a transaction.'}`
+                              : selectedPreset.id === 'swarm_arbitrage'
+                              ? `MARKET RISK SUMMARY:\n\n• ${batchTxHash ? 'Paid data cost' : 'Planned data cost'}: $0.0060 USD\n• Example spread: 0.42% price difference across sample venues\n• Status: REVIEW READY${batchTxHash ? ' · SETTLEMENT CONFIRMED' : isLiveExecution ? ' · LIVE RECEIPT PENDING' : ' · EVALUATION FLOW'}\n• ${batchTxHash ? 'Tempo L1 receipt is ready to inspect.' : isLiveExecution ? 'The Treasury relayer is processing the live receipt.' : 'Evaluation mode does not send a blockchain payment.'}`
+                              : isSolAnalysis
+                              ? solBriefContent
+                              : `EXECUTIVE BOARD CLEARANCE DOSSIER:\n\nTarget Entity: Apex Global Logistics B.V.\nRecommendation: REVIEW RECOMMENDED\nRisk Rating: Grade A (evaluation result)\n\nAudit Trail:\n• 19 registry and intelligence steps ${batchTxHash ? 'paid and completed' : 'planned'}\n• ${batchTxHash ? 'Paid' : 'Planned'} spend: $0.0270 USD (under the ${displayJobBudget} budget cap)\n• ${batchTxHash ? 'Tempo L1 receipt is ready to inspect.' : isLiveExecution ? 'The Treasury relayer is processing the live receipt.' : 'Evaluation mode shows the result without sending a blockchain payment.'}`
+                          });
+                          setTimeout(() => {
+                            const el = document.getElementById('swarm-inline-deliverable-viewer');
+                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                          }, 50);
+                        }
                       }}
                       className="w-full mt-2 py-2 px-3 rounded-lg bg-[#d7ff4f]/20 hover:bg-[#d7ff4f]/30 border border-[#d7ff4f]/40 text-[#d7ff4f] font-mono text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm active:scale-95"
                     >
                       <FileText className="w-3.5 h-3.5" />
-                      <span>Open Finished Deliverables (5 Assets)</span>
+                      <span>{selectedDeliverablePreview ? 'Hide Deliverables' : isSolAnalysis ? 'Open Market Brief & Action Plan' : 'Open Finished Deliverables (5 Assets)'}</span>
                     </button>
                   </div>
                 ) : (
                   <div className="p-3 rounded-xl bg-white/[.025] backdrop-blur-md border border-white/10 space-y-1 text-left font-mono">
                     <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#d7ff4f]">
                       <Zap className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                      <span>What happens</span>
+                      <span>Why the limit matters</span>
                     </div>
                     <p className="text-[11px] text-zinc-300 font-sans leading-snug">
-                       The lead agent plans approved steps, checks the limit, and returns the result.
+                       You are not handing an agent an open wallet. The cap is checked before every request, so free work happens first and a paid input is used only when it is approved and useful.
                     </p>
                   </div>
                 )}
@@ -2975,7 +4033,7 @@ export function MultiAgentSwarmView({
                     onClick={handleUnfreezeSwarm}
                     className="w-full px-3.5 py-2 rounded-xl bg-[#d7ff4f]/20 hover:bg-[#d7ff4f]/30 border border-[#d7ff4f]/40 text-[#d7ff4f] font-semibold text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <Play className="w-3.5 h-3.5 fill-current" />
                     <span>Resume Operations</span>
                   </button>
                 )}
@@ -2983,7 +4041,7 @@ export function MultiAgentSwarmView({
             </div>
 
             {/* 3-STEP EXECUTION MECHANICS (THE SIMPLE IDEA) DIRECTLY UNDER GOAL & DISPATCH */}
-            <div className="pt-4 border-t border-white/[0.08] grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {!isSolAnalysis && <div className="pt-4 border-t border-white/[0.08] grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* 01 */}
               <div className="p-3.5 rounded-2xl bg-white/[.025] backdrop-blur-md border border-white/10 flex items-start gap-3 hover:border-white/20 transition-all">
                 <div className="w-7 h-7 rounded-lg bg-white/[0.06] border border-white/10 flex items-center justify-center text-zinc-300 shrink-0 mt-0.5">
@@ -2992,7 +4050,7 @@ export function MultiAgentSwarmView({
                 <div>
                     <h4 className="text-xs font-bold text-white tracking-tight">1. Agent plans the steps</h4>
                   <p className="text-[11px] text-zinc-400 font-sans mt-0.5 leading-relaxed">
-                     It chooses approved APIs, sites, or other agents for the job.
+                     It chooses approved APIs, sites, or other agents for the job. That turns one goal into clear, payable steps.
                   </p>
                 </div>
               </div>
@@ -3005,7 +4063,7 @@ export function MultiAgentSwarmView({
                 <div>
                     <h4 className="text-xs font-bold text-white tracking-tight">2. Rules check the spend</h4>
                   <p className="text-[11px] text-zinc-400 font-sans mt-0.5 leading-relaxed">
-                     Every step must fit the limit and approved provider list.
+                     Every step must fit the limit and approved provider list. That stops an unapproved or over-budget step before payment.
                   </p>
                 </div>
               </div>
@@ -3018,11 +4076,11 @@ export function MultiAgentSwarmView({
                 <div>
                     <h4 className="text-xs font-bold text-white tracking-tight">3. You review the result</h4>
                   <p className="text-[11px] text-zinc-400 font-sans mt-0.5 leading-relaxed">
-                     The finished package comes back to you; a wallet is needed for a live receipt.
+                     The finished package comes back to you with one clear payment state: a Tempo L1 receipt in live mode, or a labelled preview in evaluation mode.
                   </p>
                 </div>
               </div>
-            </div>
+            </div>}
 
             {/* DELIVERABLES PREVIEW BAR */}
             <div className="deliverables-preview-bar pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-2.5 text-xs font-mono">
@@ -3055,7 +4113,7 @@ export function MultiAgentSwarmView({
                         setSelectedDeliverablePreview({
                           title: '10 Ad Copy Hooks (AIDA Framework)',
                           badge: 'DELIVERABLE 02 · HIGH CONVERSION HOOKS',
-                          content: `10 AD COPY HOOKS FOR HIGH-ENGAGEMENT SOCIAL CHANNELS:\n\n1. "Stop paying $600/month in SaaS subscriptions for tools your team touches once a week."\n2. "What if your AI bot had its own bank card with a strict $0.05 limit?"\n3. "Coordinate a full competitive audit across 7 registries under a $0.05 cap."\n4. "Why SaaS companies hate pay-per-request: they can't charge you for idle seats."\n5. "Autonomous AI is here, but CFOs are terrified of infinite loop billing. Here is the fix."\n6. "1 lead agent, 12 workers, 7 data feeds — one controlled work package."\n7. "Don't give AI an unlimited credit card. Give it a cryptographic session key."\n8. "Every API call signed. Every cent accounted for. Zero overdraft possible."\n9. "The end of monthly subscription bloat: Pay 0.1¢ per request or pay nothing."\n10. "Instant micro-payments on Tempo L1 when a live wallet is connected."`
+                            content: `10 AD COPY HOOKS FOR HIGH-ENGAGEMENT SOCIAL CHANNELS:\n\n1. "Stop paying $600/month in SaaS subscriptions for tools your team touches once a week."\n2. "What if your AI bot had its own bank card with a strict $0.05 limit?"\n3. "Coordinate a full competitive audit across 7 registries under a $0.05 cap."\n4. "Why SaaS companies hate pay-per-request: they can't charge you for idle seats."\n5. "Autonomous AI is here, but CFOs are terrified of infinite loop billing. Here is the fix."\n6. "1 lead agent, 12 workers, 7 data feeds — one controlled work package."\n7. "Don't give AI an unlimited credit card. Give it a cryptographic session key."\n8. "Every API call signed. Every cent accounted for. Zero overdraft possible."\n9. "The end of monthly subscription bloat: Pay 0.1¢ per request or pay nothing."\n10. "Instant micro-payments on Tempo L1 after the approved live settlement."`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#d7ff4f]/50 hover:bg-white/[0.08] flex items-center gap-1.5 transition cursor-pointer text-left"
@@ -3102,7 +4160,7 @@ export function MultiAgentSwarmView({
                         setSelectedDeliverablePreview({
                           title: '1-Page Launch Memo & Board Briefing',
                           badge: 'DELIVERABLE 05 · EXECUTIVE MEMO',
-                          content: `EXECUTIVE BRIEF: MULTI-PLATFORM AD CAMPAIGN LAUNCH\nMission: Multi-Platform Organic & Paid Ad Launch Under $0.05 Budget\nStatus: REVIEW READY (ON-CHAIN TRACE DEPENDS ON LIVE WALLET)\nPlanned Cost: $0.0245 under the $0.0500 policy cap\n\nKey Deliverables:\n1. 15s Video Storyboard & Neural Narration Prompts.\n2. Marketing hooks and visual concepts.\n3. Multi-platform layout and language variants.\n\nPractical note: the evaluation flow coordinates the work; a live wallet is required for a confirmed Tempo L1 receipt.`
+                          content: `EXECUTIVE BRIEF: MULTI-PLATFORM AD CAMPAIGN LAUNCH\nMission: Multi-Platform Organic & Paid Ad Launch Under ${displayJobBudget} Budget\nStatus: ${batchTxHash ? 'PAYMENT CONFIRMED — TEMPO L1 RECEIPT READY' : isLiveExecution ? 'LIVE RUN — RECEIPT PENDING' : 'EVALUATION PREVIEW'}\n${batchTxHash ? 'Paid' : 'Planned'} Cost: $0.0245 under the ${displayJobBudget} policy cap\n\nKey Deliverables:\n1. 15s Video Storyboard & Neural Narration Prompts.\n2. Marketing hooks and visual concepts.\n3. Multi-platform layout and language variants.\n\nPractical note: the lead agent coordinates the work, the cap protects the treasury, and ${batchTxHash ? 'the Tempo L1 receipt proves payment.' : isLiveExecution ? 'the Treasury relayer is processing the receipt.' : 'evaluation mode shows the plan without sending a transaction.'}`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 hover:bg-[#d7ff4f]/20 hover:border-[#d7ff4f]/60 flex items-center gap-1.5 text-[#d7ff4f] transition cursor-pointer text-left"
@@ -3120,7 +4178,7 @@ export function MultiAgentSwarmView({
                         setSelectedDeliverablePreview({
                           title: 'Sample Orderbook Depth Matrix',
                           badge: 'DELIVERABLE 01 · EVALUATION INPUT',
-                          content: `SAMPLE L2 ORDERBOOK DEPTH MATRIX (CROSS-EXCHANGE):\n\n• Venue A (Uniswap v3 TEMPO/USD pool): Example depth $420,000 within 0.15% band.\n• Venue B (Curve TEMPO/USD pool): Example depth $380,000 within 0.15% band.\n• Example spread: +0.48% across sample pools.\n• Planned evaluation cost: $0.0010 (requires a live wallet for settlement).\n• This screen demonstrates the report format; it is not a live trading signal.`
+                          content: `SAMPLE L2 ORDERBOOK DEPTH MATRIX (CROSS-EXCHANGE):\n\n• Venue A (Uniswap v3 TEMPO/USD pool): Example depth $420,000 within 0.15% band.\n• Venue B (Curve TEMPO/USD pool): Example depth $380,000 within 0.15% band.\n• Example spread: +0.48% across sample pools.\n• Planned evaluation cost: $0.0010 (evaluation mode does not submit payment).\n• This screen demonstrates the report format; it is not a live trading signal.`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#d7ff4f]/50 hover:bg-white/[0.08] flex items-center gap-1.5 transition cursor-pointer text-left"
@@ -3135,15 +4193,15 @@ export function MultiAgentSwarmView({
                         soundEngine.playClick();
                         setSelectedDeliverablePreview({
                           title: 'Market Momentum & Risk Score',
-                          badge: 'DELIVERABLE 02 · QUANT MODEL',
-                          content: `MOMENTUM & SLIPPAGE TOLERANCE REPORT:\n\n• Momentum Vector: +0.84 (Strong Bullish Continuation)\n• Volatility Skew (15m): 1.12 standard deviations\n• Max Allowed Slippage: 0.15%\n• Execution Safe Window: 42ms\n• Planned data cost: $0.0020 USD (chain receipt requires a live wallet)`
+                          badge: 'DELIVERABLE 02 · EXAMPLE MODEL',
+                          content: `EXAMPLE MOMENTUM & SLIPPAGE REPORT:\n\n• Example momentum vector: +0.84\n• Example volatility skew (15m): 1.12 standard deviations\n• Example max slippage: 0.15%\n• Example execution window: 42ms\n• Planned data cost: $0.0020 USD (a live run records the receipt after settlement)`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#d7ff4f]/50 hover:bg-white/[0.08] flex items-center gap-1.5 transition cursor-pointer text-left"
                     >
                       <Zap className="w-3.5 h-3.5 text-zinc-400" />
-                      <span className="font-semibold text-white">Momentum Score</span>
-                      <span className="text-zinc-500">(+0.84)</span>
+                      <span className="font-semibold text-white">Example momentum score</span>
+                      <span className="text-zinc-500">(example +0.84)</span>
                     </button>
                     <button
                       type="button"
@@ -3165,31 +4223,49 @@ export function MultiAgentSwarmView({
                       onClick={() => {
                         soundEngine.playClick();
                         setSelectedDeliverablePreview({
-                          title: 'AML & Sanctions Screening Digest',
-                          badge: 'DELIVERABLE 04 · COMPLIANCE CLEARANCE',
-                          content: `SANCTIONS & FRAUD SCREENING DIGEST:\n\n• Target: configured counterparty records\n• OFAC / EU Sanctions Hits: 0 (evaluation result)\n• Mixer intersection check: no match in the sample response\n• Counterparty Risk Grade: evaluation result\n• Chain proof: available only after a live wallet confirms the run`
+                          title: 'Example Compliance Response',
+                          badge: 'DELIVERABLE 04 · DEMO PROVIDER RESPONSE',
+                          content: `EXAMPLE COMPLIANCE RESPONSE:\n\n• Target: configured counterparty records\n• Provider data: supplied evaluation fixture\n• Live OFAC / EU / AML lookup: not run in this demo\n• Risk score: illustrative only\n• Chain proof: available only for a confirmed payment receipt`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#d7ff4f]/50 hover:bg-white/[0.08] flex items-center gap-1.5 transition cursor-pointer text-left"
                     >
                       <ShieldCheck className="w-3.5 h-3.5 text-zinc-400" />
-                      <span className="font-semibold text-white">AML / Sanctions Clean</span>
+                      <span className="font-semibold text-white">Example compliance response</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => {
                         soundEngine.playClick();
                         setSelectedDeliverablePreview({
-                          title: 'Evaluation Payment Record',
-                          badge: 'DELIVERABLE 05 · EVALUATION RECORD',
-                          content: `MARKET COMPARISON PAYMENT RECORD:\n\n• Planned provider spend: $0.0060 USD\n• Status: ${batchTxHash ? 'SETTLEMENT CONFIRMED' : 'EVALUATION FLOW'}\n• No trade was submitted. A live wallet is required for a confirmed Tempo L1 receipt.`
+                          title: batchTxHash ? 'Tempo L1 Payment Record' : isLiveExecution ? 'Live Payment Record' : 'Evaluation Payment Record',
+                          badge: `DELIVERABLE 05 · ${batchTxHash ? 'TEMPO L1 RECEIPT' : isLiveExecution ? 'LIVE PAYMENT' : 'EVALUATION RECORD'}`,
+                          content: `MARKET COMPARISON PAYMENT RECORD:\n\n• ${batchTxHash ? 'Settled provider spend' : 'Planned provider spend'}: $0.0060 USD\n• Status: ${batchTxHash ? 'SETTLEMENT CONFIRMED' : isLiveExecution ? 'LIVE RECEIPT PENDING' : 'EVALUATION FLOW'}\n• No trade was submitted. ${batchTxHash ? 'The provider payment is confirmed on Tempo L1.' : isLiveExecution ? 'The Treasury relayer is processing the payment receipt.' : 'Evaluation mode did not send a blockchain payment.'}`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 hover:bg-[#d7ff4f]/20 hover:border-[#d7ff4f]/60 flex items-center gap-1.5 text-[#d7ff4f] transition cursor-pointer text-left"
                     >
                       <FileText className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                      <span className="font-bold">Evaluation Record</span>
+                      <span className="font-bold">{batchTxHash ? 'Tempo L1 Payment Record' : isLiveExecution ? 'Live Payment Record' : 'Evaluation Record'}</span>
                     </button>
+                  </>
+                ) : isSolAnalysis ? (
+                  <>
+                    {solDeliverableItems.map((item) => (
+                      <button
+                        key={item.title}
+                        type="button"
+                        onClick={() => {
+                          soundEngine.playClick();
+                          setSelectedDeliverablePreview({ title: item.title, badge: item.badge, content: item.content });
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#d7ff4f]/50 hover:bg-white/[0.08] flex items-center gap-1.5 transition cursor-pointer text-left"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-zinc-400" />
+                        <span className="font-semibold text-white">{item.label}</span>
+                        <span className="text-zinc-500">({item.note})</span>
+                      </button>
+                    ))}
                   </>
                 ) : (
                   <>
@@ -3246,16 +4322,16 @@ export function MultiAgentSwarmView({
                       onClick={() => {
                         soundEngine.playClick();
                         setSelectedDeliverablePreview({
-                          title: 'Solvency & Altman Z-Score Model',
-                          badge: 'DELIVERABLE 04 · SOLVENCY SAFE ZONE',
-                          content: `ALTMAN Z-SCORE FINANCIAL HEALTH:\n\n• Composite Score: 4.12 (Well above 2.99 Safe Zone boundary)\n• Liquidity Coverage: 2.8x standard benchmark\n• Default Probability (12 months): 0.04%\n• Rating Equivalent: Standard & Poor's A-`
+                          title: 'Example solvency stress model',
+                          badge: 'DELIVERABLE 04 · EXAMPLE STRESS OUTPUT',
+                          content: `EXAMPLE STRESS OUTPUT:\n\n• Example composite score: 4.12\n• Example liquidity coverage: 2.8x benchmark\n• Example 12-month risk: 0.04%\n• This is a fixture, not a live credit rating.`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 hover:border-[#d7ff4f]/50 hover:bg-white/[0.08] flex items-center gap-1.5 transition cursor-pointer text-left"
                     >
                       <Activity className="w-3.5 h-3.5 text-zinc-400" />
-                      <span className="font-semibold text-white">Solvency: 4.12</span>
-                      <span className="text-zinc-500">(Safe Zone)</span>
+                      <span className="font-semibold text-white">Example solvency: 4.12</span>
+                      <span className="text-zinc-500">(sample)</span>
                     </button>
                     <button
                       type="button"
@@ -3264,7 +4340,7 @@ export function MultiAgentSwarmView({
                         setSelectedDeliverablePreview({
                           title: '1-Page Board Clearance Dossier',
                           badge: 'DELIVERABLE 05 · BOARD CLEARANCE',
-                          content: `EXECUTIVE BOARD CLEARANCE DOSSIER:\n\nTarget Entity: Apex Global Logistics B.V.\nRecommendation: REVIEW RECOMMENDED\nRisk Rating: Grade A (Low Risk / 94/100 Composite Score)\n\nAudit Trail:\n• 19 independent registry & intelligence calls planned\n• Planned spend: $0.0270 USD under the $0.0300 budget cap\n• Cryptographic proof is produced only for a confirmed live run`
+                            content: `EXAMPLE BOARD CLEARANCE DOSSIER:\n\nTarget Entity: Apex Global Logistics B.V.\nRecommendation: REVIEW RECOMMENDED\nExample risk result: 94/100\n\nAudit Trail:\n• 19 example registry and intelligence calls ${batchTxHash ? 'paid and completed' : 'planned'}\n• ${batchTxHash ? 'Paid' : 'Planned'} spend: $0.0270 USD under the ${displayJobBudget} budget cap\n• ${batchTxHash ? 'Tempo L1 receipt is ready to inspect.' : isLiveExecution ? 'The Treasury relayer is processing the receipt.' : 'Evaluation mode shows the result without sending a blockchain payment.'}`
                         });
                       }}
                       className="px-2.5 py-1 rounded-lg bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 hover:bg-[#d7ff4f]/20 hover:border-[#d7ff4f]/60 flex items-center gap-1.5 text-[#d7ff4f] transition cursor-pointer text-left"
@@ -3276,10 +4352,188 @@ export function MultiAgentSwarmView({
                 )}
               </div>
             </div>
+
+            {/* INLINE DELIVERABLE VIEWER (ZERO SCREEN BLACKOUT, PURE INLINE SURFACE) */}
+            {selectedDeliverablePreview && (
+              <div
+                id="swarm-inline-deliverable-viewer"
+                className="mt-3 rounded-2xl border border-[#d7ff4f]/45 bg-gradient-to-br from-[#3b4852] via-[#33414c] to-[#2b3741] p-4 sm:p-5 shadow-2xl space-y-3.5 animate-in fade-in duration-200"
+              >
+                <div className="flex items-center justify-between pb-3 border-b border-white/10">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#d7ff4f] px-2 py-0.5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/30">
+                      {selectedDeliverablePreview.badge}
+                    </span>
+                    <h3 className="text-sm sm:text-base font-bold text-white">{selectedDeliverablePreview.title}</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDeliverablePreview(null)}
+                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition cursor-pointer flex items-center gap-1 text-xs font-mono"
+                  >
+                    <X className="w-4 h-4" />
+                    <span>Close</span>
+                  </button>
+                </div>
+
+                <div className="bg-[#34424d] rounded-xl p-4 border border-white/20 text-slate-100 leading-relaxed max-h-[560px] overflow-y-scroll pr-5 [scrollbar-gutter:stable] shadow-inner shadow-black/10">
+                  {selectedDeliverablePreview.title === 'SOL/USDT Market Brief & Action Plan' ? (
+                    <div className="space-y-5 font-sans text-[11px]">
+                      <section className="rounded-xl border border-[#d7ff4f]/25 bg-[#d7ff4f]/[0.06] p-4">
+                        <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#d7ff4f]">What the Lead Agent found</div>
+                        <p className="mt-2 text-[13px] leading-relaxed text-zinc-100">{solZoneActionText}</p>
+                        <p className="mt-2 text-zinc-300">This is a review aid. It describes where the market has moved in the selected candle window; it does not place an order or promise a return.</p>
+                      </section>
+
+                      <section>
+                        <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400">Market snapshot from the candles</div>
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          <div className="rounded-lg border border-white/10 bg-white/[0.06] p-3"><div className="text-[9px] uppercase text-zinc-400">Latest close</div><div className="mt-1 text-base font-bold text-white">{solLatestCloseLabel}</div><div className="mt-1 text-[10px] text-zinc-400">{solLatestCandleDateLabel}</div></div>
+                          <div className="rounded-lg border border-white/10 bg-white/[0.06] p-3"><div className="text-[9px] uppercase text-zinc-400">Window change</div><div className={`mt-1 text-base font-bold ${solOverallChangePct !== null && solOverallChangePct >= 0 ? 'text-emerald-300' : 'text-amber-200'}`}>{solOverallChangeLabel}</div><div className="mt-1 text-[10px] text-zinc-400">first close → latest</div></div>
+                          <div className="rounded-lg border border-white/10 bg-white/[0.06] p-3"><div className="text-[9px] uppercase text-zinc-400">Avg weekly move</div><div className="mt-1 text-base font-bold text-white">{solAverageMoveLabel}</div><div className="mt-1 text-[10px] text-zinc-400">absolute close-to-close</div></div>
+                          <div className="rounded-lg border border-white/10 bg-white/[0.06] p-3"><div className="text-[9px] uppercase text-zinc-400">Data used</div><div className="mt-1 text-base font-bold text-sky-200">{solAnalysisCandleCount}</div><div className="mt-1 text-[10px] text-zinc-400">weekly candles · {solMarketSnapshot?.dataStatus === 'LIVE_PUBLIC_MARKET_DATA' ? 'public live feed' : 'sample'}</div></div>
+                        </div>
+                      </section>
+
+                      <section>
+                        <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400">Latest candle and local indicators</div>
+                          <div className="overflow-x-auto rounded-xl border border-white/15 bg-[#2b3842]">
+                          <table className="w-full min-w-[520px] border-collapse text-left">
+                            <thead className="bg-white/[0.10] text-[9px] uppercase tracking-wider text-zinc-300"><tr><th className="px-3 py-2 font-semibold">Measure</th><th className="px-3 py-2 font-semibold">Value</th><th className="px-3 py-2 font-semibold">Why it matters</th></tr></thead>
+                            <tbody className="divide-y divide-white/[0.08] text-[11px]">
+                              <tr><td className="px-3 py-2.5 font-semibold text-white">Latest week · {solLatestCandleDateLabel}</td><td className="px-3 py-2.5 text-zinc-200">{solLatestCandleLabel}</td><td className="px-3 py-2.5 text-zinc-400">Shows the most recent open, high, low and close used by the local calculation.</td></tr>
+                              <tr><td className="px-3 py-2.5 font-semibold text-white">Practical zones</td><td className="px-3 py-2.5 text-zinc-200">Support {solSupportZoneLabel} · resistance {solResistanceZoneLabel}</td><td className="px-3 py-2.5 text-zinc-400">Recent swing pivots with nearby touches; use these as areas to investigate, not automatic signals.</td></tr>
+                              <tr><td className="px-3 py-2.5 font-semibold text-white">Observed extremes</td><td className="px-3 py-2.5 text-zinc-200">${solMarketSnapshot?.analysis?.observedLow?.toFixed?.(2) || '—'} → ${solMarketSnapshot?.analysis?.observedHigh?.toFixed?.(2) || '—'}</td><td className="px-3 py-2.5 text-zinc-400">Full-window history kept as context so one old wick does not become a misleading nearby zone.</td></tr>
+                              <tr><td className="px-3 py-2.5 font-semibold text-white">Average movement</td><td className="px-3 py-2.5 text-zinc-200">{solAverageMoveLabel} per week</td><td className="px-3 py-2.5 text-zinc-400">A simple volatility clue: higher values mean the price moved more between weekly closes.</td></tr>
+                              <tr><td className="px-3 py-2.5 font-semibold text-white">Candle direction count</td><td className="px-3 py-2.5 text-zinc-200">{solBullishWeeks} up · {solBearishWeeks} down</td><td className="px-3 py-2.5 text-zinc-400">Counts weeks that closed above or below their open; it does not predict the next week.</td></tr>
+                              <tr><td className="px-3 py-2.5 font-semibold text-white">Volume context</td><td className="px-3 py-2.5 text-zinc-200">Latest {formatCompactVolume(latestSolVolume)} · {solVolumeComparisonLabel}</td><td className="px-3 py-2.5 text-zinc-400">Compares the latest traded volume with the average in the same candle window.</td></tr>
+                              <tr><td className="px-3 py-2.5 font-semibold text-white">Largest weekly body</td><td className="px-3 py-2.5 text-zinc-200">Up {solLargestUpPct === null ? '—' : `${solLargestUpPct.toFixed(1)}%`} · down {solLargestDownPct === null ? '—' : `${Math.abs(solLargestDownPct).toFixed(1)}%`}</td><td className="px-3 py-2.5 text-zinc-400">Shows the strongest close-to-open move found in the supplied candles.</td></tr>
+                              <tr><td className="px-3 py-2.5 font-semibold text-white">20-week average close</td><td className="px-3 py-2.5 text-zinc-200">{solSma20 === null ? '—' : `$${solSma20.toFixed(2)}`} · latest {solSmaDistancePct === null ? '—' : `${solSmaDistancePct >= 0 ? '+' : ''}${solSmaDistancePct.toFixed(1)}%`}</td><td className="px-3 py-2.5 text-zinc-400">Compares the latest close with a recent average to show whether price is above or below its recent baseline.</td></tr>
+                              <tr><td className="px-3 py-2.5 font-semibold text-white">14-week RSI</td><td className="px-3 py-2.5 text-zinc-200">{solRsi14 === null ? '—' : solRsi14.toFixed(1)}</td><td className="px-3 py-2.5 text-zinc-400">{solMomentumRead}</td></tr>
+                              <tr><td className="px-3 py-2.5 font-semibold text-white">Multi-factor profile</td><td className="px-3 py-2.5 text-zinc-200">{solMarketDirection} · {solVolumeComparisonLabel}</td><td className="px-3 py-2.5 text-zinc-400">{solMultiFactorRead}</td></tr>
+                              <tr><td className="px-3 py-2.5 font-semibold text-white">Confluence check</td><td className="px-3 py-2.5 text-zinc-200">{solConfluenceScore}/4 factors</td><td className="px-3 py-2.5 text-zinc-400">{solConfluenceRead}</td></tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </section>
+
+                      <section className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400">What each pipeline step contributed</div>
+                          <span className="text-[9px] font-mono text-[#d7ff4f]">Strict Verification Boundary</span>
+                        </div>
+
+                        {/* Truth Separation Banner */}
+                        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3 text-[10.5px] font-sans text-zinc-400 space-y-1">
+                          <div className="font-bold text-zinc-200 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f]" />
+                            <span>Payment Proof vs Provider Data Truth</span>
+                          </div>
+                          <p>
+                            <strong className="text-white">Tempo L1 Receipt ({batchTxHash ? 'Confirmed' : 'Evaluation'}):</strong> Cryptographically proves that {batchTxHash ? '$0.0010 was transferred via MPP on Tempo L1' : 'payment of $0.0010 is budgeted without sending an on-chain transaction'}.
+                          </p>
+                          <p>
+                            <strong className="text-white">Amberdata Provider Data (Simulation Sample):</strong> The market depth JSON payload is a demonstration fixture; blockchain settlement does not attest to the real-world truth of third-party market data.
+                          </p>
+                        </div>
+
+                        <div className="overflow-x-auto rounded-xl border border-white/15 bg-[#2b3842]">
+                          <table className="w-full min-w-[640px] border-collapse text-left">
+                            <thead className="bg-white/[0.10] text-[9px] uppercase tracking-wider text-zinc-300">
+                              <tr>
+                                <th className="px-3 py-2 font-semibold">Step</th>
+                                <th className="px-3 py-2 font-semibold">What it added</th>
+                                <th className="px-3 py-2 font-semibold">Cost / State</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/[0.08] text-[11px]">
+                              <tr>
+                                <td className="px-3 py-2.5 font-semibold text-white">Public market feed</td>
+                                <td className="px-3 py-2.5 text-zinc-300">{solRangeWindowLabel}, OHLC and volume for SOL/USDT.</td>
+                                <td className="px-3 py-2.5 text-emerald-300 font-mono text-[10px]">
+                                  FREE · {solMarketSnapshot?.dataStatus === 'LIVE_PUBLIC_MARKET_DATA' ? 'LIVE PUBLIC DATA' : 'LABELLED SAMPLE'}
+                                </td>
+                              </tr>
+                              <tr>
+                                <td className="px-3 py-2.5 font-semibold text-white">Local analysis</td>
+                                <td className="px-3 py-2.5 text-zinc-300">Direction, range, movement, candle counts and volume comparison calculated in the app.</td>
+                                <td className="px-3 py-2.5 text-emerald-300 font-mono text-[10px]">FREE · $0</td>
+                              </tr>
+                              <tr>
+                                <td className="px-3 py-2.5 font-semibold text-white">Amberdata</td>
+                                <td className="px-3 py-2.5 text-zinc-300">
+                                  SOL/USDT L2 Market Depth orderbook snapshot (bids/asks).
+                                  <div className="mt-1 text-[10px] text-zinc-400 font-mono">
+                                    <span className="text-zinc-500">Provider payload:</span> Demo Fixture · 
+                                    <span className="text-zinc-500 ml-1">Payment proof:</span> {batchTxHash ? <span className="text-emerald-400">Tempo L1 Receipt</span> : <span className="text-zinc-400">Evaluation Plan</span>}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2.5">
+                                  {solPaidStepSkippedForBudget ? (
+                                    <span className="text-[10px] font-mono font-bold text-amber-300">SKIPPED · OVER CAP</span>
+                                  ) : (
+                                    <SynapseStatusBadge status={batchTxHash ? 'CONFIRMED' : 'DEMO'} size="sm" />
+                                  )}
+                                </td>
+                              </tr>
+                              <tr>
+                                <td className="px-3 py-2.5 font-semibold text-white">CoinGlass</td>
+                                <td className="px-3 py-2.5 text-zinc-300">Liquidation data was needed for a fuller risk picture, but CoinGlass has no Synapse402 SDK route in this demo.</td>
+                                <td className="px-3 py-2.5 text-zinc-400 font-mono text-[10px]">NO ROUTE · $0 revenue</td>
+                              </tr>
+                              <tr>
+                                <td className="px-3 py-2.5 font-semibold text-white">Lead Agent</td>
+                                <td className="px-3 py-2.5 text-zinc-300">Combines the free data, local indicators, paid or skipped input and missing-data note into this brief.</td>
+                                <td className="px-3 py-2.5 text-emerald-300 font-mono text-[10px]">FINAL REPORT</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </section>
+
+                      <section className="grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-xl border border-white/10 bg-white/[0.05] p-4"><div className="text-[10px] font-bold uppercase tracking-wider text-[#d7ff4f]">How to use it</div><p className="mt-2 text-zinc-200">Support {solSupportZoneLabel}: wait for reaction and volume. Middle: no clear edge. Resistance {solResistanceZoneLabel}: review risk or profit. If price closes outside a zone, refresh the market candles before reusing these numbers.</p></div>
+                        <div className="rounded-xl border border-amber-300/25 bg-amber-300/[0.06] p-4"><div className="text-[10px] font-bold uppercase tracking-wider text-amber-200">What is missing</div><p className="mt-2 text-zinc-200">CoinGlass would add liquidation pressure data. Without the SDK route, the agent cannot buy that one query, so no liquidation result returned and CoinGlass earned $0 from it.</p><p className="mt-2 text-emerald-200">With an SDK route, the agent could pay only for this query instead of needing a full subscription.</p></div>
+                      </section>
+
+                      <div className="border-t border-white/10 pt-3 text-[10px] text-zinc-400">Spend: ${effectivePlannedCostUsd.toFixed(4)} of {displayJobBudget} maximum · {batchTxHash ? 'Tempo L1 payment confirmed' : 'evaluation preview · no blockchain payment sent'} · This is not financial advice.</div>
+                    </div>
+                  ) : (
+                    <div className="whitespace-pre-wrap font-mono text-xs leading-relaxed">{evaluationCopy(selectedDeliverablePreview.content)}</div>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-white/10 text-xs font-mono">
+                  <span className="text-zinc-500 text-[11px]">{batchTxHash ? 'Settled on Tempo L1 (Chain 42431)' : 'Evaluation deliverable · no chain receipt'} • Zero Subscriptions</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        soundEngine.playClick();
+                        navigator.clipboard.writeText(evaluationCopy(selectedDeliverablePreview.content));
+                        setCopiedKey('deliverable_modal');
+                        setTimeout(() => setCopiedKey(null), 2000);
+                      }}
+                      className="px-4 py-1.5 rounded-xl bg-[#d7ff4f] text-[#08090c] font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 text-xs"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>{copiedKey === 'deliverable_modal' ? 'Copied to Clipboard' : 'Copy Content'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDeliverablePreview(null)}
+                      className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 transition cursor-pointer text-xs"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* FULL-WIDTH ASSEMBLY LINE */}
-          <div className={`p-5 sm:p-6 rounded-2xl border space-y-4 shadow-sm transition-all duration-500 ${
+          <div data-state={isEmergencyFrozen ? 'blocked' : isExecuting ? 'running' : batchTxHash ? 'success' : settledWorkerIds.size > 0 ? 'evaluation' : 'idle'} className={`ui-result p-5 sm:p-6 rounded-2xl border space-y-4 shadow-sm transition-all duration-500 ${
             isExecuting 
               ? 'bg-white/[.04] backdrop-blur-md border-[#d7ff4f]/40 ring-1 ring-[#d7ff4f]/20 shadow-[0_0_50px_rgba(215,255,79,0.06)]' 
               : 'bg-white/[.03] backdrop-blur-md border-white/[.08]'
@@ -3288,13 +4542,13 @@ export function MultiAgentSwarmView({
 
 
             {/* ON-CHAIN SETTLEMENT STATUS BAR */}
-            <div className="rounded-xl bg-white/[.025] border border-white/[.08] p-3 shadow-sm">
+            <div className="ui-meta rounded-xl bg-white/[.025] border border-white/[.08] p-3 shadow-sm">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-mono">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="w-2 h-2 rounded-full bg-[#d7ff4f]" />
                   <span className="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                     <Activity className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                    <span>Tempo L1 Native Settlement</span>
+                    <span>Tempo L1 Native Settlement — payment proof</span>
                   </span>
                   <span className="text-[9.5px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-zinc-400 font-mono">
                     Chain ID 42431 · Type 0x76 MPP
@@ -3304,14 +4558,14 @@ export function MultiAgentSwarmView({
                   <span className="text-zinc-400">Status:</span>
                         <span className="text-[#d7ff4f] font-bold">
                     {settledWorkerIds.size === selectedPreset.subcontractors.length && settledWorkerIds.size > 0
-                      ? (batchTxHash ? `${selectedPreset.subcontractors.filter(s => s.costPathUsd > 0).length} payments confirmed on-chain` : `${selectedPreset.subcontractors.filter(s => s.costPathUsd > 0).length} payment steps completed in evaluation`)
+                      ? (batchTxHash ? `${displayPaidStepCount} payments confirmed on-chain` : `${displayPaidStepCount} payment steps completed in evaluation`)
                       : isExecuting
-                      ? `${settledWorkerIds.size} payment steps completed...`
+                      ? `${Math.min(settledWorkerIds.size, isSolAnalysis ? 5 : selectedPreset.subcontractors.length)} steps reviewed...`
                       : 'Standby'}
                   </span>
                   <span className="text-zinc-600">•</span>
                   <span className="text-white">
-                    {batchTxHash ? 'Spent' : 'Planned'}: <strong className="text-[#d7ff4f] font-mono">${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)}</strong> USD
+                    {batchTxHash ? 'Spent' : 'Planned'}: <strong className="text-[#d7ff4f] font-mono">${(isSolAnalysis ? effectivePlannedCostUsd : Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0)).toFixed(4)}</strong> USD
                   </span>
                 </div>
               </div>
@@ -3353,17 +4607,23 @@ export function MultiAgentSwarmView({
                         'Operations halted. All cards frozen.'
                       ) : isExecuting ? (
                         activeStageNum === 0 ? (
-                          selectedPreset.id === 'swarm_media_creative'
+                          executionPhase === 'authorizing'
+                            ? `Lead Agent: ${isLiveExecution ? 'confirming approved payment steps on Tempo L1' : 'preparing the approved payment plan'}... (${executionElapsedSec}s)`
+                            : selectedPreset.id === 'swarm_media_creative'
                             ? 'Lead Agent: Planning viral ad campaign and delegating creative tasks...'
-                            : selectedPreset.id === 'swarm_arbitrage'
-                            ? 'Lead Agent: Planning market comparison and allocating feed queries...'
-                            : 'Lead Agent: Planning supplier review and delegating tasks...'
+                             : selectedPreset.id === 'swarm_arbitrage'
+                             ? 'Lead Agent: Planning market comparison and allocating feed queries...'
+                             : isSolAnalysis
+                             ? 'Lead Agent: Fetching free SOL/USDT data and planning the paid depth check...'
+                             : 'Lead Agent: Planning supplier review and delegating tasks...'
                         ) : activeStageNum === 4 ? (
                           selectedPreset.id === 'swarm_media_creative'
                             ? 'Lead Agent: Packaging ad creatives, videos & 1-page launch memo...'
-                            : selectedPreset.id === 'swarm_arbitrage'
-                            ? 'Lead Agent: Verifying the evaluation record...'
-                            : 'Lead Agent: Compiling deliverables into final clearance memo...'
+                             : selectedPreset.id === 'swarm_arbitrage'
+                             ? 'Lead Agent: Verifying the evaluation record...'
+                             : isSolAnalysis
+                             ? 'Lead Agent: Writing the final SOL/USDT market brief...'
+                             : 'Lead Agent: Compiling deliverables into final clearance memo...'
                         ) : (() => {
                           const activeNode = selectedPreset.subcontractors.find(s => workerLiveStates[s.id]?.status === 'REQUESTING' || workerLiveStates[s.id]?.status === 'PAYING');
                           if (activeNode) {
@@ -3386,15 +4646,19 @@ export function MultiAgentSwarmView({
                           </span>
                         ) : selectedPreset.id === 'swarm_arbitrage' ? (
                           <span>
-                            Liquidity Audit <strong className="text-white">{batchTxHash ? 'COMPLETE' : 'REVIEW READY'}</strong> • {batchTxHash ? 'Verified spread' : 'Sample spread'}: <strong className="text-white">0.42% Discrepancy</strong> (Data Cost: $0.0060 USD)
+                            Liquidity Audit <strong className="text-white">{batchTxHash ? 'COMPLETE' : 'REVIEW READY'}</strong> • Example spread: <strong className="text-white">0.42% difference</strong> (Data Cost: $0.0060 USD)
+                          </span>
+                        ) : isSolAnalysis ? (
+                          <span>
+                            SOL/USDT Brief <strong className="text-white">REVIEW READY</strong> • Market data + local analysis free · Amberdata {solPaidStepSkippedForBudget ? `skipped over ${displayJobBudget}` : `demo planned at $0.0010`} · CoinGlass data needed, SDK not integrated, $0 revenue
                           </span>
                         ) : (
                           <span>
-                            Supplier <strong className="text-white">"Apex Foundry Ltd"</strong> REVIEW READY • Sample score: <strong className="text-white">Grade A (Low Risk)</strong>
+                            Supplier <strong className="text-white">"Apex Foundry Ltd"</strong> REVIEW READY • Example score: <strong className="text-white">Grade A (illustrative)</strong>
                           </span>
                         )
                       ) : (
-                        `${selectedPreset.subcontractors.length} Mission Units ready (${selectedPreset.description || '1 Lead · 12 Workers · 7 Providers'}) under ${selectedPreset.budgetLimit || '$0.050 USD'} budget.`
+                        `${displayWorkforceLabel} ready (${selectedPreset.description || '1 Lead · 12 Workers · 7 Providers'}) under ${displayJobBudget} budget.`
                       )}
                     </div>
                   </div>
@@ -3403,7 +4667,7 @@ export function MultiAgentSwarmView({
                 {/* Spent & Budget Indicator */}
                 <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 text-xs font-mono">
                   <span className="px-3 py-1 rounded-lg bg-black/40 border border-white/10 text-zinc-300">
-                    {batchTxHash ? 'Spent' : 'Planned'}: <strong className="text-[#d7ff4f]">${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)}</strong> / {selectedPreset.id === 'swarm_media_creative' ? '$0.050 USD' : selectedPreset.id === 'swarm_arbitrage' ? '$0.010 USD' : '$0.030 USD'}
+                              {batchTxHash ? 'Spent' : 'Planned'}: <strong className="text-[#d7ff4f]">${(isSolAnalysis ? effectivePlannedCostUsd : Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0)).toFixed(4)}</strong> / {displayJobBudget}
                   </span>
                 </div>
               </div>
@@ -3414,7 +4678,7 @@ export function MultiAgentSwarmView({
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[10.5px] uppercase text-zinc-400 font-semibold tracking-wider flex items-center gap-1.5">
                   <Network className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                  Workforce View Mode:
+                  View:
                 </span>
                 <div className="flex items-center p-0.5 rounded-lg bg-black/50 border border-white/10">
                   <button
@@ -3430,7 +4694,7 @@ export function MultiAgentSwarmView({
                     }`}
                   >
                     <Layers className="w-3.5 h-3.5" />
-                    <span>3-Phase Tree</span>
+                    <span>Overview</span>
                   </button>
                   <button
                     type="button"
@@ -3445,7 +4709,7 @@ export function MultiAgentSwarmView({
                     }`}
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    <span>Causal Pipeline</span>
+                    <span>Flow</span>
                   </button>
                   <button
                     type="button"
@@ -3460,7 +4724,7 @@ export function MultiAgentSwarmView({
                     }`}
                   >
                     <Layers className="w-3.5 h-3.5" />
-                    <span>Detailed Unit Cards</span>
+                    <span>Details</span>
                   </button>
                 </div>
               </div>
@@ -3504,21 +4768,21 @@ export function MultiAgentSwarmView({
                   {
                     stageNum: 1,
                     title: '01 — GATHER TRENDS & MEDIA FEEDS',
-                    subtitle: '7 example provider steps ($0.0100) · Uses sample trend, visual and audio inputs',
+                    subtitle: '7 example provider steps ($0.0100) · Uses sample trend, visual and audio inputs so the campaign starts with usable source material',
                     flowText: '7 provider steps prepared ($0.0100) ➔ Relayed to 5 Creative Specialists',
                     summaryText: 'Sample trend inputs reviewed · Ad angles drafted · Visual assets prepared · Voice and music examples aligned · Audience notes mapped',
                   },
                   {
                     stageNum: 2,
                     title: '02 — PRODUCE & AUDIT ADS',
-                    subtitle: '5 Specialist Creative & Compliance Workers ($0.0075) · Writes copy, syncs video & verifies policy',
+                    subtitle: '5 Specialist Creative & Compliance Workers ($0.0075) · Writes copy, syncs video & verifies policy so raw inputs become safe creative work',
                     flowText: 'Ad copy & video layouts verified ($0.0075) ➔ Relayed to Packaging Units',
                     summaryText: '10 Viral Hooks Ready · 9:16 Storyboards Built · Policy Check Passed · 15s Storyboard Synced · Brand Review Approved',
                   },
                   {
                     stageNum: 3,
                     title: '03 — PACKAGE, LOCALIZE & SEAL',
-                    subtitle: '7 Packaging, Localization & Tempo L1 Seal Units ($0.0070) · Adapts 4 platforms & translates 5 languages',
+                    subtitle: '7 Packaging, Localization & Tempo L1 Seal Units ($0.0070) · Adapts 4 platforms & translates 5 languages so the final package is ready to use',
                     flowText: 'Campaign package assembled ($0.0070) ➔ Signed ad deployment package delivered',
                     summaryText: '4 Native Ratios Formatted · 5 Languages Localized · 3 Campaign Covers · Full Asset Bundle · 1-Page Memo Ready · $0.0245 Planned',
                   },
@@ -3526,21 +4790,21 @@ export function MultiAgentSwarmView({
                   {
                     stageNum: 1,
                     title: '01 — FIND THE FACTS',
-                    subtitle: '7 example registry steps ($0.0120) · Shows how filings, credit and sanctions checks fit together',
+                    subtitle: '7 example registry steps ($0.0120) · Shows how filings, credit and sanctions checks fit together so the review is evidence-based',
                     flowText: '7 registry steps prepared ($0.0120) ➔ Relayed to 5 AI Risk Specialists',
                     summaryText: 'Registry snapshot · Filing snapshot · Ownership summary · Credit example · Legal and watchlist examples',
                   },
                   {
                     stageNum: 2,
                     title: '02 — CHECK THE RISK',
-                    subtitle: '5 Specialist AI Analysts ($0.0080) · Audits solvency, debt leverage & contract clauses',
+                    subtitle: '5 Specialist AI Analysts ($0.0080) · Audits solvency, debt leverage & contract clauses so risk is checked before approval',
                     flowText: 'Example risk calculations prepared ($0.0080) ➔ Relayed to decision specialists',
                     summaryText: 'Structure example · Cash and debt examples · Trade rules example · Contract terms example · Stress-test example',
                   },
                   {
                     stageNum: 3,
                     title: '03 — MAKE THE DECISION',
-                    subtitle: '7 synthesis workers & optional payment record ($0.0070) · Compiles a 1-page review memo',
+                    subtitle: '7 synthesis workers & optional payment record ($0.0070) · Compiles a 1-page review memo so a human can act on one clear recommendation',
                     flowText: 'Review memo compiled ($0.0070) ➔ Evidence pack returned to the human',
                     summaryText: 'Inputs compared · Rules summarized · Review score calculated · Evidence pack · 1-page memo ready',
                   },
@@ -3657,7 +4921,7 @@ export function MultiAgentSwarmView({
                             {isStageActive && (
                               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-[#d7ff4f]/20 text-[#d7ff4f] border border-[#d7ff4f]/40 animate-pulse flex items-center gap-1">
                                 <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                                <span>WORKING IN PARALLEL</span>
+                                <span>RUNNING NOW</span>
                               </span>
                             )}
                             {allStageSettled && (
@@ -3763,9 +5027,7 @@ export function MultiAgentSwarmView({
                                     isSettled ? 'text-emerald-300 font-medium' : isBusy ? 'text-[#d7ff4f]' : 'text-zinc-300'
                                   }`}>
                                     {isSettled
-                                       ? (batchTxHash
-                                         ? (sub.verifiedBadge || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview)
-                                         : `Prepared: ${sub.deliverablePreview}`)
+                                       ? `Sample output · ${sub.verifiedBadge || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}`
                                       : isBusy
                                       ? (liveState?.displayNote || sub.workingAction)
                                       : (NODE_HUMAN_JOBS[sub.id] || sub.deliverablePreview)}
@@ -3791,9 +5053,7 @@ export function MultiAgentSwarmView({
                                          <span>{batchTxHash ? 'Delivered' : 'Prepared'}</span>
                                       </span>
                                       <span className="px-1.5 py-0.2 rounded text-[8.5px] font-mono font-bold bg-[#d7ff4f]/15 text-[#d7ff4f] border border-[#d7ff4f]/30 truncate max-w-[140px]" title={sub.verifiedBadge || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}>
-                                        {batchTxHash
-                                          ? (sub.verifiedBadge || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview)
-                                          : `Sample output · ${sub.deliverablePreview}`}
+                                        {`Sample output · ${sub.verifiedBadge || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}`}
                                       </span>
                                     </div>
                                   ) : isPending ? (
@@ -3863,7 +5123,7 @@ export function MultiAgentSwarmView({
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="text-zinc-400 font-mono text-[11px]">
-                                Budget Cap: <span className="text-[#d7ff4f] font-bold font-mono">{selectedPreset.budgetLimit || '$0.0500 USD'}</span>
+                                Budget Cap: <span className="text-[#d7ff4f] font-bold font-mono">{displayJobBudget}</span>
                               </span>
                               <span className="text-zinc-600">·</span>
                               <span className="text-zinc-400 font-mono text-[11px]">
@@ -3906,10 +5166,10 @@ export function MultiAgentSwarmView({
                                   </h3>
                                   <p className="text-[11px] text-zinc-400 truncate">
                                     {selectedPreset.id === 'swarm_media_creative' 
-                                      ? 'Coordinates the job, controls spending, and combines the results.'
+                                    ? 'Coordinates the job, controls spending, and combines the results, so one campaign package comes back instead of scattered files.'
                                       : selectedPreset.id === 'swarm_arbitrage'
-                                      ? 'Coordinates 2 market feeds, 1 prediction model, and 1 execution sandbox under cap.'
-                                      : 'Coordinates 12 workers and 7 feeds, controls spending, and delivers final dossier.'}
+                                      ? 'Coordinates 2 market feeds, 1 prediction model, and 1 execution sandbox under cap, so the report is checked before delivery.'
+                                      : 'Coordinates 12 workers and 7 feeds, controls spending, and delivers final dossier, so the requester gets one review-ready decision.'}
                                   </p>
                                 </div>
                               </div>
@@ -3955,7 +5215,7 @@ export function MultiAgentSwarmView({
                               <div className="flex items-center gap-2">
                                 <span className={`w-2 h-2 rounded-full ${isExecuting ? 'bg-[#d7ff4f] animate-ping' : 'bg-[#d7ff4f]'}`} />
                                 <span className="font-bold text-white tracking-wide text-[10.5px]">
-                                  {isExecuting ? 'PARALLEL WORKFLOW ACTIVE' : '3-PHASE EXECUTION FLOW'}
+                                  {isExecuting ? 'WORKFORCE RUN IN PROGRESS' : '3-PHASE EXECUTION FLOW · INPUTS → WORK → DELIVERY'}
                                 </span>
                               </div>
                               <span className="text-zinc-600 hidden sm:inline">|</span>
@@ -3999,7 +5259,7 @@ export function MultiAgentSwarmView({
                                         {selectedPreset.id === 'swarm_media_creative' ? '7 Example Media Inputs' : selectedPreset.id === 'swarm_arbitrage' ? '2 Example Market Inputs' : '7 Example Registry Inputs'}
                                       </h4>
                                       <p className="text-[11px] text-zinc-400 mt-0.5">
-                                        {selectedPreset.id === 'swarm_media_creative' ? '7 providers supply data and media services' : selectedPreset.id === 'swarm_arbitrage' ? '2 sample feeds provide market-shaped inputs for the evaluation' : '7 example registry inputs cover entity, legal, and financial checks'}
+                                        {selectedPreset.id === 'swarm_media_creative' ? '7 providers supply data and media services, so the lead agent starts with the inputs the campaign needs' : selectedPreset.id === 'swarm_arbitrage' ? '2 sample feeds provide market-shaped inputs for the evaluation, so the report has comparable evidence' : '7 example registry inputs cover entity, legal, and financial checks, so the review is grounded in evidence'}
                                       </p>
                                     </div>
 
@@ -4035,7 +5295,7 @@ export function MultiAgentSwarmView({
                                                 <div className="min-w-0">
                                                   <span className="font-bold text-white block truncate text-[11.5px]">{sub.shortName || sub.role}</span>
                                                   <span className="text-[10px] text-zinc-400 block truncate">
-                                                    {isSettled ? (batchTxHash ? `✓ ${SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}` : `Sample output · ${sub.deliverablePreview}`) : sub.providerLabel}
+                                                    {isSettled ? `Sample output · ${SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}` : sub.providerLabel}
                                                   </span>
                                                 </div>
                                               </div>
@@ -4110,7 +5370,7 @@ export function MultiAgentSwarmView({
                                         {selectedPreset.id === 'swarm_media_creative' ? '5 Creative Workers' : selectedPreset.id === 'swarm_arbitrage' ? '1 Prediction Model' : '5 Risk & Analysis Workers'}
                                       </h4>
                                       <p className="text-[11px] text-zinc-400 mt-0.5">
-                                        {selectedPreset.id === 'swarm_media_creative' ? '5 workers turn inputs into copy, visuals, video and checks' : selectedPreset.id === 'swarm_arbitrage' ? '1 worker calculates momentum and risk estimate' : '5 workers analyze financial solvency, ownership and court records'}
+                                        {selectedPreset.id === 'swarm_media_creative' ? '5 workers turn inputs into copy, visuals, video and checks, so raw material becomes a usable campaign' : selectedPreset.id === 'swarm_arbitrage' ? '1 worker calculates momentum and risk estimate, so the lead agent can explain the market signal' : '5 workers analyze financial solvency, ownership and court records, so risk is checked from several angles'}
                                       </p>
                                     </div>
 
@@ -4146,7 +5406,7 @@ export function MultiAgentSwarmView({
                                                 <div className="min-w-0">
                                                   <span className="font-bold text-white block truncate text-[11.5px]">{sub.shortName || sub.role}</span>
                                                   <span className="text-[10px] text-zinc-400 block truncate">
-                                                    {isSettled ? (batchTxHash ? `✓ ${SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}` : `Sample output · ${sub.deliverablePreview}`) : sub.role}
+                                                    {isSettled ? `Sample output · ${SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}` : sub.role}
                                                   </span>
                                                 </div>
                                               </div>
@@ -4221,7 +5481,7 @@ export function MultiAgentSwarmView({
                                         {selectedPreset.id === 'swarm_media_creative' ? '7 Packaging Workers' : selectedPreset.id === 'swarm_arbitrage' ? '1 Execution Sandbox' : '7 Synthesis Specialists'}
                                       </h4>
                                       <p className="text-[11px] text-zinc-400 mt-0.5">
-                                        {selectedPreset.id === 'swarm_media_creative' ? '7 workers package, localize and prepare the final campaign' : selectedPreset.id === 'swarm_arbitrage' ? '1 sandbox worker simulates gas safety and checks execution risk; no trade is sent in this demo' : '7 workers compile clearance dossier and board sign-off'}
+                                        {selectedPreset.id === 'swarm_media_creative' ? '7 workers package, localize and prepare the final campaign, so the output is ready to review and publish' : selectedPreset.id === 'swarm_arbitrage' ? '1 sandbox worker simulates gas safety and checks execution risk; no trade is sent in this demo, so the decision can be inspected safely' : '7 workers compile clearance dossier and board sign-off, so the final recommendation is ready for a human decision'}
                                       </p>
                                     </div>
 
@@ -4257,7 +5517,7 @@ export function MultiAgentSwarmView({
                                                 <div className="min-w-0">
                                                   <span className="font-bold text-white block truncate text-[11.5px]">{sub.shortName || sub.role}</span>
                                                   <span className="text-[10px] text-zinc-400 block truncate">
-                                                    {isSettled ? (batchTxHash ? `✓ ${SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}` : `Sample output · ${sub.deliverablePreview}`) : sub.role}
+                                                    {isSettled ? `Sample output · ${SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}` : sub.role}
                                                   </span>
                                                 </div>
                                               </div>
@@ -4333,6 +5593,7 @@ export function MultiAgentSwarmView({
                             const isBusy = workerLiveStates[activeNode.id]?.status === 'REQUESTING' || workerLiveStates[activeNode.id]?.status === 'PAYING';
                             const NodeIcon = getSubcontractorIcon(activeNode.id);
                             const dependency = NODE_CAUSAL_DEPENDENCY[activeNode.id];
+                            const solActiveExplanation = isSolAnalysis ? SOL_NODE_EXPLANATIONS[activeNode.id] : undefined;
 
                             return (
                               <div className="rounded-2xl bg-white/[.03] backdrop-blur-md border border-white/[.08] p-5 shadow-sm relative overflow-hidden">
@@ -4381,7 +5642,7 @@ export function MultiAgentSwarmView({
                                       <span>Cryptographic Proof</span>
                                     </button>
                                     <a
-                                      href="https://explore.tempo.xyz/address/0x3c42E274FAdd8e371fB84f97203CC2F2125c8775"
+                                      href={`${TEMPO_EXPLORER_URL}/address/${TEMPO_VAULT_ADDRESS}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       title="View SynapseVault Smart Contract on Tempo Moderato (Chain ID 42431)"
@@ -4440,7 +5701,7 @@ export function MultiAgentSwarmView({
                                       <div className="flex items-center justify-between text-zinc-400">
                                         <span>On-Chain Tx:</span>
                                         <a
-                                          href={batchTxHash ? `https://explore.tempo.xyz/tx/${batchTxHash}` : undefined}
+                                          href={batchTxHash ? tempoTransactionUrl(batchTxHash) : undefined}
                                           target="_blank"
                                           rel="noopener noreferrer"
                                           title={batchTxHash ? 'Confirmed transaction on Tempo Moderato' : 'No confirmed transaction returned'}
@@ -4455,12 +5716,12 @@ export function MultiAgentSwarmView({
                                   {/* Panel 3: Live Output Produced */}
                                   <div className="p-3.5 rounded-xl bg-white/[.025] backdrop-blur-md border border-white/[.08] space-y-2">
                                     <span className="text-zinc-400 font-bold uppercase tracking-wider text-[10px] block flex items-center gap-1.5">
-                                      <CheckCircle2 className="w-3.5 h-3.5 text-[#d7ff4f]" />
+                                      <FileCheck className="w-3.5 h-3.5 text-[#d7ff4f]" />
                                       <span>3. Deliverable Output</span>
                                     </span>
                                     <p className="text-[#d7ff4f] text-[11.5px] font-sans font-medium leading-relaxed">
                                       {isSettled 
-                                        ? (batchTxHash ? (activeNode.taskOutput || activeNode.samplePayload || activeNode.deliverablePreview) : `Sample output · ${activeNode.deliverablePreview}`)
+                                        ? `Sample output · ${activeNode.taskOutput || activeNode.samplePayload || activeNode.deliverablePreview}`
                                         : isBusy
                                         ? (activeNode.workingAction || 'Generating output on provider cluster...')
                                         : (activeNode.deliverablePreview || 'Awaiting execution trigger...')}
@@ -4470,6 +5731,33 @@ export function MultiAgentSwarmView({
                                     </div>
                                   </div>
                                 </div>
+
+                                {solActiveExplanation && (
+                                  <div className="mt-4 rounded-xl border border-[#d7ff4f]/20 bg-[#d7ff4f]/[0.045] overflow-hidden">
+                                    <div className="px-3.5 py-2.5 border-b border-[#d7ff4f]/15 flex items-center justify-between gap-3">
+                                      <span className="text-[10px] font-mono font-bold uppercase tracking-[0.16em] text-[#d7ff4f]">What this step means</span>
+                                      <span className="text-[10px] text-zinc-400 font-sans">Purpose · value · handoff</span>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-px bg-white/[0.06]">
+                                      <div className="p-3 bg-[#11161a]/90">
+                                        <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-500 block mb-1">What it does</span>
+                                        <p className="text-[11px] text-zinc-200 font-sans leading-relaxed">{solActiveExplanation.purpose}</p>
+                                      </div>
+                                      <div className="p-3 bg-[#11161a]/90">
+                                        <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-500 block mb-1">Why it matters</span>
+                                        <p className="text-[11px] text-zinc-200 font-sans leading-relaxed">{solActiveExplanation.why}</p>
+                                      </div>
+                                      <div className="p-3 bg-[#11161a]/90">
+                                        <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-500 block mb-1">What comes back</span>
+                                        <p className="text-[11px] text-zinc-200 font-sans leading-relaxed">{solActiveExplanation.returns}</p>
+                                      </div>
+                                      <div className="p-3 bg-[#11161a]/90">
+                                        <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-500 block mb-1">Next handoff</span>
+                                        <p className="text-[11px] text-zinc-200 font-sans leading-relaxed">{solActiveExplanation.next}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
 
                                 {/* Footer hint */}
                                 <div className="mt-3.5 pt-2.5 border-t border-white/[0.06] flex items-center justify-between text-[10.5px] font-mono text-zinc-500">
@@ -4499,11 +5787,11 @@ export function MultiAgentSwarmView({
                               <h3 className="text-2xl font-extrabold text-white tracking-tight mt-1.5 flex items-center gap-3">
                                 <span>{selectedPreset.title}</span>
                                 <span className="text-xs px-2.5 py-1 rounded-full bg-[#d7ff4f]/10 text-[#d7ff4f] border border-[#d7ff4f]/30 font-mono font-medium">
-                                  {selectedPreset.subcontractors.length} Units
+                                  {displayPipelineUnitCount} {isSolAnalysis ? 'Pipeline Units' : 'Units'}
                                 </span>
                               </h3>
                               <p className="text-xs sm:text-[13px] text-zinc-400 mt-1 font-sans leading-relaxed">
-                                {selectedPreset.subcontractors.length} interconnected units. Strict causal handoffs. Every payment step stays within the hard {selectedPreset.budgetLimit || '$0.0500 cap'} policy cap.
+                                {isSolAnalysis ? 'One Lead Agent turns market inputs into one reviewable brief.' : `${selectedPreset.subcontractors.length} connected units turn the job into one deliverable.`} Every payment step stays within the hard {displayJobBudget} policy cap.
                               </p>
                             </div>
 
@@ -4514,7 +5802,7 @@ export function MultiAgentSwarmView({
                                 <span className="text-[#d7ff4f] font-bold text-sm">
                                   ${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)} USD
                                 </span>
-                                <span className="text-zinc-600 text-[11px]">/ {selectedPreset.budgetLimit || '$0.0500 cap'}</span>
+                                <span className="text-zinc-600 text-[11px]">/ {displayJobBudget}</span>
                               </div>
                               <button
                                 type="button"
@@ -4528,7 +5816,7 @@ export function MultiAgentSwarmView({
                                 <span>Inspect Live Proof</span>
                               </button>
                               <a
-                                href="https://explore.tempo.xyz/address/0x3c42E274FAdd8e371fB84f97203CC2F2125c8775"
+                                href={`${TEMPO_EXPLORER_URL}/address/${TEMPO_VAULT_ADDRESS}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 title="SynapseVault Smart Contract on Tempo Moderato (Chain ID 42431)"
@@ -4592,7 +5880,7 @@ export function MultiAgentSwarmView({
                                             </span>
                                           </div>
                                           <p className="text-[11.5px] text-zinc-400 font-sans mt-0.5">
-                                            Coordinates {selectedPreset.subcontractors.length - 1} units under the {selectedPreset.budgetLimit || '$0.0500 cap'} policy budget cap.
+                                            Coordinates {isSolAnalysis ? '5 pipeline units' : `${selectedPreset.subcontractors.length - 1} units`} under the {displayJobBudget} policy budget cap.
                                           </p>
                                           <div key={isLeadActive ? 'active' : isLeadSettled ? 'settled' : 'standby'} className="animate-glide text-[12px] text-zinc-300 mt-1 font-sans truncate">
                                             {isLeadActive ? (
@@ -4603,12 +5891,12 @@ export function MultiAgentSwarmView({
                                             ) : isLeadSettled ? (
                                               <span className="text-zinc-300 font-mono flex items-center gap-2">
                                                 <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-[#d7ff4f]" />
-                                <span>Mission directive executed • {selectedPreset.subcontractors.length === 20 ? '19' : selectedPreset.subcontractors.length - 1} payment steps completed{batchTxHash ? ' and confirmed on Tempo L1' : ' in the evaluation flow'}</span>
+                                                <span>Mission directive executed • {isSolAnalysis ? displayPaidStepCount : selectedPreset.subcontractors.length === 20 ? '19' : selectedPreset.subcontractors.length - 1} payment steps completed{batchTxHash ? ' and confirmed on Tempo L1' : ' in the evaluation flow'}</span>
                                               </span>
                                             ) : (
                                               <span className="text-zinc-500 font-mono flex items-center gap-2">
                                                 <Clock className="w-3.5 h-3.5 shrink-0 text-zinc-600" />
-                                                <span>Enforces {selectedPreset.budgetLimit || '$0.0500 cap'} • Coordinates {selectedPreset.subcontractors.length - 1} units • Zero subscriptions</span>
+                                                <span>Enforces {displayJobBudget} • Coordinates {isSolAnalysis ? '5 pipeline units' : `${selectedPreset.subcontractors.length - 1} units`} • Zero subscriptions</span>
                                               </span>
                                             )}
                                           </div>
@@ -4638,7 +5926,7 @@ export function MultiAgentSwarmView({
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10.5px]">
                                           <div className="p-2.5 rounded bg-black/40 border border-white/[0.04]">
                                             <span className="text-zinc-500 font-bold uppercase tracking-wider text-[9.5px] block">Policy Limit Enforcement</span>
-                                            <span className="text-zinc-200 font-medium">Hard Cap: {selectedPreset.budgetLimit || '$0.0500 cap'} • Max Nodes: {selectedPreset.subcontractors.length - 1} Units</span>
+                                            <span className="text-zinc-200 font-medium">Hard Cap: {displayJobBudget} • Max Nodes: {isSolAnalysis ? displayPipelineUnitCount : selectedPreset.subcontractors.length - 1} Units</span>
                                           </div>
                                           <div className="p-2.5 rounded bg-black/40 border border-white/[0.04]">
                                             <span className="text-zinc-500 font-bold uppercase tracking-wider text-[9.5px] block">Execution Pipeline Flow</span>
@@ -4666,7 +5954,7 @@ export function MultiAgentSwarmView({
                                   </span>
                                 </span>
                                 <span className="px-3 py-1 rounded-lg bg-white/5 border border-white/10 text-zinc-300 font-mono text-[11px] font-bold shadow-inner">
-                                  ${selectedPreset.subcontractors.filter(s => s.waveGroup === 1).reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD {batchTxHash ? 'Settled on Tempo L1' : 'planned in evaluation'}
+                                  ${selectedPreset.subcontractors.filter(s => s.waveGroup === 1).reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD {batchTxHash ? 'Settled on Tempo L1' : isLiveExecution ? 'live settlement pending' : 'planned in evaluation'}
                                 </span>
                               </div>
 
@@ -4738,7 +6026,7 @@ export function MultiAgentSwarmView({
                                               ) : isSettled ? (
                                                 <span className="text-zinc-300 font-mono flex items-center gap-2">
                                                   <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-[#d7ff4f]" />
-                                                  <span>{batchTxHash ? 'Delivered:' : 'Result preview:'} <strong className="text-[#d7ff4f] font-medium px-2 py-0.5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/25 text-[11px]">{SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</strong></span>
+                                                  <span>Sample output: <strong className="text-[#d7ff4f] font-medium px-2 py-0.5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/25 text-[11px]">{SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</strong></span>
                                                 </span>
                                               ) : (
                                                 <span className="text-zinc-500 font-mono flex items-center gap-2">
@@ -4798,7 +6086,7 @@ export function MultiAgentSwarmView({
                                                 ) : isSettled ? (
                                                   <span className="text-zinc-200">{batchTxHash ? 'Settled' : 'Planned'} • ${sub.costPathUsd.toFixed(4)} USD</span>
                                                 ) : (
-                                                  <span className="text-zinc-500">Standby Channel (Cap: {selectedPreset.budgetLimit || '$0.0500 cap'})</span>
+                                                  <span className="text-zinc-500">Standby Channel (Cap: {displayJobBudget})</span>
                                                 )}
                                               </span>
                                             </div>
@@ -4806,7 +6094,7 @@ export function MultiAgentSwarmView({
 
                                           {isSettled && (
                                             <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06] text-zinc-300 text-[10.5px] flex items-center justify-between animate-glide">
-                                              <div className="truncate"><strong className="text-white font-medium">{batchTxHash ? 'Output delivered:' : 'Evaluation output:'}</strong> <span className="text-zinc-200 ml-1">{sub.taskOutput || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</span></div>
+                                              <div className="truncate"><strong className="text-white font-medium">Sample output:</strong> <span className="text-zinc-200 ml-1">{sub.taskOutput || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</span></div>
                                               <span className="text-[9.5px] font-mono text-zinc-400 shrink-0 ml-2">➔ Handed to Stage 03</span>
                                             </div>
                                           )}
@@ -4832,7 +6120,7 @@ export function MultiAgentSwarmView({
                                   </span>
                                 </span>
                                 <span className="px-3 py-1 rounded-lg bg-white/5 border border-white/10 text-zinc-300 font-mono text-[11px] font-bold shadow-inner">
-                                  ${selectedPreset.subcontractors.filter(s => s.waveGroup === 2).reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD {batchTxHash ? 'Settled on Tempo L1' : 'planned in evaluation'}
+                                  ${selectedPreset.subcontractors.filter(s => s.waveGroup === 2).reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD {batchTxHash ? 'Settled on Tempo L1' : isLiveExecution ? 'live settlement pending' : 'planned in evaluation'}
                                 </span>
                               </div>
 
@@ -4898,7 +6186,7 @@ export function MultiAgentSwarmView({
                                               ) : isSettled ? (
                                                 <span className="text-zinc-300 font-mono flex items-center gap-2">
                                                   <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
-                                                  <span>{batchTxHash ? 'Delivered:' : 'Result preview:'} <strong className="text-[#d7ff4f] font-medium px-2 py-0.5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/25 text-[11px]">{SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</strong></span>
+                                                  <span>Sample output: <strong className="text-[#d7ff4f] font-medium px-2 py-0.5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/25 text-[11px]">{SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</strong></span>
                                                 </span>
                                               ) : (
                                                 <span className="text-zinc-500 font-mono flex items-center gap-2">
@@ -4954,7 +6242,7 @@ export function MultiAgentSwarmView({
                                                 ) : isSettled ? (
                                                   <span className="text-zinc-200">{batchTxHash ? 'Channel settled' : 'Payment planned'} • ${sub.costPathUsd.toFixed(4)} USD{batchTxHash ? ' verified' : ''}</span>
                                                 ) : (
-                                                  <span className="text-zinc-500">Standby Channel (Cap: {selectedPreset.budgetLimit || '$0.0500 cap'})</span>
+                                                  <span className="text-zinc-500">Standby Channel (Cap: {displayJobBudget})</span>
                                                 )}
                                               </span>
                                             </div>
@@ -4962,7 +6250,7 @@ export function MultiAgentSwarmView({
 
                                           {isSettled && (
                                             <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06] text-zinc-300 text-[10.5px] flex items-center justify-between animate-glide">
-                                              <div className="truncate"><strong className="text-white font-medium">{batchTxHash ? 'Output delivered:' : 'Evaluation output:'}</strong> <span className="text-zinc-200 ml-1">{sub.taskOutput || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</span></div>
+                                              <div className="truncate"><strong className="text-white font-medium">Sample output:</strong> <span className="text-zinc-200 ml-1">{sub.taskOutput || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</span></div>
                                               <span className="text-[9.5px] font-mono text-zinc-400 shrink-0 ml-2">➔ Handed to Stage 04</span>
                                             </div>
                                           )}
@@ -4988,7 +6276,7 @@ export function MultiAgentSwarmView({
                                   </span>
                                 </span>
                                 <span className="px-3 py-1 rounded-lg bg-[#d7ff4f]/10 border border-[#d7ff4f]/25 text-[#d7ff4f] font-mono text-[11px] font-bold shadow-inner">
-                                  ${selectedPreset.subcontractors.filter(s => s.waveGroup === 3).reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD {batchTxHash ? 'Settled on Tempo L1' : 'planned in evaluation'}
+                                  ${selectedPreset.subcontractors.filter(s => s.waveGroup === 3).reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD {batchTxHash ? 'Settled on Tempo L1' : isLiveExecution ? 'live settlement pending' : 'planned in evaluation'}
                                 </span>
                               </div>
 
@@ -5062,7 +6350,7 @@ export function MultiAgentSwarmView({
                                               ) : isSettled ? (
                                                 <span className="text-zinc-300 font-mono flex items-center gap-2">
                                                   <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-[#d7ff4f]" />
-                                                  <span>{batchTxHash ? 'Delivered:' : 'Result preview:'} <strong className="text-[#d7ff4f] font-medium px-2 py-0.5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/25 text-[11px]">{SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</strong></span>
+                                                  <span>Sample output: <strong className="text-[#d7ff4f] font-medium px-2 py-0.5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/25 text-[11px]">{SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</strong></span>
                                                 </span>
                                               ) : (
                                                 <span className="text-zinc-500 font-mono flex items-center gap-2">
@@ -5122,7 +6410,7 @@ export function MultiAgentSwarmView({
                                                 ) : isSettled ? (
                                               <span className="text-zinc-200">{batchTxHash ? 'Settled' : 'Planned'} • ${sub.costPathUsd.toFixed(4)} USD{batchTxHash ? ' verified' : ''}</span>
                                                 ) : (
-                                                  <span className="text-zinc-500">Standby Channel (Cap: {selectedPreset.budgetLimit || '$0.0500 cap'})</span>
+                                                  <span className="text-zinc-500">Standby Channel (Cap: {displayJobBudget})</span>
                                                 )}
                                               </span>
                                             </div>
@@ -5130,7 +6418,7 @@ export function MultiAgentSwarmView({
 
                                           {isSettled && (
                                             <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06] text-zinc-300 text-[10.5px] flex items-center justify-between animate-glide">
-                                              <div className="truncate"><strong className="text-white font-medium">{batchTxHash ? 'Output delivered:' : 'Evaluation output:'}</strong> <span className="text-zinc-200 ml-1">{sub.taskOutput || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</span></div>
+                                              <div className="truncate"><strong className="text-white font-medium">Sample output:</strong> <span className="text-zinc-200 ml-1">{sub.taskOutput || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview}</span></div>
                                               <span className="text-[9.5px] font-mono text-zinc-400 shrink-0 ml-2">➔ Final Package Locked</span>
                                             </div>
                                           )}
@@ -5171,15 +6459,15 @@ export function MultiAgentSwarmView({
                                       spentUsd: 0.0245,
                                       deliverables: 20,
                                       status: 'COMPLETED_ON_TEMPO_L1',
-                                      network: 'Tempo Moderato (Chain 42431)',
-                                      contractVault: '0x3c42E274FAdd8e371fB84f97203CC2F2125c8775',
+                                      network: `Tempo Moderato (Chain ${TEMPO_CHAIN_ID})`,
+                                      contractVault: TEMPO_VAULT_ADDRESS,
                                     }, null, 2),
                                     'pkg_download'
                                   );
                                 }}
                                 className="px-4 py-2 rounded-xl bg-[#d7ff4f] hover:bg-[#cbf540] text-[#08090c] font-bold text-xs font-mono transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
                               >
-                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <Download className="w-3.5 h-3.5" />
                                 <span>{copiedKey === 'pkg_download' ? '✓ Copied Package ZIP' : 'Download Package (.zip)'}</span>
                               </button>
 
@@ -5216,10 +6504,10 @@ export function MultiAgentSwarmView({
                           <div className="p-3.5 rounded-xl luxury-card border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-mono">
                             <div className="flex items-center gap-2.5 text-zinc-300">
                               <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f]" />
-                              <span><strong className="text-white">Causality Rule:</strong> Money moves only when an agent needs an approved resource. The cap is checked before each step; a live wallet is required for an on-chain receipt.</span>
+                              <span><strong className="text-white">Causality Rule:</strong> Money moves only when an agent needs an approved resource. The cap is checked before each step; live settlement confirms the on-chain receipt, so every payment has a clear reason and boundary.</span>
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
-                              <span className="text-zinc-400">{batchTxHash ? 'Total spent' : 'Planned cost'}: <strong className="text-white font-bold">${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)}</strong> / {selectedPreset.budgetLimit || '$0.0500 USD'}</span>
+                              <span className="text-zinc-400">{batchTxHash ? 'Total spent' : 'Planned cost'}: <strong className="text-white font-bold">${(isSolAnalysis ? effectivePlannedCostUsd : Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0)).toFixed(4)}</strong> / {displayJobBudget}</span>
                             </div>
                           </div>
 
@@ -5255,7 +6543,7 @@ export function MultiAgentSwarmView({
                                   {selectedPreset.id === 'swarm_media_creative' ? 'CAMPAIGN DIRECTOR' : selectedPreset.id === 'swarm_arbitrage' ? 'LEAD MARKET REVIEWER' : 'LEAD AGENT'}
                                 </span>
                                 <span className="text-[11px] font-mono text-zinc-300">
-                                  Budget: <strong className="text-[#d7ff4f]">{selectedPreset.budgetLimit || '$0.0500 policy cap'}</strong>
+                                  Budget: <strong className="text-[#d7ff4f]">{displayJobBudget}</strong>
                                 </span>
                               </div>
                               <div className="flex items-center justify-center gap-3 py-1">
@@ -5274,10 +6562,10 @@ export function MultiAgentSwarmView({
                                   </h3>
                                   <p className="text-xs text-zinc-300 font-sans mt-0.5">
                                     {selectedPreset.id === 'swarm_media_creative'
-                                      ? 'Coordinates 12 workers and 7 providers, enforces $0.050 budget cap, and directs ad campaign'
+                                      ? `Coordinates 12 workers and 7 providers, enforces ${displayJobBudget} budget cap, and directs ad campaign`
                                       : selectedPreset.id === 'swarm_arbitrage'
                                       ? 'Reviews 2 sample market inputs, models spread risk, and prepares a comparison report'
-                                      : 'Coordinates 19 units, enforces the $0.030 cap, and prepares a supplier review'}
+                                      : `Coordinates 19 units, enforces the ${displayJobBudget} cap, and prepares a supplier review`}
                                   </p>
                                   <div className="flex items-center gap-1.5 text-[11px] font-mono mt-2 flex-wrap">
                                     {selectedPreset.id === 'swarm_media_creative' ? (
@@ -5319,11 +6607,11 @@ export function MultiAgentSwarmView({
                                       ? (selectedPreset.id === 'swarm_media_creative' ? '✓ Campaign Ready (Brand & Policy Approved)' : selectedPreset.id === 'swarm_arbitrage' ? '✓ Market Report Ready' : '✓ Supplier Review Ready (Evaluation)')
                                       : '✓ Evaluation result ready')
                                     : isLeadActive 
-                                    ? '⚡ Coordinating Workforce...' 
+                                    ? 'Coordinating Workforce...' 
                                     : 'Standing by — Ready to Run'}
                                 </strong></span>
                                 <span className="text-[10px] text-zinc-400">
-                                  {selectedPreset.subcontractors.length === 20 ? '12 Workers · 7 Providers Active' : `${selectedPreset.subcontractors.length - 1} Units Active`}
+                                  {selectedPreset.subcontractors.length === 20 ? '12 Workers · 7 Providers Active' : isSolAnalysis ? '1 Lead · 5 Pipeline Units' : `${selectedPreset.subcontractors.length - 1} Units Active`}
                                 </span>
                               </div>
                             </div>
@@ -5422,8 +6710,8 @@ export function MultiAgentSwarmView({
                                        {/* Familiar display title: source name for providers, specialist role for workers */}
                                        const displayName = isProvider ? (sub.shortName || sub.role) : sub.role;
                                        const rawResult = sub.verifiedBadge || SUBCONTRACTOR_RESULT_PILLS[sub.id] || sub.deliverablePreview;
-                                       const displaySecondary = isSettled
-                                         ? (rawResult.startsWith('✓') ? rawResult : `✓ ${rawResult}`)
+                                      const displaySecondary = isSettled
+                                        ? `Sample output · ${rawResult.replace(/^✓\s*/, '')}`
                                          : isBusy
                                          ? (liveState?.displayNote || sub.workingAction)
                                          : (NODE_HUMAN_JOBS[sub.id] || sub.deliverablePreview);
@@ -5518,7 +6806,7 @@ export function MultiAgentSwarmView({
                                   <div className="pt-2.5 mt-3 border-t border-white/[0.06] flex items-center justify-between text-[10px] font-mono text-zinc-400">
                                     <span>{stageSubs.length} Autonomous Nodes</span>
                                     <span className={allStageSettled ? 'text-emerald-400 font-bold' : isStageActive ? 'text-[#d7ff4f] font-bold animate-pulse' : 'text-zinc-500'}>
-                                      {allStageSettled ? (batchTxHash ? '✓ All Delivered' : '✓ Results prepared') : isStageActive ? '⚡ In Flight' : 'Standby'}
+                                      {allStageSettled ? (batchTxHash ? '✓ All Delivered' : '✓ Results prepared') : isStageActive ? 'In Flight' : 'Standby'}
                                     </span>
                                   </div>
                                 </div>
@@ -5568,13 +6856,13 @@ export function MultiAgentSwarmView({
                                   </span>
                                 </div>
                                 <p className="text-[11px] text-zinc-300 font-sans mt-0.5">
-                                  {selectedPreset.id === 'swarm_media_creative' ? 'Coordinates 12 workers and 7 providers, enforces $0.050 budget cap, and delivers full ad package' : selectedPreset.id === 'swarm_arbitrage' ? 'Coordinates 4 units and 2 sample feeds, enforces the $0.010 cap, and prepares a market report' : 'Plans mission, coordinates 19 units, manages $0.030 budget, and approves final contract'}
+                                  {selectedPreset.id === 'swarm_media_creative' ? `Coordinates 12 workers and 7 providers, enforces ${displayJobBudget} budget cap, and delivers full ad package so the team returns one launch-ready package` : selectedPreset.id === 'swarm_arbitrage' ? `Coordinates 4 units and 2 sample feeds, enforces the ${displayJobBudget} cap, and prepares a market report so the decision is based on checked inputs` : `Plans mission, coordinates 19 units, manages ${displayJobBudget} budget, and approves final contract so a human can review one coherent recommendation`}
                                 </p>
                               </div>
                             </div>
                             <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
                               <span className="px-2.5 py-1 rounded bg-black/50 border border-white/10 text-zinc-300 text-[11px] font-mono">
-                                {batchTxHash ? 'Spent' : 'Planned'}: <strong className="text-[#d7ff4f]">${plannedCostUsd.toFixed(4)} USD</strong> / {selectedPreset.budgetLimit || '$0.0500 policy cap'}
+                                {batchTxHash ? 'Spent' : 'Planned'}: <strong className="text-[#d7ff4f]">${plannedCostUsd.toFixed(4)} USD</strong> / {displayJobBudget}
                               </span>
                               <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
                                 isLeadSettled
@@ -5583,7 +6871,7 @@ export function MultiAgentSwarmView({
                                   ? 'bg-[#d7ff4f]/20 text-[#d7ff4f] border border-[#d7ff4f]/40 animate-pulse'
                                   : 'bg-white/5 text-zinc-400 border border-white/10'
                               }`}>
-                                {isLeadSettled ? (batchTxHash ? (selectedPreset.id === 'swarm_media_creative' ? '✓ Campaign Ready to Launch' : selectedPreset.id === 'swarm_arbitrage' ? '✓ Market Report Ready' : '✓ Supplier Review Ready (94/100)') : '✓ Evaluation result ready') : isLeadActive ? '⚡ Coordinating Workforce...' : 'Ready to Direct'}
+                                {isLeadSettled ? (batchTxHash ? (selectedPreset.id === 'swarm_media_creative' ? '✓ Campaign Ready to Launch' : selectedPreset.id === 'swarm_arbitrage' ? '✓ Market Report Ready' : '✓ Supplier Review Ready (example)') : '✓ Evaluation result ready') : isLeadActive ? 'Coordinating Workforce...' : 'Ready to Direct'}
                               </span>
                             </div>
                           </div>
@@ -5591,7 +6879,7 @@ export function MultiAgentSwarmView({
 
                         <details className="group mt-4 rounded-2xl border border-white/[.08] bg-white/[.02]">
                           <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between gap-3 text-xs font-mono text-zinc-300 hover:text-white transition">
-                            <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-zinc-500" /><strong>View 3 phases</strong><span className="text-zinc-500">{selectedPreset.subcontractors.length} units</span></span>
+                            <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-zinc-500" /><strong>View 3 phases</strong><span className="text-zinc-500">{displayPipelineUnitCount} {isSolAnalysis ? 'pipeline units' : 'units'}</span></span>
                             <ChevronDown className="w-4 h-4 text-zinc-400 transition-transform group-open:rotate-180" />
                           </summary>
                           <div className="p-3 sm:p-4 border-t border-white/[.06]">
@@ -5607,7 +6895,7 @@ export function MultiAgentSwarmView({
                         {/* Header Climax */}
                         <div className="space-y-3">
                           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 text-[#d7ff4f] text-[10px] font-mono font-bold uppercase tracking-widest">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <FileCheck className="w-3.5 h-3.5" />
                             <span>{batchTxHash ? 'Mission complete · payments confirmed' : 'Mission flow complete · payment trace pending'}</span>
                           </div>
                           
@@ -5621,10 +6909,10 @@ export function MultiAgentSwarmView({
                           
                           <p className="text-xs text-zinc-400 font-mono max-w-xl mx-auto leading-relaxed">
                             {selectedPreset.id === 'swarm_media_creative'
-                              ? `1 Lead Agent coordinated 12 workers and 7 providers. Campaign flow completed in ${actualExecutionTimeSec}s for $0.0245 under the $0.0500 budget.`
+                              ? `1 Lead Agent coordinated 12 workers and 7 providers. Campaign flow completed in ${actualExecutionTimeSec}s for $0.0245 under the $0.0500 budget, leaving one launch-ready package to review.`
                               : selectedPreset.id === 'swarm_arbitrage'
-                              ? `1 Lead Agent coordinated 2 workers and sample market inputs. Market analysis flow completed in ${actualExecutionTimeSec}s for $0.0060 under $0.0100 budget.`
-                              : `1 Lead Agent coordinated 12 workers and 7 example registry inputs. Clearance flow completed in ${actualExecutionTimeSec}s for $0.0270 under $0.0300 budget.`}
+                              ? `1 Lead Agent coordinated 2 workers and sample market inputs. Market analysis flow completed in ${actualExecutionTimeSec}s for $0.0060 under $0.0100 budget, so the report can be checked before action.`
+                              : `1 Lead Agent coordinated 12 workers and 7 example registry inputs. Clearance flow completed in ${actualExecutionTimeSec}s for $0.0270 under $0.0300 budget, so the final recommendation is ready for review.`}
                           </p>
                         </div>
 
@@ -5646,10 +6934,10 @@ export function MultiAgentSwarmView({
                           <div className="p-4 rounded-xl bg-white/[.035] border border-white/10 space-y-1">
                             <span className="text-[10px] uppercase text-zinc-400 font-bold block">WORKFORCE</span>
                             <span className="text-2xl font-black text-white block">
-                              {selectedPreset.subcontractors.length}
+                              {displayPipelineUnitCount}
                             </span>
                             <span className="text-[10.5px] text-zinc-400 block truncate">
-                              {selectedPreset.subcontractors.length === 20 ? '1 Lead · 12 Workers · 7 Providers' : `${selectedPreset.subcontractors.length} Participants`}
+                              {selectedPreset.subcontractors.length === 20 ? '1 Lead · 12 Workers · 7 Providers' : isSolAnalysis ? '1 Lead Agent · 5 pipeline units' : `${selectedPreset.subcontractors.length} Participants`}
                             </span>
                           </div>
                           <div className="p-4 rounded-xl bg-white/[.035] border border-white/10 space-y-1">
@@ -5669,7 +6957,7 @@ export function MultiAgentSwarmView({
                               <span className="text-xs font-normal text-zinc-400 ml-1.5 font-mono">remaining</span>
                             </span>
                             <span className="text-[10.5px] text-zinc-400 block truncate">
-                              ${plannedCostUsd.toFixed(4)} planned ({plannedBudgetPercent}% of {selectedPreset.budgetLimit || '$0.0500'} cap)
+                              ${plannedCostUsd.toFixed(4)} planned ({plannedBudgetPercent}% of {displayJobBudget} cap)
                             </span>
                           </div>
                         </div>
@@ -5686,7 +6974,7 @@ export function MultiAgentSwarmView({
                                     </span>
                                     <span className="text-xs text-zinc-400 font-mono flex items-center gap-1.5">
                                       <span className={`w-1.5 h-1.5 rounded-full ${batchTxHash ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'}`} />
-                                      {batchTxHash ? 'Receipt ready' : 'Evaluation result · no live payment'}
+                                      {batchTxHash ? 'Receipt ready' : isLiveExecution ? 'Awaiting live settlement' : 'Evaluation result · no live payment'}
                                     </span>
                                   </div>
                                   <h3 className="text-base sm:text-lg font-black text-white tracking-tight mt-1 flex items-center gap-2">
@@ -5699,7 +6987,7 @@ export function MultiAgentSwarmView({
                               </div>
 
                               {batchTxHash && (
-                                <a href={`https://explore.tempo.xyz/tx/${batchTxHash}`} target="_blank" rel="noopener noreferrer" className="px-3.5 py-2 rounded-xl bg-[#d7ff4f]/15 hover:bg-[#d7ff4f]/25 border border-[#d7ff4f]/35 text-[#d7ff4f] font-bold text-xs transition flex items-center gap-1.5 active:scale-95">
+                                <a href={tempoTransactionUrl(batchTxHash)} target="_blank" rel="noopener noreferrer" className="px-3.5 py-2 rounded-xl bg-[#d7ff4f]/15 hover:bg-[#d7ff4f]/25 border border-[#d7ff4f]/35 text-[#d7ff4f] font-bold text-xs transition flex items-center gap-1.5 active:scale-95">
                                   <span>View receipt</span>
                                   <ExternalLink className="w-3.5 h-3.5" />
                                 </a>
@@ -5711,22 +6999,22 @@ export function MultiAgentSwarmView({
                               {batchTxHash ? (
                                 <>The approved work steps were paid and a receipt is ready to review.</>
                               ) : (
-                                <>The evaluation plan stayed within the budget. No live payment was sent.</>
+                                <>{isLiveExecution ? 'The job stayed within the cap, but no confirmed Tempo L1 receipt was returned.' : 'The evaluation plan stayed within the budget. No live payment was sent.'}</>
                               )}
                             </p>
 
                             <div className="px-3.5 py-3 rounded-xl bg-white/[.035] border border-white/10 text-xs text-zinc-300">
                               <span className="text-zinc-500 uppercase text-[10px] font-bold mr-2">Status</span>
-                              <strong className={batchTxHash ? 'text-emerald-400' : 'text-zinc-300'}>{batchTxHash ? 'Payment confirmed' : 'Evaluation only · no live payment'}</strong>
+                                    <strong className={batchTxHash ? 'text-emerald-400' : isLiveExecution ? 'text-amber-300' : 'text-zinc-300'}>{batchTxHash ? 'Payment confirmed' : isLiveExecution ? 'No confirmed receipt returned' : 'Evaluation only · no live payment'}</strong>
                             </div>
 
                             {/* Optional technical detail: keep the main result readable first. */}
                             <details className="group pt-2">
-                              <summary className="list-none cursor-pointer flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[.025] px-3.5 py-3 text-xs font-mono text-zinc-300 hover:border-[#d7ff4f]/30 transition">
+                              <summary aria-label="Open payment proof details" className="list-none cursor-pointer flex items-center justify-between gap-3 rounded-xl border border-[#d7ff4f]/30 bg-[#d7ff4f]/[.055] px-3.5 py-3 text-xs font-mono text-white hover:border-[#d7ff4f]/70 hover:bg-[#d7ff4f]/[.09] transition">
                                 <span className="flex items-center gap-2">
                                   <Coins className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                                  <span className="font-bold">View payment steps ({selectedPreset.subcontractors.filter(s => s.costPathUsd > 0).length})</span>
-                                  <span className="text-zinc-500 hidden sm:inline">Optional technical details</span>
+                                  <span className="font-bold">Payment proof · {selectedPreset.subcontractors.filter(s => s.costPathUsd > 0).length} records</span>
+                                  <span className="text-zinc-400 hidden sm:inline">Click to expand</span>
                                 </span>
                                 <ChevronDown className="w-4 h-4 text-zinc-400 transition-transform group-open:rotate-180" />
                               </summary>
@@ -5816,7 +7104,7 @@ export function MultiAgentSwarmView({
                                                ${sub.costPathUsd.toFixed(4)} USD
                                              </span>
                                              <span className="text-zinc-400 text-[10px] flex items-center justify-end gap-1">
-                                               <CheckCircle2 className="w-3 h-3 text-[#d7ff4f]" />
+                                               <ShieldCheck className="w-3 h-3 text-[#d7ff4f]" />
                                                <span>Verification follows confirmed trace</span>
                                              </span>
                                            </div>
@@ -5845,18 +7133,18 @@ export function MultiAgentSwarmView({
 
                         {/* What the workforce delivered */}
                         <details className="group pt-2 max-w-4xl mx-auto text-left">
-                          <summary className="list-none cursor-pointer flex items-center justify-between gap-3 py-2 text-[10px] font-mono font-bold uppercase tracking-widest text-[#d7ff4f] hover:text-white transition">
-                            <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f]" />Key outputs <span className="text-zinc-500 font-normal tracking-normal normal-case">(optional detail)</span></span>
+                          <summary aria-label="Open key outputs" className="list-none cursor-pointer flex items-center justify-between gap-3 rounded-xl border border-[#d7ff4f]/30 bg-[#d7ff4f]/[.04] px-4 py-3 text-[11px] font-mono font-bold uppercase tracking-widest text-[#d7ff4f] hover:border-[#d7ff4f]/70 hover:bg-[#d7ff4f]/[.08] transition">
+                            <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-[#d7ff4f]" />Key outputs <span className="text-zinc-300 font-semibold tracking-normal normal-case">Click to expand results</span></span>
                             <ChevronDown className="w-4 h-4 text-zinc-400 transition-transform group-open:rotate-180" />
                           </summary>
-                        <div className="pt-2 space-y-3">
+                        <div className="mt-2 rounded-xl border border-white/10 bg-white/[.025] p-3 sm:p-4 space-y-3">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#d7ff4f] flex items-center gap-1.5">
                               <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f]" />
                               What the workforce delivered
                             </span>
                             <span className="text-[10px] font-mono text-zinc-400">
-                              {selectedPreset.subcontractors.length === 20 ? '19 payment steps' : `${selectedPreset.subcontractors.length - 1} payment steps`} {batchTxHash ? 'confirmed on Tempo L1' : 'in evaluation flow'}
+                              {selectedPreset.subcontractors.length === 20 ? '19 payment steps' : isSolAnalysis ? `${displayPaidStepCount} paid step${displayPaidStepCount === 1 ? '' : 's'}` : `${selectedPreset.subcontractors.length - 1} payment steps`} {batchTxHash ? 'confirmed on Tempo L1' : 'in evaluation flow'}
                             </span>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 text-xs font-mono [&_.bg-black\/50]:!bg-[#1f252b]/70 [&>*:nth-child(n+4)]:opacity-65">
@@ -5933,7 +7221,7 @@ export function MultiAgentSwarmView({
                                     </div>
                                     <h5 className="text-white font-bold block text-[11px] mt-1">Volatility Skew</h5>
                                   </div>
-                                  <span className="text-[9.5px] text-zinc-400 font-sans block border-t border-white/5 pt-1.5">Gamma neutral (+0.84)</span>
+                                    <span className="text-[9.5px] text-zinc-400 font-sans block border-t border-white/5 pt-1.5">Example gamma neutral (+0.84)</span>
                                 </div>
                                 <div className="p-3.5 rounded-xl bg-black/50 border border-white/10 space-y-2 flex flex-col justify-between">
                                   <div>
@@ -5941,7 +7229,7 @@ export function MultiAgentSwarmView({
                                       <span className="text-[10px] text-[#d7ff4f] font-mono font-bold">03</span>
                                       <span className="text-[9px] text-zinc-400 uppercase font-mono font-semibold">MODEL</span>
                                     </div>
-                                    <h5 className="text-white font-bold block text-[11px] mt-1">Momentum Predictor</h5>
+                                    <h5 className="text-white font-bold block text-[11px] mt-1">Example momentum</h5>
                                   </div>
                                   <span className="text-[9.5px] text-zinc-400 font-sans block border-t border-white/5 pt-1.5">Edge: +1.42% net profit</span>
                                 </div>
@@ -5963,7 +7251,7 @@ export function MultiAgentSwarmView({
                                     </div>
                                     <h5 className="text-white font-bold block text-[11px] mt-1">Market Comparison</h5>
                                   </div>
-                                  <span className="text-[9.5px] text-zinc-400 font-sans block border-t border-white/5 pt-1.5">{batchTxHash ? 'Settled in 14ms (&lt;$0.00002 gas)' : 'No network fee in evaluation'}</span>
+                                  <span className="text-[9.5px] text-zinc-400 font-sans block border-t border-white/5 pt-1.5">{batchTxHash ? 'Settled in 14ms (&lt;$0.00002 selected TIP-20 fee)' : 'No network fee in evaluation'}</span>
                                 </div>
                               </>
                             ) : (
@@ -6004,7 +7292,7 @@ export function MultiAgentSwarmView({
                                       <span className="text-[10px] text-[#d7ff4f] font-mono font-bold">04</span>
                                       <span className="text-[9px] text-zinc-400 uppercase font-mono font-semibold">SOLVENCY</span>
                                     </div>
-                                    <h5 className="text-white font-bold block text-[11px] mt-1">Score: 4.12 (Safe)</h5>
+                                    <h5 className="text-white font-bold block text-[11px] mt-1">Example score: 4.12</h5>
                                   </div>
                                   <span className="text-[9.5px] text-zinc-400 font-sans block border-t border-white/5 pt-1.5">10k Monte Carlo test</span>
                                 </div>
@@ -6014,7 +7302,7 @@ export function MultiAgentSwarmView({
                                       <span className="text-[10px] text-[#d7ff4f] font-mono font-bold">05</span>
                                       <span className="text-[9px] text-zinc-400 uppercase font-mono font-semibold">DECISION</span>
                                     </div>
-                                    <h5 className="text-white font-bold block text-[11px] mt-1">APPROVED (94/100)</h5>
+                                    <h5 className="text-white font-bold block text-[11px] mt-1">Example result: 94/100</h5>
                                   </div>
                                   <span className="text-[9.5px] text-zinc-400 font-sans block border-t border-white/5 pt-1.5">Prepare contract review</span>
                                 </div>
@@ -6051,8 +7339,8 @@ export function MultiAgentSwarmView({
                                 `Target Product: Next-Gen SaaS Autonomous AI Suite`,
                                 `Brand & Quality Review: Approved (Brand & Policy Compliant)`,
                                 `Recommendation: LAUNCH MULTI-PLATFORM AD CAMPAIGN`,
-                                `Total Spend: $0.0245 USD (Budget Cap: $0.0500)`,
-                                `Unused Budget: $0.0255 USD`,
+                                `Total Spend: $0.0245 USD (Budget Cap: ${displayJobBudget})`,
+                                `Unused Budget: $${Math.max(0, budgetCapUsd - 0.0245).toFixed(4)} USD`,
                                 `Deliverables: 15s Storyboard Spec, Visuals, 5-Lang Scripts, 3 Thumbnails`,
                                 `Workforce: 1 Lead Agent · 12 Workers · 7 Providers`,
                                 `Human Role: Strategy Directive & Hardware Spend Cap Enforced`,
@@ -6067,10 +7355,27 @@ export function MultiAgentSwarmView({
                                 `Observed Sample Spread: +1.42% (evaluation input)`,
                                 `Planned payment step: $0.0060 USD (no trade submitted)`,
                                 `Recommendation: REVIEW SAMPLE SPREAD; NO TRADE SENT`,
-                                `Total Spend: $0.0060 USD (Budget Cap: $0.0100)`,
-                                `Unused Budget: $0.0040 USD`,
+                                `Total Spend: $0.0060 USD (Budget Cap: ${displayJobBudget})`,
+                                `Unused Budget: $${Math.max(0, budgetCapUsd - 0.0060).toFixed(4)} USD`,
                                 `Workforce: 1 Lead Agent · 2 Workers · 2 Market Feeds`,
                                 `Human Role: Strategy Directive & Hard Spend Cap Enforced`,
+                                `Transaction ID: ${batchTxHash || 'No batch transaction returned'}`,
+                                "======================================================="
+                              ].join("\n") : isSolAnalysis ? [
+                                "=======================================================",
+                                "SYNAPSE402 SOL/USDT MARKET BRIEF",
+                                "=======================================================",
+                                `Task: ${customDirective || selectedPreset.title}`,
+                                "Public weekly candles: FREE market input (clearly labelled live/sample)",
+                                "Local analysis: FREE support, resistance, trend and volatility calculations",
+                                solPaidStepSkippedForBudget ? `Amberdata market depth: SKIPPED — $0.0010 exceeds the ${displayJobBudget} job maximum` : "Amberdata market depth: $0.0010 paid demo step",
+                                "CoinGlass liquidation heatmap: NEEDED BUT UNAVAILABLE — CoinGlass has no Synapse402 SDK route; request revenue: $0",
+                                "If CoinGlass added the Synapse402 SDK: the agent could buy only this liquidation query (example $0.002), CoinGlass could earn per request, and a full API subscription would not be required for this job.",
+                                `Total Spend: $${effectivePlannedCostUsd.toFixed(4)} USD (Budget Cap: ${displayJobBudget})`,
+                                `Unused Budget: $${Math.max(0, budgetCapUsd - effectivePlannedCostUsd).toFixed(4)} USD`,
+                                `Market: ${solMarketSnapshot?.analysis?.direction || 'pending'} · Support: $${solMarketSnapshot?.analysis?.support?.toFixed?.(2) || '—'} · Resistance: $${solMarketSnapshot?.analysis?.resistance?.toFixed?.(2) || '—'}`,
+                                `Conclusion: ${solMarketSnapshot?.analysis?.direction === 'uptrend' ? 'Setup worth watching' : 'No clear setup yet'}`,
+                                "Result: One SOL/USDT market brief for human review; no trade is submitted",
                                 `Transaction ID: ${batchTxHash || 'No batch transaction returned'}`,
                                 "======================================================="
                               ].join("\n") : [
@@ -6081,8 +7386,8 @@ export function MultiAgentSwarmView({
                                 `Target Supplier: Apex Foundry Ltd (Active Commercial Entity)`,
                                 `Supplier Risk Assessment: Low Risk (Evaluation)`,
                                 `Recommendation: EXECUTE SUPPLIER PROCUREMENT CONTRACT`,
-                                `Total Spend: $0.0270 USD (Budget Cap: $0.0300)`,
-                                `Unused Budget: $0.0030 USD`,
+                                `Total Spend: $0.0270 USD (Budget Cap: ${displayJobBudget})`,
+                                `Unused Budget: $${Math.max(0, budgetCapUsd - 0.0270).toFixed(4)} USD`,
                                 `Workforce: 1 Lead Agent · 12 Workers · 7 Providers`,
                                 `Human Role: Strategy Directive & Hard Spend Cap Enforced`,
                                 `Transaction ID: ${batchTxHash || 'No batch transaction returned'}`,
@@ -6115,7 +7420,7 @@ export function MultiAgentSwarmView({
                                 authMechanism: 'EIP-712 Scoped Session Key'
                               } : {
                                 status: 'NOT_SUBMITTED',
-                                note: 'Evaluation only; a live wallet is required for on-chain settlement.'
+                                note: 'Evaluation only; no blockchain payment is submitted.'
                               };
                               const bundleJson = selectedPreset.id === 'swarm_media_creative' ? {
                                 project: "Synapse402 Autonomous AI Workforce",
@@ -6123,9 +7428,9 @@ export function MultiAgentSwarmView({
                                 mission: "Multi-Platform Ad Campaign Launch",
                                 status: "DELIVERED_READY_FOR_PUBLISH",
                                 budgetSummary: {
-                                  budgetCapUsd: 0.0500,
-                                  totalSpentUsd: 0.0245,
-                                  budgetSavedUsd: 0.0255,
+                                  budgetCapUsd,
+                                  totalSpentUsd: plannedCostUsd,
+                                  budgetSavedUsd: Math.max(0, budgetCapUsd - plannedCostUsd),
                                   humanRole: "Strategy Directive & Hard Spending Cap Enforced",
                                   executionTimeSec: actualExecutionTimeSec
                                 },
@@ -6170,7 +7475,7 @@ export function MultiAgentSwarmView({
                                     status: "PASSED",
                                     complianceStandards: ["Meta Advertising Standards", "TikTok Branded Content Policy"],
                                     restrictedKeywordsFound: 0,
-                                    claimRiskScore: "0.02 (Safe / Grade A)"
+                                    claimRiskScore: "Example 0.02 (illustrative)",
                                   }
                                 }
                               } : selectedPreset.id === 'swarm_arbitrage' ? {
@@ -6179,10 +7484,10 @@ export function MultiAgentSwarmView({
                                 mission: "Cross-DEX Market Comparison (Evaluation)",
                                 status: batchTxHash ? "PAYMENT_CONFIRMED_REPORT_READY" : "EVALUATION_RESULT_READY",
                                 budgetSummary: {
-                                  budgetCapUsd: 0.0100,
-                                  plannedSpendUsd: 0.0060,
-                                  liveSettledSpendUsd: batchTxHash ? 0.0060 : 0,
-                                  remainingCapUsd: 0.0040,
+                                  budgetCapUsd,
+                                  plannedSpendUsd: plannedCostUsd,
+                                  liveSettledSpendUsd: batchTxHash ? plannedCostUsd : 0,
+                                  remainingCapUsd: Math.max(0, budgetCapUsd - plannedCostUsd),
                                   humanRole: "Strategy Directive & Hard Spending Cap Enforced",
                                   executionTimeSec: actualExecutionTimeSec
                                 },
@@ -6201,15 +7506,45 @@ export function MultiAgentSwarmView({
                                   configuredSlippageLimit: "0.05%",
                                   tradeSubmitted: false
                                 }
+                              } : isSolAnalysis ? {
+                                project: "Synapse402 Autonomous AI Workforce",
+                                protocol: "HTTP 402 budgeted payments (Tempo L1 when live; Chain ID: 42431)",
+                                mission: "SOL/USDT Market Analysis",
+                                status: batchTxHash ? "PAYMENT_CONFIRMED_REPORT_READY" : "EVALUATION_RESULT_READY",
+                                budgetSummary: {
+                                  budgetCapUsd,
+                                  plannedSpendUsd: effectivePlannedCostUsd,
+                                  liveSettledSpendUsd: batchTxHash ? effectivePlannedCostUsd : 0,
+                                  remainingCapUsd: Math.max(0, budgetCapUsd - effectivePlannedCostUsd),
+                                  humanRole: "Choose the market job and one maximum; no trade is submitted",
+                                  executionTimeSec: actualExecutionTimeSec
+                                },
+                                onChainSettlement: settlementRecord,
+                                inputs: {
+                                  marketData: "FREE public SOL/USDT weekly candles (live or labelled sample)",
+                                  localAnalysis: "FREE trend, support, resistance and volatility calculations",
+                                  amberdata: solPaidStepSkippedForBudget ? "SKIPPED — over the job maximum" : "$0.0010 paid demo market-depth snapshot",
+                                  coinglass: "Needed liquidation data unavailable — CoinGlass has no Synapse402 SDK route; request revenue: $0. If integrated, the agent could buy only this query (example $0.002) and CoinGlass could earn per request without requiring a full subscription for this job."
+                                },
+                                result: {
+                                  market: solMarketSnapshot?.analysis?.direction || 'pending',
+                                  trend: solMarketSnapshot?.analysis?.direction || 'pending',
+                                  support: solMarketSnapshot?.analysis?.support ?? null,
+                                  resistance: solMarketSnapshot?.analysis?.resistance ?? null,
+                                  extraPaidInsight: solPaidStepSkippedForBudget ? 'Unavailable because the job maximum was below $0.0010' : 'Sample provider response from one Amberdata demo market-depth snapshot',
+                                  missingInsight: 'CoinGlass liquidation heatmap was needed but unavailable: CoinGlass has no Synapse402 SDK route, so this request generated $0 revenue. With the SDK, the agent could buy only this query (example $0.002) and the provider could earn per request.',
+                                  conclusion: solMarketSnapshot?.analysis?.direction === 'uptrend' ? 'Setup worth watching' : 'No clear setup yet',
+                                  reason: 'This is a market-analysis demo, not financial advice; no trade was submitted.'
+                                }
                               } : {
                                 project: "Synapse402 Autonomous AI Workforce",
                                 protocol: "HTTP 402 budgeted payments (Tempo L1 when live; Chain ID: 42431)",
                                 mission: "Enterprise Supplier Due Diligence",
                                  status: "EVALUATION_REVIEW_READY",
                                 budgetSummary: {
-                                  budgetCapUsd: 0.0300,
-                                  totalSpentUsd: 0.0270,
-                                  budgetSavedUsd: 0.0030,
+                                  budgetCapUsd,
+                                  totalSpentUsd: plannedCostUsd,
+                                  budgetSavedUsd: Math.max(0, budgetCapUsd - plannedCostUsd),
                                   humanRole: "Strategy Directive & Hard Spending Cap Enforced",
                                   executionTimeSec: actualExecutionTimeSec
                                 },
@@ -6226,6 +7561,8 @@ export function MultiAgentSwarmView({
                                 ? 'campaign_bundle_tempo_l1.json'
                                 : selectedPreset.id === 'swarm_arbitrage'
                                 ? 'market_comparison_evaluation.json'
+                                : isSolAnalysis
+                                ? 'sol_usdt_market_brief.json'
                                 : 'supplier_dossier_tempo_l1.json';
 
                               const blob = new Blob([JSON.stringify(bundleJson, null, 2)], { type: 'application/json' });
@@ -6239,7 +7576,7 @@ export function MultiAgentSwarmView({
                             className="px-5 py-3 rounded-xl bg-white/[.04] hover:bg-white/[.08] border border-white/15 text-zinc-200 text-xs font-mono font-semibold transition flex items-center gap-2 cursor-pointer active:scale-95"
                           >
                             <Download className="w-3.5 h-3.5" />
-                            <span>{selectedPreset.id === 'swarm_media_creative' ? 'Download Campaign Bundle (.JSON)' : selectedPreset.id === 'swarm_arbitrage' ? 'Download Market Comparison (.JSON)' : 'Download Due Diligence Dossier (.JSON)'}</span>
+                            <span>{selectedPreset.id === 'swarm_media_creative' ? 'Download Campaign Bundle (.JSON)' : selectedPreset.id === 'swarm_arbitrage' ? 'Download Market Comparison (.JSON)' : isSolAnalysis ? 'Download SOL/USDT Brief (.JSON)' : 'Download Due Diligence Dossier (.JSON)'}</span>
                           </button>
                           <button
                             type="button"
@@ -6264,7 +7601,7 @@ export function MultiAgentSwarmView({
                               <div>
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${batchTxHash ? 'bg-emerald-400/10 text-emerald-300 border-emerald-400/25' : 'bg-white/[.05] text-zinc-300 border-white/10'}`}>
-                                    {batchTxHash ? 'PAYMENT CONFIRMED' : 'EVALUATION ONLY'}
+                                    {batchTxHash ? 'PAYMENT CONFIRMED' : isLiveExecution ? 'LIVE PAYMENT' : 'EVALUATION ONLY'}
                                   </span>
                                 </div>
                                 <h4 className="text-sm font-bold text-white tracking-tight mt-1">
@@ -6275,7 +7612,7 @@ export function MultiAgentSwarmView({
 
                             {batchTxHash && <div className="flex items-center gap-2 shrink-0">
                               <a
-                                href={`https://explore.tempo.xyz/tx/${batchTxHash}`}
+                                href={tempoTransactionUrl(batchTxHash)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="px-3 py-1.5 rounded-xl border border-[#d7ff4f]/30 bg-[#d7ff4f]/10 hover:bg-[#d7ff4f]/20 text-[#d7ff4f] text-xs font-semibold transition flex items-center gap-1.5 shrink-0"
@@ -6293,11 +7630,11 @@ export function MultiAgentSwarmView({
                             </div>
                             <div className="p-3 rounded-lg bg-black/20 border border-white/[0.06]">
                               <span className="text-zinc-500 block text-[10px] uppercase">Work steps</span>
-                              <strong className="text-white">{selectedPreset.subcontractors.length}</strong>
+                              <strong className="text-white">{displayPipelineUnitCount}</strong>
                             </div>
                             <div className="p-3 rounded-lg bg-black/20 border border-white/[0.06] col-span-2 sm:col-span-1">
                               <span className="text-zinc-500 block text-[10px] uppercase">Status</span>
-                              <strong className={batchTxHash ? 'text-emerald-400' : 'text-zinc-300'}>{batchTxHash ? 'Confirmed' : 'No live payment'}</strong>
+                              <strong className={batchTxHash ? 'text-emerald-400' : isLiveExecution ? 'text-amber-300' : 'text-zinc-300'}>{batchTxHash ? 'Confirmed' : isLiveExecution ? 'Receipt pending' : 'No live payment'}</strong>
                             </div>
                           </div>
                           {batchTxHash && <div className="flex items-center gap-2 text-xs font-mono text-zinc-400">
@@ -6326,11 +7663,11 @@ export function MultiAgentSwarmView({
                                 Live Activity
                               </span>
                               <span className="px-1.5 py-0.2 rounded bg-white/[0.05] text-zinc-300 border border-white/15 text-[9px] font-mono font-bold">
-                                {selectedPreset.subcontractors.length === 20 ? '1 Lead · 12 Workers · 7 Providers' : `${selectedPreset.subcontractors.length} Autonomous Units`}
+                                {selectedPreset.subcontractors.length === 20 ? '1 Lead · 12 Workers · 7 Providers' : isSolAnalysis ? '1 Lead Agent · 5 pipeline units' : `${selectedPreset.subcontractors.length} Autonomous Units`}
                               </span>
                             </div>
                             <span className="text-[10.5px] text-zinc-400 font-sans">
-                              See the job move from resource request → payment → result → next step
+                              See the job move from resource request → payment → result → next step, so each handoff can be checked instead of guessed.
                             </span>
                           </div>
                         </div>
@@ -6354,7 +7691,7 @@ export function MultiAgentSwarmView({
                           <div className="p-6 rounded-xl bg-white/[0.015] border border-white/[0.05] text-center text-zinc-400 text-xs font-sans space-y-1">
                             <p className="text-zinc-300 font-medium">Activity Stream Standby</p>
                             <p className="text-[11px] text-zinc-500">
-                              Click <strong className="text-[#d7ff4f]">Start Campaign</strong> above to watch the job move from resource request → payment → result → next step in real time.
+                              Click <strong className="text-[#d7ff4f]">Start Campaign</strong> above to watch the job move from resource request → payment → result → next step in real time, so you can see why each unit is called.
                             </p>
                           </div>
                         ) : (
@@ -6411,14 +7748,152 @@ export function MultiAgentSwarmView({
               }
 
               // Fallback for smaller swarms
+              const solPipelineSteps = selectedPreset.subcontractors.filter((sub) => sub.id !== 'lead_orchestrator');
+              const solPhaseDefs = [
+                { id: 'phase_inputs', number: '01', title: 'GET THE RESOURCES', subtitle: 'Free market input starts the job.', ids: ['sol_bybit_free'], tone: 'sky' },
+                { id: 'phase_analysis', number: '02', title: 'ANALYZE & BUY', subtitle: 'Local work stays free; one extra input is paid only when allowed.', ids: ['sol_local_analysis', 'sol_amberdata_depth'], tone: 'emerald' },
+                { id: 'phase_delivery', number: '03', title: 'FINISH & DELIVER', subtitle: 'The missing CoinGlass insight becomes the business lesson, then one brief returns to you.', ids: ['sol_coinglass_skipped', 'sol_final_report'], tone: 'amber' },
+              ];
+              const solTourTargetIds: Record<string, string> = {
+                sol_bybit_free: 'tour-sol-bybit-free',
+                sol_local_analysis: 'tour-sol-local-analysis',
+                sol_amberdata_depth: 'tour-sol-amberdata-depth',
+                sol_coinglass_skipped: 'tour-sol-coinglass-skipped',
+              };
+              const solFlowComplete = !isExecuting && solPipelineSteps.length > 0 && solPipelineSteps.every((sub) => settledWorkerIds.has(sub.id));
+              const solActivityText = !isExecuting
+                ? solFlowComplete
+                  ? 'Run complete · the Lead Agent returned one reviewable brief.'
+                  : 'Ready · the Lead Agent will request each input in order.'
+                : activeStageNum === 1
+                  ? 'Reading free market data · the first input is arriving.'
+                  : activeStageNum === 2
+                    ? 'Checking zones and the approved paid input · the job maximum still applies.'
+                    : activeStageNum === 3
+                     ? 'Preparing final delivery · assembling the report and its evidence.'
+                      : 'Lead Agent is setting the job plan and checking the spending rule.';
                   return (
                     <>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {isSolAnalysis && (
+                        <div className="mb-5 rounded-2xl border border-[#d7ff4f]/30 bg-gradient-to-br from-[#d7ff4f]/[0.07] via-sky-400/[0.05] to-amber-300/[0.08] p-4 sm:p-6 shadow-[0_16px_42px_rgba(215,255,79,0.08)] overflow-hidden relative">
+                          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d7ff4f]/80 to-transparent" />
+                          <div className="flex items-center justify-between gap-3 mb-4">
+                            <div>
+                              <div className="text-[10px] font-mono font-bold uppercase tracking-[0.18em] text-[#d7ff4f]">SOL/USDT WORKFORCE FLOW</div>
+                              <p className="text-xs text-zinc-300 mt-1">The Lead Agent is the only coordinator: it reads the inputs, decides what is needed, and returns one market brief.</p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="hidden sm:inline text-[9px] font-mono uppercase text-zinc-400">1 Lead Agent</span>
+                              {solMarketSnapshot?.dataStatus && (
+                                <span className="rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-[9px] font-mono uppercase text-zinc-300">
+                                  {solMarketSnapshot.dataStatus === 'LIVE_PUBLIC_MARKET_DATA' ? 'LIVE MARKET DATA' : 'SAMPLE MARKET DATA'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div id="tour-sol-lead-agent" className={`mx-auto max-w-2xl rounded-2xl border p-4 sm:p-5 transition-all duration-500 ${
+                            isExecuting && activeStageNum === 0 ? 'sol-lead-active' :
+                            solFlowComplete ? 'sol-lead-complete border-teal-300/40 bg-white/[0.045]' :
+                            settledWorkerIds.has('lead_orchestrator') ? 'border-teal-300/40 bg-white/[0.045]' : 'border-white/15 bg-white/[0.04]'
+                          }`}>
+                            <div className="flex items-center gap-3">
+                              <div className="w-11 h-11 rounded-xl bg-white/[0.08] border border-[#d7ff4f]/35 flex items-center justify-center text-[#d7ff4f] shadow-[0_0_18px_rgba(215,255,79,0.16)]">
+                                <Bot className="w-5 h-5" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-[#d7ff4f]">LEAD AGENT</span>
+                                  <span className="px-2 py-0.5 rounded-full bg-white/10 text-[9px] font-mono text-zinc-300">{isExecuting ? 'WORKING' : settledWorkerIds.has('lead_orchestrator') ? 'READY' : 'STANDBY'}</span>
+                                </div>
+                                <div className="text-base sm:text-lg font-black text-white mt-0.5">Lead Market Analyst</div>
+                                <div className="text-[11px] text-zinc-400 leading-snug">It keeps the job inside your cap, asks for each input in order, and explains what was found and what was missing.</div>
+                              </div>
+                              <span className="hidden sm:inline text-[10px] font-mono text-zinc-400">ONE JOB MAX · {displayJobBudget}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-center gap-2 py-4 text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-300">
+                            <span className={`w-2 h-2 rounded-full bg-[#d7ff4f] shadow-[0_0_10px_rgba(215,255,79,0.8)] ${isExecuting ? 'animate-ping' : ''}`} />
+                            <span>3-PHASE EXECUTION FLOW</span>
+                            <span className="text-zinc-500">INPUTS</span><span className={isExecuting ? 'sol-flow-arrow-active' : 'text-zinc-600'}>→</span><span className="text-zinc-500">ANALYSIS</span><span className={isExecuting ? 'sol-flow-arrow-active' : 'text-zinc-600'}>→</span><span className="text-[#d7ff4f]">DELIVERY</span>
+                          </div>
+                          <div className={`sol-activity-log ${isExecuting ? 'is-running' : ''}`} aria-live="polite">
+                            <span className="sol-activity-dot" aria-hidden="true" />
+                            <span key={`${isExecuting ? 'running' : 'idle'}-${activeStageNum}-${solFlowComplete}`} className="sol-activity-text">{solActivityText}</span>
+                          </div>
+
+                          <div className={`grid grid-cols-1 lg:grid-cols-3 gap-3 ${isExecuting ? 'sol-flow-running' : ''}`}>
+                            {solPhaseDefs.map((phase, phaseIndex) => {
+                              const phaseSubs = phase.ids.map((id) => solPipelineSteps.find((sub) => sub.id === id)).filter(Boolean) as typeof solPipelineSteps;
+                              const phaseActive = phaseSubs.some((sub) => isExecuting && activeStageNum === (sub.waveGroup || 1) && workerLiveStates[sub.id]?.status !== 'DONE');
+                              const phaseDone = phaseSubs.every((sub) => settledWorkerIds.has(sub.id));
+                              const phaseActiveTone = phase.tone === 'sky' ? 'sol-phase-active-sky' : phase.tone === 'emerald' ? 'sol-phase-active-emerald' : 'sol-phase-active-amber';
+                              return (
+                                <div key={phase.id} style={phaseDone ? { animationDelay: `${phaseIndex * 140}ms` } : undefined} className={`rounded-2xl border p-3 sm:p-4 transition-all duration-500 ${
+                                  phaseActive ? `sol-phase-active ${phaseActiveTone}` :
+                                  phaseDone ? 'sol-phase-complete border-white/[0.14] bg-white/[0.025]' : 'border-white/10 bg-black/[0.12]'
+                                }`}>
+                                  <div className="flex items-start justify-between gap-2 mb-3">
+                                    <div>
+                                    <div className={`text-[9px] font-mono font-bold uppercase tracking-wider ${phaseActive ? 'text-[#d7ff4f]' : 'text-zinc-300'}`}>{phase.number} · {phase.title}</div>
+                                       <div className="text-[11px] text-zinc-400 mt-1 leading-snug">{phase.id === 'phase_delivery' && !solFlowComplete ? 'Returns the final report after all approved steps are checked.' : phase.subtitle}</div>
+                                    </div>
+                                    <span className={`text-[9px] font-mono font-bold ${phaseDone ? 'text-zinc-300' : phaseActive ? 'text-[#d7ff4f]' : 'text-zinc-500'}`}>{phaseDone ? 'DONE' : phaseActive ? 'ACTIVE' : 'READY'}</span>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {phaseSubs.map((sub) => {
+                                      const stepState = workerLiveStates[sub.id]?.status;
+                                      const isActive = isExecuting && activeStageNum === (sub.waveGroup || 1) && stepState !== 'DONE';
+                                      const isSkipped = sub.id === 'sol_coinglass_skipped';
+                                      const isBudgetSkipped = solPaidStepSkippedForBudget && sub.id === 'sol_amberdata_depth';
+                                      const isFree = sub.costPathUsd === 0 && !isSkipped;
+                                      const isDone = settledWorkerIds.has(sub.id);
+                                      const activeStepTone = 'border-white/35 bg-white/[0.055]';
+                                      return (
+                                        <div id={solTourTargetIds[sub.id] || `tour-${sub.id.replace(/_/g, '-')}`} key={sub.id} style={isDone ? { animationDelay: `${phaseIndex * 140 + 80}ms` } : undefined} className={`relative overflow-hidden rounded-xl border px-3 py-2.5 transition-all duration-500 ${
+                                          isActive ? `sol-step-active ${activeStepTone}` :
+                                          isDone && (isSkipped || isBudgetSkipped) ? 'border-zinc-500/40 bg-zinc-900/35' :
+                                          isDone ? 'border-white/[0.13] bg-white/[0.035] animate-settled' : 'border-white/[0.10] bg-white/[0.025]'
+                                        }`}>
+                                          {isActive && <span className="sol-step-scanline" aria-hidden="true" />}
+                                          <div className="flex items-center justify-between gap-2">
+                                             <span className="text-xs sm:text-[13px] font-bold text-white">{sub.id === 'sol_amberdata_depth' && solPaidStepSkippedForBudget ? 'Amberdata · OVER BUDGET' : isSkipped && !solFlowComplete ? 'CoinGlass · LIQUIDATION DATA' : sub.shortName}</span>
+                                             <span className={`text-[9px] font-mono font-bold ${isSkipped || isBudgetSkipped ? 'text-zinc-400' : isFree ? 'text-zinc-300' : 'text-amber-300'}`}>{isBudgetSkipped ? 'OVER BUDGET' : isSkipped ? (solFlowComplete ? 'SKIPPED' : 'WAITING') : isFree ? 'FREE · $0' : '$0.001 PAID'}</span>
+                                          </div>
+                                          <div className="flex items-center justify-between gap-2 mt-1">
+                                       <span className="text-[10px] sm:text-[11px] leading-snug text-zinc-400 truncate">{isActive ? (stepState === 'PAYING' ? 'Payment in progress…' : 'Working…') : isBudgetSkipped ? `Exceeds ${displayJobBudget} · no request` : isSkipped ? (solFlowComplete ? 'Needed by the AI · SDK missing · $0 revenue' : 'Waiting for the final delivery step…') : sub.id === 'sol_local_analysis' && solMarketSnapshot?.analysis ? `Support zone ${solSupportZoneLabel} · resistance zone ${solResistanceZoneLabel}` : sub.deliverablePreview}</span>
+                                            <span className={`shrink-0 text-[9px] font-mono ${isDone ? 'text-zinc-300' : isActive ? 'text-[#d7ff4f]' : 'text-zinc-500'}`}>{isDone ? (isBudgetSkipped ? 'SKIPPED' : isSkipped ? 'SKIPPED' : isFree ? 'FREE' : batchTxHash ? 'PAID' : 'PLANNED') : 'READY'}</span>
+                                          </div>
+                                           {isSkipped && solFlowComplete && (
+                                            <div className="mt-2 rounded-lg border border-amber-300/25 bg-amber-300/[0.06] px-2.5 py-2 text-[10px] leading-snug text-amber-100">
+                                              The AI needs liquidation data, but CoinGlass needs to add our SDK.
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-[10px] font-mono text-zinc-400">
+                            <span><strong className="text-[#d7ff4f]">ONE LEAD AGENT</strong> runs the order</span>
+                            <span><strong className="text-zinc-300">FREE FIRST</strong> public data and local work</span>
+                            <span><strong className="text-amber-300">ONE PAID INPUT</strong> only if the cap allows</span>
+                          </div>
+                        </div>
+                      )}
+                      {!isSolAnalysis && <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         {selectedPreset.subcontractors.map((sub) => {
                           const isSettled = settledWorkerIds.has(sub.id);
                           const isSelected = selectedSubId === sub.id;
                           const liveState = workerLiveStates[sub.id];
-                          const isBusy = liveState?.status === 'BUSY';
+                          const isBusy = liveState?.status === 'REQUESTING' || liveState?.status === 'PAYING';
+                          const isSkipped = sub.id === 'sol_coinglass_skipped';
+                          const isBudgetSkipped = solPaidStepSkippedForBudget && sub.id === 'sol_amberdata_depth';
+                          const isFree = sub.costPathUsd === 0 && !isSkipped;
                           const NodeIcon = getSubcontractorIcon(sub.id);
 
                           return (
@@ -6444,63 +7919,174 @@ export function MultiAgentSwarmView({
                                 <div className="flex items-center gap-1.5 min-w-0">
                                   <NodeIcon className={`w-3.5 h-3.5 shrink-0 ${isSettled ? 'text-emerald-400' : isBusy ? 'text-[#d7ff4f]' : 'text-zinc-400'}`} />
                                   <span className="text-xs font-semibold text-zinc-100 truncate">
-                                    {sub.shortName}
+                                    {sub.id === 'sol_amberdata_depth' && solPaidStepSkippedForBudget ? 'Amberdata · OVER BUDGET' : sub.shortName}
                                   </span>
                                 </div>
                                 <span className={`w-2 h-2 rounded-full shrink-0 ${isSettled ? 'bg-emerald-400' : isBusy ? 'bg-[#d7ff4f]' : 'bg-zinc-600'}`} />
                               </div>
                               <div className="text-[10px] text-zinc-400 truncate mb-1 font-sans">
-                                {sub.deliverablePreview}
+                                 {isSettled || isBusy ? (liveState?.displayNote || sub.deliverablePreview) : sub.deliverablePreview}
                               </div>
                               <div className="flex items-center justify-between text-[10px] font-mono mt-auto pt-1.5 border-t border-white/[0.04]">
-                                <span className="text-zinc-200 font-medium">${sub.costPathUsd}</span>
+                                <span className={`font-medium ${isSkipped || isBudgetSkipped ? 'text-zinc-400' : isFree ? 'text-emerald-300' : 'text-amber-300'}`}>
+                                  {isBudgetSkipped ? 'OVER BUDGET' : isSkipped ? 'SKIP' : isFree ? 'FREE · $0' : `$${sub.costPathUsd.toFixed(4)}`}
+                                </span>
                                 <span className={isSettled ? 'text-emerald-400 font-semibold' : isBusy ? 'text-[#d7ff4f] font-bold' : 'text-zinc-400'}>
-                                  {isSettled ? (batchTxHash ? '✓ Delivered' : '✓ Prepared') : isBusy ? 'Active...' : 'Ready'}
+                                  {isSettled ? (isBudgetSkipped ? '✓ Over budget' : isSkipped ? '✓ Skipped' : isFree ? '✓ Free' : batchTxHash ? '✓ Paid' : '✓ Planned') : isBusy ? (liveState?.status === 'PAYING' ? 'Paying...' : 'Working...') : 'Ready'}
                                 </span>
                               </div>
                             </button>
                           );
                         })}
-                      </div>
+                      </div>}
 
-                      {/* BIG RESULT BLOCK (FOR SMALLER SWARMS) */}
-                      {settledWorkerIds.size === selectedPreset.subcontractors.length && (
+                      {/* SOL RESULT PACKAGE: clean analyst brief */}
+                      {isSolAnalysis && settledWorkerIds.size === selectedPreset.subcontractors.length && (
+                        <div id="tour-sol-final-report" className="my-6 overflow-hidden rounded-2xl border border-slate-600/70 border-t-4 border-t-[#d7ff4f]/70 bg-[#1b232c] shadow-xl animate-fade-in">
+                          <header className="border-b border-slate-600/60 bg-[#222c36] p-5 sm:p-6">
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                              <div>
+                                <div className="flex items-center gap-2.5">
+                                  <span className="h-2 w-2 rounded-full bg-[#d7ff4f] shadow-[0_0_10px_rgba(215,255,79,.65)]" aria-hidden="true" />
+                                  <span className="font-mono text-[11px] font-black uppercase tracking-[0.22em] text-[#d7ff4f]">FINAL RESULT</span>
+                                  <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">SOL/USDT analyst brief</span>
+                                </div>
+                                <h2 className="mt-3 text-3xl font-black leading-none tracking-tight text-white sm:text-4xl">Market brief ready</h2>
+                                <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-300">One Lead Agent reviewed the market inputs and returned a short plan for human review. No trade was submitted.</p>
+                              </div>
+                              <span className="inline-flex w-fit items-center rounded-lg border border-slate-500/70 bg-[#2d3944] px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-200">{batchTxHash ? 'Payment confirmed' : 'Evaluation ready'}</span>
+                            </div>
+                            <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                              <div className="rounded-lg border border-slate-500/60 bg-[#2d3944] px-3 py-2.5"><div className="font-mono text-[9px] uppercase tracking-wider text-slate-400">Market</div><div className="mt-1 text-sm font-bold capitalize text-white">SOL/USDT · {solMarketDirection}</div></div>
+                              <div className="rounded-lg border border-slate-500/60 bg-[#2d3944] px-3 py-2.5"><div className="font-mono text-[9px] uppercase tracking-wider text-slate-400">Decision</div><div className="mt-1 text-sm font-bold text-[#d7ff4f]">{solConfluenceDecision}</div></div>
+                              <div className="rounded-lg border border-slate-500/60 bg-[#2d3944] px-3 py-2.5"><div className="font-mono text-[9px] uppercase tracking-wider text-slate-400">Spend</div><div className="mt-1 text-sm font-bold text-white">{'$' + effectivePlannedCostUsd.toFixed(4)} <span className="text-xs font-normal text-slate-400">/ {displayJobBudget}</span></div></div>
+                              <div className="rounded-lg border border-slate-500/60 bg-[#2d3944] px-3 py-2.5"><div className="font-mono text-[9px] uppercase tracking-wider text-slate-400">Payment</div><div className="mt-1 text-sm font-bold text-slate-100">{batchTxHash ? 'Tempo L1' : 'No chain write'}</div></div>
+                            </div>
+                          </header>
+                          <div className="grid grid-cols-1 divide-y divide-slate-600/60 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+                            <section className="bg-[#26313b] p-5 sm:p-6">
+                              <div className="mb-4 flex items-start justify-between gap-3"><div><div className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-slate-300">MARKET VIEW</div><p className="mt-1 text-xs text-slate-400">Measured from {solRangeWindowLabel} of {solDataSourceLabel}.</p></div><span className="rounded-md border border-slate-500/70 bg-[#2d3944] px-2 py-1 font-mono text-[9px] text-slate-300">{solMarketSnapshot?.dataStatus === 'LIVE_PUBLIC_MARKET_DATA' ? 'LIVE DATA' : 'SAMPLE DATA'}</span></div>
+                              <div className="grid grid-cols-2 gap-2">
+                                 <div className="rounded-lg border border-slate-500/60 bg-[#2d3944] p-3"><div className="text-[10px] uppercase text-slate-400">Current price</div><div className="mt-1 text-lg font-black text-white">{solLatestCloseLabel}</div><div className="mt-1 text-[10px] text-slate-400">latest weekly close</div></div>
+                                 <div className="rounded-lg border border-slate-500/60 bg-[#2d3944] p-3"><div className="text-[10px] uppercase text-slate-400">Direction</div><div className="mt-1 text-lg font-black capitalize text-white">{solMarketDirection}</div><div className="mt-1 text-[10px] text-slate-400">{solMultiFactorRead}</div></div>
+                                 <div className="rounded-lg border border-slate-500/60 bg-[#2d3944] p-3"><div className="text-[10px] uppercase text-slate-400">Support zone</div><div className="mt-1 text-base font-black text-white">{solSupportZoneLabel}</div><div className="mt-1 text-[10px] text-slate-400">area to watch</div></div>
+                                 <div className="rounded-lg border border-slate-500/60 bg-[#2d3944] p-3"><div className="text-[10px] uppercase text-slate-400">Resistance zone</div><div className="mt-1 text-base font-black text-white">{solResistanceZoneLabel}</div><div className="mt-1 text-[10px] text-slate-400">area to review risk</div></div>
+                                 <div className="rounded-lg border border-slate-500/60 bg-[#2d3944] p-3"><div className="text-[10px] uppercase text-slate-400">RSI / average</div><div className="mt-1 text-base font-black text-white">RSI {solRsi14 === null ? '—' : solRsi14.toFixed(1)}</div><div className="mt-1 text-[10px] text-slate-400">20-week {solSma20 === null ? '—' : '$' + solSma20.toFixed(2)}</div></div>
+                                 <div className="rounded-lg border border-slate-500/60 bg-[#2d3944] p-3"><div className="text-[10px] uppercase text-slate-400">Volume</div><div className="mt-1 text-base font-black text-white">{formatCompactVolume(latestSolVolume)}</div><div className="mt-1 text-[10px] text-slate-400">{solVolumeComparisonLabel}</div></div>
+                              </div>
+                              <div className="mt-3 border-t border-slate-600/60 pt-3 text-xs text-slate-300">Observed range: <strong className="text-white">{'$' + (solMarketSnapshot?.analysis?.observedLow?.toFixed?.(2) || '—')} → {'$' + (solMarketSnapshot?.analysis?.observedHigh?.toFixed?.(2) || '—')}</strong></div>
+                              <SolCandlestickChart
+                                candles={solCandleRows}
+                                support={toFiniteNumber(solMarketSnapshot?.analysis?.support)}
+                                resistance={toFiniteNumber(solMarketSnapshot?.analysis?.resistance)}
+                                supportZoneLow={toFiniteNumber(solMarketSnapshot?.analysis?.supportZoneLow)}
+                                supportZoneHigh={toFiniteNumber(solMarketSnapshot?.analysis?.supportZoneHigh)}
+                                resistanceZoneLow={toFiniteNumber(solMarketSnapshot?.analysis?.resistanceZoneLow)}
+                                resistanceZoneHigh={toFiniteNumber(solMarketSnapshot?.analysis?.resistanceZoneHigh)}
+                                latestClose={solLatestClose}
+                              />
+                            </section>
+                            <section className="bg-[#26313b] p-5 sm:p-6">
+                              <div className="mb-4"><div className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-slate-300">STRUCTURAL CONDITIONS</div><p className="mt-1 text-xs text-slate-400">{solConfluenceRead}</p></div>
+                              <div className="space-y-2.5">
+                                <div className="rounded-lg border border-[#d7ff4f]/35 bg-[#d7ff4f]/[0.07] p-3"><div className="text-xs font-bold text-white">Support watch condition</div><p className="mt-1 text-xs leading-relaxed text-slate-300">Monitor for price reaction and volume confirmation near {solSupportZoneLabel}; invalidation if weekly close settles below.</p></div>
+                                 <div className="rounded-lg border border-slate-500/60 bg-[#2d3944] p-3"><div className="text-xs font-bold text-white">Neutral zone (middle range)</div><p className="mt-1 text-xs leading-relaxed text-slate-300">The middle of the range does not provide a directional edge; wait for boundary test.</p></div>
+                                 <div className="rounded-lg border border-slate-500/60 bg-[#2d3944] p-3"><div className="text-xs font-bold text-white">Resistance breakout / rejection</div><p className="mt-1 text-xs leading-relaxed text-slate-300">Near {solResistanceZoneLabel}, evaluate for boundary absorption or rejection rather than assuming continuation.</p></div>
+                                <div className="rounded-lg border border-amber-300/40 bg-amber-300/[0.07] p-3"><div className="text-xs font-bold text-amber-100">CoinGlass data is missing</div><p className="mt-1 text-xs leading-relaxed text-slate-300">The AI needed liquidation data, but CoinGlass has no Synapse402 SDK route, so this request earned $0.</p></div>
+                              </div>
+                            </section>
+                          </div>
+                          <section className="border-t border-slate-600/60 bg-[#202a33] p-5 sm:p-6">
+                            <div className="mb-3 flex items-end justify-between gap-3"><div><div className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-slate-300">LEVELS & METRICS</div><p className="mt-1 text-xs text-slate-400">Measured inputs behind the conclusion.</p></div><span className="font-mono text-[9px] uppercase text-slate-500">Measured · not forecast</span></div>
+                            <div className="overflow-hidden rounded-xl border border-slate-600/70">
+                              <div className="grid grid-cols-[minmax(120px,0.8fr)_minmax(110px,1fr)_minmax(0,1.8fr)] bg-[#2d3944] px-3 py-2.5 font-mono text-[9px] font-bold uppercase text-slate-400 sm:px-4"><span>Metric</span><span>Value</span><span>Meaning</span></div>
+                              <div className="divide-y divide-slate-600/60 bg-[#26313b] text-xs">
+                                <div className="grid grid-cols-[minmax(120px,0.8fr)_minmax(110px,1fr)_minmax(0,1.8fr)] gap-3 px-3 py-3 sm:px-4"><span className="font-semibold text-white">Current price</span><strong className="text-white">{solLatestCloseLabel}</strong><span className="text-slate-300">latest weekly close</span></div>
+                                <div className="grid grid-cols-[minmax(120px,0.8fr)_minmax(110px,1fr)_minmax(0,1.8fr)] gap-3 px-3 py-3 sm:px-4"><span className="font-semibold text-white">Support zone</span><strong className="text-white">{solSupportZoneLabel}</strong><span className="text-slate-300">area to watch for a reaction</span></div>
+                                <div className="grid grid-cols-[minmax(120px,0.8fr)_minmax(110px,1fr)_minmax(0,1.8fr)] gap-3 px-3 py-3 sm:px-4"><span className="font-semibold text-white">Resistance zone</span><strong className="text-white">{solResistanceZoneLabel}</strong><span className="text-slate-300">area where selling pressure may appear</span></div>
+                                <div className="grid grid-cols-[minmax(120px,0.8fr)_minmax(110px,1fr)_minmax(0,1.8fr)] gap-3 px-3 py-3 sm:px-4"><span className="font-semibold text-white">RSI</span><strong className="text-white">{solRsi14 === null ? '—' : solRsi14.toFixed(1)}</strong><span className="text-slate-300">momentum context, not a trade signal</span></div>
+                                <div className="grid grid-cols-[minmax(120px,0.8fr)_minmax(110px,1fr)_minmax(0,1.8fr)] gap-3 px-3 py-3 sm:px-4"><span className="font-semibold text-white">Volume</span><strong className="text-white">{solVolumeComparisonLabel}</strong><span className="text-slate-300">confirmation versus recent candles</span></div>
+                              </div>
+                            </div>
+                          </section>
+                          <section className="border-t border-slate-600/60 bg-[#1f2932] p-5 sm:p-6">
+                            <div className="mb-3"><div className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-slate-300">DATA USED</div><p className="mt-1 text-xs text-slate-400">What arrived, what was calculated, and where payment did or did not happen.</p></div>
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                               <div className="rounded-lg border border-slate-600/70 bg-[#2d3944] p-3"><div className="flex items-center justify-between gap-2"><span className="text-sm font-bold text-white">Public market feed</span><span className="font-mono text-[9px] text-slate-300">{solMarketSnapshot?.dataStatus === 'LIVE_PUBLIC_MARKET_DATA' ? 'LIVE · FREE' : 'SAMPLE · FREE'}</span></div><p className="mt-1 text-xs text-slate-300">Weekly SOL/USDT candles and volume.</p></div>
+                               <div className="rounded-lg border border-slate-600/70 bg-[#2d3944] p-3"><div className="flex items-center justify-between gap-2"><span className="text-sm font-bold text-white">Local analysis</span><span className="font-mono text-[9px] text-slate-300">CALCULATED · FREE</span></div><p className="mt-1 text-xs text-slate-300">Support, resistance, RSI, trend and volume context.</p></div>
+                               <div className="rounded-lg border border-slate-600/70 bg-[#2d3944] p-3"><div className="flex items-center justify-between gap-2"><span className="text-sm font-bold text-white">Amberdata</span><span className="font-mono text-[9px] text-amber-200">{solPaidStepSkippedForBudget ? 'SKIPPED · $0' : batchTxHash ? 'PAID · $0.0010' : 'PLANNED · $0.0010'}</span></div><p className="mt-1 text-xs text-slate-300">Sample market-depth response, only when the job maximum allows it.</p></div>
+                              <div className="rounded-lg border border-amber-300/40 bg-amber-300/[0.06] p-3"><div className="flex items-center justify-between gap-2"><span className="text-sm font-bold text-white">CoinGlass</span><span className="font-mono text-[9px] text-amber-100">NO ROUTE · $0</span></div><p className="mt-1 text-xs text-slate-300">Liquidation data was needed, but its Synapse402 SDK route is not integrated.</p></div>
+                            </div>
+                          </section>
+                          <footer className="border-t border-slate-600/60 bg-[#222c36] p-5 sm:p-6">
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                              <div className="rounded-lg border-l-2 border-[#d7ff4f] bg-[#d7ff4f]/[0.08] px-4 py-3"><div className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-[#d7ff4f]">BOTTOM LINE</div><p className="mt-1 text-sm font-semibold leading-relaxed text-white">This brief used free market candles and local analysis plus {solPaidStepSkippedForBudget ? 'no paid input because Amberdata exceeded the job maximum' : 'one paid Amberdata snapshot'}. CoinGlass data is missing because it has no Synapse402 payment route yet.</p></div>
+                              <button type="button" onClick={() => { soundEngine.playClick(); setActiveConsoleTab('logs'); const el = document.getElementById('workforce-console-deck'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border border-slate-500/70 bg-[#2d3944] px-3 py-2 font-mono text-[10px] font-bold text-slate-200 transition hover:bg-[#364451]"><Terminal className="h-3.5 w-3.5 text-slate-300" /> View execution log</button>
+                            </div>
+                             <details className="mt-4 rounded-lg border border-slate-600/70 bg-[#26313b]"><summary className="cursor-pointer list-none px-4 py-3 text-xs font-semibold text-slate-200">Payment proof / technical details</summary><div className="grid gap-2 border-t border-slate-600/60 px-4 py-3 text-xs text-slate-300 sm:grid-cols-3"><span>Network: <strong className="text-white">Tempo Moderato · 42431</strong></span><span>Spend: <strong className="text-white">{'$' + effectivePlannedCostUsd.toFixed(4)} / {displayJobBudget}</strong></span><span>Receipt: <strong className="text-white">{batchTxHash ? 'confirmed' : 'evaluation only'}</strong></span>{batchTxHash && <a className="truncate text-[#d7ff4f] hover:underline sm:col-span-3" href={tempoTransactionUrl(batchTxHash)} target="_blank" rel="noopener noreferrer">Explorer receipt: {batchTxHash}</a>}</div></details>
+                          </footer>
+                        </div>
+                      )}
+                      {/* BIG RESULT BLOCK (FOR OTHER SMALLER SWARMS) */}
+                      {!isSolAnalysis && settledWorkerIds.size === selectedPreset.subcontractors.length && (
                         <div id="swarm-big-result-block" className="p-8 sm:p-10 rounded-2xl bg-gradient-to-b from-white/[0.04] to-black/80 border border-white/15 text-center space-y-5 shadow-2xl my-6 animate-fade-in">
                           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 mb-1">
-                            <CheckCircle2 className="w-6 h-6" />
+                            <FileCheck className="w-6 h-6" />
                           </div>
                           <div className="space-y-1">
                             <span className="text-[11px] font-mono tracking-[0.25em] text-zinc-400 uppercase block font-semibold">
                               MISSION ACCOMPLISHED
                             </span>
                             <h2 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-                              WORK COMPLETE
+                              {isSolAnalysis ? 'SOL/USDT BRIEF READY' : 'WORK COMPLETE'}
                             </h2>
-                            <p className="text-sm text-zinc-300 font-sans max-w-lg mx-auto">
-                              {batchTxHash
-                                ? (selectedPreset.id === 'swarm_media_creative'
-                                  ? 'Creative Studio Assets Ready — Transparent PNG, visual concept layout, and audio stems synthesized.'
-                                  : 'Market Risk Dossier Ready — sample inputs reviewed and Python calculations prepared.')
-                                : 'Evaluation package ready — sample outputs assembled for review; no external result was independently verified.'}
+                              <p className="text-sm text-zinc-300 font-sans max-w-lg mx-auto">
+                                {batchTxHash
+                                  ? (selectedPreset.id === 'swarm_media_creative'
+                                    ? 'Creative Studio Assets Ready — Transparent PNG, visual concept layout, and audio stems synthesized.'
+                                    : isSolAnalysis
+                                    ? solPaidStepSkippedForBudget
+                                      ? 'SOL/USDT Market Brief Ready — Market candles and local analysis were free, Amberdata was skipped because it exceeded the job maximum, and CoinGlass liquidation data was unavailable because its SDK route is not integrated; provider revenue from this request was $0.'
+                                      : 'SOL/USDT Market Brief Ready — Market candles and local analysis were free, one Amberdata demo snapshot was paid, and CoinGlass liquidation data was needed but its SDK route was not integrated; provider revenue from this request was $0.'
+                                    : 'Market Risk Dossier Ready — sample inputs reviewed and Python calculations prepared.')
+                                  : isSolAnalysis
+                                  ? solPaidStepSkippedForBudget
+                                    ? 'Evaluation brief ready — free market data and local calculations are complete; the Amberdata step was over the job maximum, while CoinGlass data was needed but its SDK route was missing, so the request earned $0.'
+                                    : 'Evaluation brief ready — free market data, local calculations, the planned Amberdata step, and the CoinGlass SDK opportunity are shown explicitly; no live payment was sent.'
+                                  : 'Evaluation package ready — sample outputs assembled for review; no external result was independently verified.'}
                             </p>
                           </div>
+                          {isSolAnalysis && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-3xl mx-auto text-left text-[11px] font-mono">
+                              <div className="p-3 rounded-xl bg-black/40 border border-white/[0.08]">
+                                <span className="text-zinc-500 uppercase text-[9px] block mb-1">Market & trend</span>
+                                <span className="text-white font-semibold">{solMarketSnapshot?.analysis?.direction || 'Trend pending'}</span>
+                                <span className="text-zinc-400 block mt-1">Weekly candles and volume from {solMarketSnapshot?.dataStatus === 'LIVE_PUBLIC_MARKET_DATA' ? 'a public market feed' : 'a labelled evaluation sample'}.</span>
+                              </div>
+                              <div className="p-3 rounded-xl bg-black/40 border border-white/[0.08]">
+                                <span className="text-zinc-500 uppercase text-[9px] block mb-1">Zones & conclusion</span>
+                                <span className="text-white font-semibold">Support ${solMarketSnapshot?.analysis?.support?.toFixed?.(2) || '—'} · Resistance ${solMarketSnapshot?.analysis?.resistance?.toFixed?.(2) || '—'}</span>
+                                <span className="text-zinc-400 block mt-1">{solMarketSnapshot?.analysis?.direction === 'uptrend' ? 'Setup worth watching.' : 'No clear setup yet.'} Paid depth: {solPaidStepSkippedForBudget ? 'unavailable over budget' : 'included as a demo input'} · CoinGlass liquidation data: needed, but SDK not integrated; this request earned $0.</span>
+                              </div>
+                            </div>
+                          )}
                           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 max-w-3xl mx-auto pt-4 border-t border-white/10 font-mono text-left">
                             <div className="p-4 rounded-xl bg-black/60 border border-white/[0.08]">
                               <span className="text-[10px] uppercase text-zinc-500 block mb-1">{batchTxHash ? 'Total spent' : 'Planned cost'}</span>
                               <span className="text-xl font-bold text-white block">
-                                ${selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)}
+                                ${(isSolAnalysis ? effectivePlannedCostUsd : selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0)).toFixed(4)}
                               </span>
-                              <span className="text-[11px] text-zinc-400 block mt-0.5">Policy cap: {(selectedPreset as any).budgetLimit || '$0.0300 policy cap'}</span>
+                              <span className="text-[11px] text-zinc-400 block mt-0.5">Policy cap: {displayJobBudget}</span>
                             </div>
                             <div className="p-4 rounded-xl bg-black/60 border border-white/[0.08]">
                               <span className="text-[10px] uppercase text-zinc-500 block mb-1">
-                                {selectedPreset.id === 'swarm_media_creative' ? 'Pipeline composition' : batchTxHash ? 'Nodes paid' : 'Steps reviewed'}
+                                {selectedPreset.id === 'swarm_media_creative' ? 'Pipeline composition' : isSolAnalysis ? 'Pipeline composition' : batchTxHash ? 'Nodes paid' : 'Steps reviewed'}
                               </span>
                               <span className="text-xl font-bold text-[#d7ff4f] block">
-                                {selectedPreset.id === 'swarm_media_creative' ? '7 Feeds · 12 Workers' : selectedPreset.subcontractors.length}
+                                {selectedPreset.id === 'swarm_media_creative' ? '7 Feeds · 12 Workers' : isSolAnalysis ? `2 Free · ${solPaidStepSkippedForBudget ? '0 Paid' : '1 Paid'} · 1 Skipped` : selectedPreset.subcontractors.length}
                               </span>
                               <span className="text-[11px] text-zinc-400 block mt-0.5">
-                                {selectedPreset.id === 'swarm_media_creative' ? '19 pipeline steps' : 'Specialist endpoints'}
+                                {selectedPreset.id === 'swarm_media_creative' ? '19 pipeline steps' : isSolAnalysis ? 'plus final report' : 'Specialist endpoints'}
                               </span>
                             </div>
                             <div className="p-4 rounded-xl bg-black/60 border border-white/[0.08]">
@@ -6523,18 +8109,18 @@ export function MultiAgentSwarmView({
                                 <span className="text-zinc-500 text-[10px]">Chain ID 42431 · Type 0x76 MPP</span>
                               </div>
                               <a
-                                href={batchTxHash ? `https://explore.tempo.xyz/tx/${batchTxHash}` : undefined}
+                                href={batchTxHash ? tempoTransactionUrl(batchTxHash) : undefined}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-xs text-[#d7ff4f] hover:underline flex items-center gap-1"
                               >
-                                <span>Explorer Receipt ↗</span>
+                                 <span>{batchTxHash ? 'Explorer Receipt ↗' : 'Evaluation trace · no receipt'}</span>
                                 <ExternalLink className="w-3 h-3" />
                               </a>
                             </div>
                             <div className="flex items-center justify-between text-[11px] text-zinc-300">
-                              <span>{batchTxHash ? 'Total settled' : 'Total planned'}: <strong className="text-white">${selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0).toFixed(4)} USD</strong></span>
-                              <span>{batchTxHash ? 'Units paid' : 'Payment steps'}: <strong className="text-[#d7ff4f]">{selectedPreset.subcontractors.filter(s => s.costPathUsd > 0).length}</strong></span>
+                              <span>{batchTxHash ? 'Total settled' : 'Total planned'}: <strong className="text-white">${(isSolAnalysis ? effectivePlannedCostUsd : selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0)).toFixed(4)} USD</strong></span>
+                              <span>{batchTxHash ? 'Units paid' : 'Payment steps'}: <strong className="text-[#d7ff4f]">{displayPaidStepCount}</strong></span>
                               <span>{batchTxHash ? 'Network fee' : 'Network fee'}: <strong className="text-emerald-400">{batchTxHash ? '&lt;$0.00002' : 'not incurred'}</strong></span>
                             </div>
                           </div>
@@ -6574,17 +8160,22 @@ export function MultiAgentSwarmView({
                     </h3>
                     <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold border bg-white/[0.04] text-zinc-300 border-white/10 flex items-center gap-1.5">
                       <span className={`w-1.5 h-1.5 rounded-full ${settledWorkerIds.size === selectedPreset.subcontractors.length ? 'bg-emerald-400' : 'bg-zinc-500'}`} />
-                      {settledWorkerIds.size}/{selectedPreset.subcontractors.length} {settledWorkerIds.size > 0 ? 'Steps complete' : 'Ready'}
+                      {settledWorkerIds.size > 0
+                        ? `${Math.min(settledWorkerIds.size, isSolAnalysis ? 5 : selectedPreset.subcontractors.length)}/${isSolAnalysis ? 5 : selectedPreset.subcontractors.length} steps complete`
+                        : `${isSolAnalysis ? displayPipelineUnitCount : selectedPreset.subcontractors.length} ${isSolAnalysis ? 'pipeline units' : 'steps'} ready`}
                     </span>
                   </div>
                   <p className="text-xs text-zinc-400 font-sans mt-0.5">
                     {settledWorkerIds.size === selectedPreset.subcontractors.length
-                    ? `${selectedPreset.subcontractors.length} work steps completed in the evaluation flow${batchTxHash ? ' and confirmed on Tempo L1.' : '.'}`
+                    ? `${isSolAnalysis ? 5 : selectedPreset.subcontractors.length} work steps completed in the evaluation flow${batchTxHash ? ' and confirmed on Tempo L1.' : '.'}`
                       : isExecuting
                       ? selectedPreset.subcontractors.length === 20
-                        ? 'Executing 3-phase workforce pipeline in parallel...'
+                        ? 'Executing 3-phase workforce pipeline...'
                         : 'Executing workforce pipeline...'
-                    : `${selectedPreset.subcontractors.length} work steps configured and ready.`}
+                    : isSolAnalysis ? '5 pipeline units configured under one Lead Agent and ready.' : `${selectedPreset.subcontractors.length} work steps configured and ready.`}
+                  </p>
+                  <p className="text-[11px] text-zinc-500 font-sans mt-1">
+                    This is the audit area: inspect each unit, the returned deliverable, and the payment record behind the final result.
                   </p>
                 </div>
               </div>
@@ -6611,7 +8202,7 @@ export function MultiAgentSwarmView({
                       mission: selectedPreset.title,
                       totalNodes: selectedPreset.subcontractors.length,
                       totalSettledCostUsd: Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4),
-                      tempoL1Settlement: batchTxHash ? "Verified parallel payment lanes" : "Budgeted payment steps; no chain receipt",
+                      tempoL1Settlement: batchTxHash ? "Confirmed payment receipts for approved steps" : "Budgeted payment steps; no chain receipt",
                       settledNodes: selectedPreset.subcontractors.map(s => ({
                         node: s.shortName,
                         role: s.role,
@@ -6652,15 +8243,15 @@ export function MultiAgentSwarmView({
                       `Brand & Quality Review: Approved (Brand & Policy Compliant)`,
                       `Recommendation: LAUNCH MULTI-PLATFORM AD CAMPAIGN`,
                       `Total Spend: $${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)} USD`,
-                      `Policy Budget Cap: ${(selectedPreset as any).budgetLimit || '$0.0500 cap'} (Zero Overdrafts)`,
+                      `Policy Budget Cap: ${displayJobBudget} (Zero Overdrafts)`,
                       `SaaS Subscription Incurred: $0.00 (Zero Retainers)`,
-                      `Settlement Layer: ${batchTxHash ? 'Tempo L1 micropayments (confirmed trace)' : 'Evaluation payment plan (wallet required for chain settlement)'}`,
+                      `Settlement Layer: ${batchTxHash ? 'Tempo L1 micropayments (confirmed trace)' : isLiveExecution ? 'Tempo L1 settlement via configured Treasury relayer (receipt pending)' : 'Evaluation payment plan (no chain transaction)'}`,
                       `On-Chain Tx Hash: ${batchTxHash || 'No batch transaction returned'}`,
                       "-------------------------------------------------------",
                       "VERIFIED DELIVERABLE SPECIFICATIONS:",
                       ...selectedPreset.subcontractors.map((s, idx) => `  ${idx + 1}. [${s.shortName}] ${s.role}: ${s.deliverablePreview} ($${s.costPathUsd.toFixed(4)})`),
                       "-------------------------------------------------------",
-                      "EXECUTIVE STATUS: REVIEW READY (ON-CHAIN TRACE DEPENDS ON LIVE WALLET)",
+                      `EXECUTIVE STATUS: ${batchTxHash ? 'PAYMENT CONFIRMED — TEMPO L1 RECEIPT READY' : isLiveExecution ? 'LIVE RUN — RECEIPT PENDING' : 'REVIEW READY — EVALUATION PREVIEW'}`,
                       "======================================================="
                     ].join("\n") : [
                       "=======================================================",
@@ -6668,17 +8259,17 @@ export function MultiAgentSwarmView({
                       "=======================================================",
                       `Job: ${customDirective || selectedPreset.title}`,
                       `Preset Workforce: ${selectedPreset.title}`,
-                      `Total Specialist Nodes: ${selectedPreset.subcontractors.length === 20 ? '20 Mission Units (1 Lead · 12 Workers · 7 Providers)' : `${selectedPreset.subcontractors.length} Mission Units`}`,
+                      `Total Specialist Nodes: ${selectedPreset.subcontractors.length === 20 ? '20 Mission Units (1 Lead · 12 Workers · 7 Providers)' : isSolAnalysis ? '1 Lead Agent + 5 pipeline units' : `${selectedPreset.subcontractors.length} Mission Units`}`,
                       `Total Spend: $${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)} USD`,
-                      `Corporate Policy Cap: ${(selectedPreset as any).budgetLimit || '$0.0300 cap'} (Zero Unapproved Overdrafts)`,
+                      `Corporate Policy Cap: ${displayJobBudget} (Zero Unapproved Overdrafts)`,
                       `SaaS Subscription Incurred: $0.00 (Zero Recurring Retainers)`,
-                      `Settlement Layer: ${batchTxHash ? 'Tempo L1 micropayments (confirmed trace)' : 'Evaluation payment plan (wallet required for chain settlement)'}`,
+                      `Settlement Layer: ${batchTxHash ? 'Tempo L1 micropayments (confirmed trace)' : isLiveExecution ? 'Tempo L1 settlement via configured Treasury relayer (receipt pending)' : 'Evaluation payment plan (no chain transaction)'}`,
                       `On-Chain Tx Hash: ${batchTxHash || 'No batch transaction returned'}`,
                       "-------------------------------------------------------",
                       "VERIFIED DELIVERABLE SPECIFICATIONS:",
                       ...selectedPreset.subcontractors.map((s, idx) => `  ${idx + 1}. [${s.shortName}] ${s.role}: ${s.deliverablePreview} ($${s.costPathUsd.toFixed(4)})`),
                       "-------------------------------------------------------",
-                      "EXECUTIVE STATUS: REVIEW READY (ON-CHAIN TRACE DEPENDS ON LIVE WALLET)",
+                      `EXECUTIVE STATUS: ${batchTxHash ? 'PAYMENT CONFIRMED — TEMPO L1 RECEIPT READY' : isLiveExecution ? 'LIVE RUN — RECEIPT PENDING' : 'REVIEW READY — EVALUATION PREVIEW'}`,
                       "======================================================="
                     ].join("\n");
                     navigator.clipboard.writeText(memoText);
@@ -6753,7 +8344,7 @@ export function MultiAgentSwarmView({
                       <div className="space-y-1.5 max-w-md mx-auto">
                         <h4 className="text-base font-bold text-white font-mono">Workforce Standby</h4>
                         <p className="text-xs text-zinc-400 font-sans leading-relaxed">
-                          {selectedPreset.subcontractors.length} specialized autonomous units are primed and authorized under the {(selectedPreset as any).budgetLimit || '$0.0300 cap'}.
+                          {isFlagshipMediaSwarm ? 'One Lead Agent, twelve workers, and seven provider inputs are ready' : isSolAnalysis ? 'One Lead Agent and five pipeline units are ready' : `${selectedPreset.subcontractors.length} specialized autonomous units are primed and authorized`} under the {displayJobBudget} cap, so you can review the plan before any payment step runs.
                         </p>
                       </div>
                       <button
@@ -6774,24 +8365,28 @@ export function MultiAgentSwarmView({
                       <div className="p-4 rounded-2xl bg-[#1f252b]/70 border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-xl bg-[#d7ff4f]/15 border border-[#d7ff4f]/30 flex items-center justify-center text-[#d7ff4f] shrink-0">
-                            <CheckCircle2 className="w-4 h-4" />
+                            <FileCheck className="w-4 h-4" />
                           </div>
                           <div>
                             <span className="text-xs font-bold text-white font-mono block">
                               {batchTxHash
                                 ? (selectedPreset.id === 'swarm_media_creative'
-                                  ? 'Executive Campaign Deliverables Approved'
+                                 ? 'Executive Campaign Deliverables Approved'
                                   : selectedPreset.id === 'swarm_arbitrage'
                                   ? 'Market Comparison Approved'
+                                  : isSolAnalysis
+                                  ? 'SOL/USDT Market Brief Approved'
                                   : 'Enterprise Due Diligence Dossier Approved')
                                 : (selectedPreset.id === 'swarm_media_creative'
                                   ? 'Executive Campaign Deliverables Ready'
                                   : selectedPreset.id === 'swarm_arbitrage'
                                   ? 'Market Comparison Ready'
+                                  : isSolAnalysis
+                                  ? 'SOL/USDT Market Brief Ready'
                                   : 'Enterprise Due Diligence Draft Ready')}
                             </span>
                             <span className="text-[11px] text-zinc-400 font-sans">
-                              {selectedPreset.subcontractors.length} work steps completed {batchTxHash ? 'with a Tempo L1 trace' : 'in the evaluation flow'} • Total planned spend: ${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)} USD
+                              {isSolAnalysis ? 5 : selectedPreset.subcontractors.length} work steps completed {batchTxHash ? 'with a Tempo L1 trace' : 'in the evaluation flow'} • Total planned spend: ${(isSolAnalysis ? effectivePlannedCostUsd : Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0)).toFixed(4)} USD
                             </span>
                           </div>
                         </div>
@@ -6806,17 +8401,17 @@ export function MultiAgentSwarmView({
                                 "SYNAPSE402 AUTONOMOUS WORKFORCE EXECUTIVE MEMO",
                                 "=======================================================",
                                 `Mission Directive: ${customDirective || selectedPreset.title}`,
-                                `Total Units: ${selectedPreset.subcontractors.length} Autonomous Units`,
+                                `Total Units: ${isSolAnalysis ? '1 Lead Agent + 5 pipeline units' : `${selectedPreset.subcontractors.length} Autonomous Units`}`,
                                 `Total Spend: $${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)} USD`,
-                                `Budget Policy Cap: ${selectedPreset.budgetLimit || '$0.0500 cap'} (Zero Overdrafts)`,
+                                `Budget Policy Cap: ${displayJobBudget} (Zero Overdrafts)`,
                                 `SaaS Subscriptions Incurred: $0.00 (Zero Recurring Retainers)`,
-                                `Settlement Layer: ${batchTxHash ? 'Tempo L1 micropayments (confirmed trace)' : 'Evaluation payment plan (wallet required for chain settlement)'}`,
+                                `Settlement Layer: ${batchTxHash ? 'Tempo L1 micropayments (confirmed trace)' : isLiveExecution ? 'Tempo L1 settlement via configured Treasury relayer (receipt pending)' : 'Evaluation payment plan (no chain transaction)'}`,
                                 `Batch Tx Hash: ${batchTxHash || 'No batch transaction returned'}`,
                                 "-------------------------------------------------------",
                                 "VERIFIED DELIVERABLES SUMMARY:",
                                 ...selectedPreset.subcontractors.map((s, idx) => `  ${idx + 1}. [${s.shortName}] ${s.role}: ${s.deliverablePreview} ($${s.costPathUsd.toFixed(4)})`),
                                 "-------------------------------------------------------",
-                                "EXECUTIVE STATUS: REVIEW READY (ON-CHAIN TRACE DEPENDS ON LIVE WALLET)",
+                                `EXECUTIVE STATUS: ${batchTxHash ? 'PAYMENT CONFIRMED — TEMPO L1 RECEIPT READY' : isLiveExecution ? 'LIVE RUN — RECEIPT PENDING' : 'REVIEW READY — EVALUATION PREVIEW'}`,
                                 "======================================================="
                               ].join("\n");
                               copyToClipboard(memoText, 'tab_memo_btn');
@@ -6831,7 +8426,7 @@ export function MultiAgentSwarmView({
                             ) : (
                               <>
                                 <Copy className="w-3.5 h-3.5 text-zinc-300" />
-                                <span>Copy 1-Page Memo</span>
+                                <span>{isSolAnalysis ? 'Copy Market Brief' : 'Copy 1-Page Memo'}</span>
                               </>
                             )}
                           </button>
@@ -6875,10 +8470,11 @@ export function MultiAgentSwarmView({
               {activeConsoleTab === 'inspector' && (() => {
                 const currentSub = selectedPreset.subcontractors.find((s) => s.id === selectedSubId) || selectedPreset.subcontractors[0];
                 const isSettled = settledWorkerIds.has(currentSub.id);
+                const solExplanation = isSolAnalysis ? SOL_NODE_EXPLANATIONS[currentSub.id] : undefined;
 
                 return (
                   <div className="space-y-4">
-                    {/* Quick Bot Selector Chips */}
+                    {/* Quick worker selector chips */}
                     <div className="flex items-center gap-1.5 overflow-x-auto pb-2 [scrollbar-width:thin]">
                       {selectedPreset.subcontractors.map((sub) => {
                         const isSubActive = sub.id === currentSub.id;
@@ -6904,7 +8500,7 @@ export function MultiAgentSwarmView({
                       })}
                     </div>
 
-                    {/* Bot Card Details */}
+                  {/* Worker card details */}
                     <div className="p-4 rounded-xl bg-black/40 border border-white/[0.08] space-y-3.5">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.06] pb-3">
                         <div className="flex items-center gap-2.5">
@@ -6914,6 +8510,11 @@ export function MultiAgentSwarmView({
                           <div>
                             <span className="font-semibold text-white text-sm block">{currentSub.role}</span>
                             <span className="text-[11px] text-zinc-500 font-sans">{currentSub.providerLabel || currentSub.team} • Stage: {currentSub.category}</span>
+                            {solExplanation && (
+                              <span className="text-[11px] text-zinc-300 font-sans block mt-1 max-w-3xl leading-relaxed">
+                                {solExplanation.purpose}
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div>
@@ -6941,16 +8542,43 @@ export function MultiAgentSwarmView({
                         <div className="p-3 rounded-lg bg-black/40 border border-white/[0.05]">
                           <span className="text-[10px] text-zinc-500 block uppercase">Input / Query Mandate</span>
                           <span className="text-zinc-200 font-medium truncate block text-[11px] font-sans mt-0.5">
-                            {currentSub.taskInput || currentSub.queryPrompt || currentSub.deliverablePreview}
+                            {solExplanation?.purpose || currentSub.taskInput || currentSub.queryPrompt || currentSub.deliverablePreview}
                           </span>
                         </div>
                         <div className="p-3 rounded-lg bg-black/40 border border-white/[0.05]">
                           <span className="text-[10px] text-zinc-500 block uppercase">Cost & Speed</span>
                           <span className="text-white font-medium block text-[11px] font-mono mt-0.5">
-                            ${currentSub.costPathUsd.toFixed(4)} USD • policy check
+                            {solExplanation?.cost || `$${currentSub.costPathUsd.toFixed(4)} USD • policy check`}
                           </span>
                         </div>
                       </div>
+
+                      {solExplanation && (
+                        <div className="rounded-xl border border-[#d7ff4f]/20 bg-[#d7ff4f]/[0.045] overflow-hidden">
+                          <div className="px-3.5 py-2.5 border-b border-[#d7ff4f]/15 flex items-center justify-between gap-3">
+                            <span className="text-[10px] font-mono font-bold uppercase tracking-[0.16em] text-[#d7ff4f]">Why this unit exists</span>
+                            <span className="text-[10px] text-zinc-400 font-sans">Follow the handoff</span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-white/[0.06]">
+                            <div className="p-3 bg-[#11161a]/90">
+                              <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-500 block mb-1">What it does</span>
+                              <p className="text-[11px] text-zinc-200 font-sans leading-relaxed">{solExplanation.purpose}</p>
+                            </div>
+                            <div className="p-3 bg-[#11161a]/90">
+                              <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-500 block mb-1">Why it matters</span>
+                              <p className="text-[11px] text-zinc-200 font-sans leading-relaxed">{solExplanation.why}</p>
+                            </div>
+                            <div className="p-3 bg-[#11161a]/90">
+                              <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-500 block mb-1">What comes back</span>
+                              <p className="text-[11px] text-zinc-200 font-sans leading-relaxed">{solExplanation.returns}</p>
+                            </div>
+                            <div className="p-3 bg-[#11161a]/90">
+                              <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-zinc-500 block mb-1">Next handoff</span>
+                              <p className="text-[11px] text-zinc-200 font-sans leading-relaxed">{solExplanation.next}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Task & Verified Deliverable Output Box */}
                       <div className="p-3.5 rounded-lg bg-black/60 border border-white/[0.08] space-y-2">
@@ -6965,8 +8593,8 @@ export function MultiAgentSwarmView({
                         </div>
                         <div className="p-3 rounded-md bg-white/[0.02] border border-white/[0.04] font-mono text-xs text-zinc-200 leading-relaxed break-words select-all whitespace-pre-wrap">
                           {isSettled
-                            ? (currentSub.taskOutput || currentSub.samplePayload || currentSub.deliverablePreview)
-                            : `Expected Output: ${currentSub.deliverablePreview}`}
+                            ? `${solExplanation ? solExplanation.returns : 'Sample output · ' + (currentSub.taskOutput || currentSub.samplePayload || currentSub.deliverablePreview)}`
+                            : `${solExplanation ? `Expected result: ${solExplanation.returns}` : `Expected Output: ${currentSub.deliverablePreview}`}`}
                         </div>
                       </div>
                     </div>
@@ -6993,19 +8621,19 @@ export function MultiAgentSwarmView({
                     </div>
                     <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.05] space-y-1">
                       <span className="text-zinc-500 block uppercase text-[10px]">Settlement Network</span>
-                      <span className="text-[#d7ff4f] font-mono block">{batchTxHash ? 'Tempo L1 Testnet' : 'Awaiting live wallet'}</span>
+                      <span className="text-[#d7ff4f] font-mono block">{batchTxHash ? 'Tempo L1 Testnet' : isLiveExecution ? 'Awaiting live settlement' : 'Evaluation mode'}</span>
                     </div>
                     <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.05] space-y-1">
                       <span className="text-zinc-500 block uppercase text-[10px]">{batchTxHash ? 'Total paid' : 'Total planned'}</span>
                       <span className="text-[#d7ff4f] font-semibold block">
-                        {settledWorkerIds.size} of {selectedPreset.subcontractors.length} Nodes (${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)} USD)
+                        {Math.min(settledWorkerIds.size, displayPipelineUnitCount)} of {displayPipelineUnitCount} Pipeline Units (${Array.from(settledWorkerIds).reduce<number>((acc, id) => acc + (selectedPreset.subcontractors.find(x => x.id === id)?.costPathUsd || 0), 0).toFixed(4)} USD)
                       </span>
                     </div>
                   </div>
 
                   <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] text-[11px] text-zinc-300 space-y-2">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                      <span>{batchTxHash ? 'Differentiated micro-settlements were released on Tempo L1 after delivery checks.' : 'Each payment step is planned against the budget and is not sent until a live wallet is connected.'} Total pipeline cost: ${(selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0)).toFixed(4)} USD of {(selectedPreset as any).budgetLimit || '$0.0500 cap'}.</span>
+                      <span>{batchTxHash ? 'Differentiated micro-settlements were released on Tempo L1 after delivery checks.' : isLiveExecution ? 'Each approved payment step is sent through the configured Treasury relayer after the cap and provider checks pass.' : 'Each payment step is shown against the budget but no blockchain payment is sent in evaluation mode.'} Total pipeline cost: ${(selectedPreset.subcontractors.reduce((acc, s) => acc + s.costPathUsd, 0)).toFixed(4)} USD of {displayJobBudget}.</span>
                       <span className="text-[#d7ff4f] font-mono font-semibold">
                         {selectedPreset.id === 'swarm_media_creative' ? 'Surplus: $0.0255 protected' : selectedPreset.id === 'swarm_arbitrage' ? 'Surplus: $0.0040 protected' : 'Surplus: $0.0030 protected'}
                       </span>
@@ -7034,7 +8662,7 @@ export function MultiAgentSwarmView({
                           <span className="text-zinc-400 font-mono">Multi-Party Settlement Record</span>
                         )}
                         <a
-                          href={batchTxHash ? `https://explore.tempo.xyz/tx/${batchTxHash}` : undefined}
+                          href={batchTxHash ? tempoTransactionUrl(batchTxHash) : undefined}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-[#d7ff4f] hover:text-white flex items-center gap-1 font-mono text-[10px] hover:underline"
@@ -7122,14 +8750,14 @@ export function MultiAgentSwarmView({
               </div>
               <div>
                 <span className="font-bold text-[#f5f5f2] flex items-center">
-                  <span>1. Pay Word-by-Word</span>
+                  <span>1. Meter Word-by-Word</span>
                   <InfoBadge
-                    title="Pay Word-by-Word"
-                    text="AI generates text word-by-word. You are billed $0.00002 only for words actually received. No paying upfront for unread answers."
+                    title="Meter Word-by-Word"
+                    text="The demo counts each delivered token at $0.00002. It records one evaluation receipt after the stream; no live payment is sent."
                   />
                 </span>
                 <span className="text-white/50">
-                  Words stream in real-time. You only pay for what you actually receive ($0.00002/word).
+                  Words stream in real-time. The evaluation meter counts only delivered tokens ($0.00002/token).
                 </span>
               </div>
             </div>
@@ -7140,14 +8768,14 @@ export function MultiAgentSwarmView({
               </div>
               <div>
                 <span className="font-bold text-[#f5f5f2] flex items-center">
-                  <span>2. Stop Anytime (&lt;15ms Freeze)</span>
+                  <span>2. Stop while streaming</span>
                   <InfoBadge
-                    title="Instant Stop (<15ms)"
-                    text="Clicking Stop halts the connection in under 15ms. Metering freezes immediately so you never pay for unread text."
+                    title="Stop while streaming"
+                    text="Clicking Stop closes the stream and stops counting new words. The final record includes only the words received before the stop."
                   />
                 </span>
                 <span className="text-white/50">
-                  Hit "Abort Stream" mid-sentence. Billing cuts off immediately without paying for the rest.
+                  Hit "Abort Stream" mid-sentence. The evaluation meter stops immediately and records only the tokens delivered so far.
                 </span>
               </div>
             </div>
@@ -7161,18 +8789,18 @@ export function MultiAgentSwarmView({
                   <span>3. One Final Micro-Receipt</span>
                   <InfoBadge
                     title="Final payment record"
-                    text="Words are tallied as they arrive; the final amount is recorded when the stream completes or stops. A live wallet is required for an on-chain receipt."
+                    text="Words are tallied as they arrive; the final amount is recorded in one evaluation receipt when the stream completes or stops. Live streaming stays disabled until a pre-authorized hold exists."
                   />
                 </span>
                 <span className="text-white/50">
-                  Words are counted live; the accumulated amount is recorded when finished. Live chain settlement requires a connected wallet.
+                  Words are counted live; the accumulated amount is recorded when finished. This experimental stream is evaluation-only, so no Treasury payment is sent.
                 </span>
               </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Left: Stream Topic & Live Controls */}
+            {/* Left: Stream Topic & Evaluation Controls */}
             <div className="lg:col-span-5 space-y-4">
               <div className="flex items-center gap-2 px-1">
                 <span className="px-2 py-0.5 rounded-md bg-[#d7ff4f] text-[#08090c] font-black text-[10px] tracking-wider uppercase">
@@ -7196,7 +8824,7 @@ export function MultiAgentSwarmView({
                     }`}
                   >
                     <div className="font-bold text-xs text-[#f5f5f2] mb-0.5">Market Market Comparison &amp; Micro-Pricing</div>
-                    <p className="text-[11px] text-white/50">Simulates real-time pricing and a budgeted sub-cent payment step.</p>
+                    <p className="text-[11px] text-white/50">Shows sample pricing and a budgeted sub-cent evaluation step.</p>
                   </button>
 
                   <button
@@ -7209,7 +8837,7 @@ export function MultiAgentSwarmView({
                     }`}
                   >
                     <div className="font-bold text-xs text-[#f5f5f2] mb-0.5">Code Sandbox &amp; Risk Testing</div>
-                    <p className="text-[11px] text-white/50">Executes automated code testing and risk models in real time.</p>
+                    <p className="text-[11px] text-white/50">Shows a sample code test and risk model response.</p>
                   </button>
 
                   <button
@@ -7221,8 +8849,8 @@ export function MultiAgentSwarmView({
                         : 'bg-black/40 border-white/[.08] text-white/50'
                     }`}
                   >
-                    <div className="font-bold text-xs text-[#f5f5f2] mb-0.5">External Tools &amp; Data Verification</div>
-                    <p className="text-[11px] text-white/50">Live tool response verification with a budget check.</p>
+                    <div className="font-bold text-xs text-[#f5f5f2] mb-0.5">External Tools &amp; Data Preview</div>
+                    <p className="text-[11px] text-white/50">Sample tool output with a local budget check.</p>
                   </button>
                 </div>
 
@@ -7275,13 +8903,13 @@ export function MultiAgentSwarmView({
               </div>
             </div>
 
-            {/* Right: Live Token Stream Receiver & Real-time Accumulator */}
+            {/* Right: Evaluation Token Stream Receiver & Real-time Accumulator */}
             <div className="lg:col-span-7 space-y-4">
               <div className="flex items-center gap-2 px-1">
                 <span className="px-2 py-0.5 rounded-md bg-[#d7ff4f] text-[#08090c] font-black text-[10px] tracking-wider uppercase">
                   STEP 2
                 </span>
-                <span className="text-xs font-bold text-white tracking-wide">Live token stream and payment record</span>
+                <span className="text-xs font-bold text-white tracking-wide">Evaluation token stream and receipt</span>
               </div>
               {/* Telemetry Bar */}
               <div className="p-3 rounded-xl bg-white/[.04] border border-white/15 grid grid-cols-3 gap-2 font-mono text-center">
@@ -7294,17 +8922,17 @@ export function MultiAgentSwarmView({
                   <span className="text-base font-bold text-[#d7ff4f]">${streamCost.toFixed(6)}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-white/50 uppercase block">Parallel Lane</span>
+                  <span className="text-[10px] text-white/50 uppercase block">Nonce Lane</span>
                   <span className="text-base font-bold text-[#d7ff4f]">{streamNonce}</span>
                 </div>
               </div>
 
-              {/* Live Streaming Terminal / Word Accumulator */}
+              {/* Evaluation Streaming Terminal / Word Accumulator */}
               <div className="p-4 rounded-xl bg-black/40 border border-white/[.08] font-mono text-xs space-y-3">
                 <div className="flex items-center justify-between pb-2 border-b border-white/[.08]">
                   <div className="flex items-center gap-2">
                     <Radio className={`w-3.5 h-3.5 ${isStreaming ? 'text-[#d7ff4f]' : 'text-white/50'}`} />
-                    <span className="text-[#f5f5f2] font-bold">Live Model Stream Output</span>
+                    <span className="text-[#f5f5f2] font-bold">Evaluation Model Stream Output</span>
                   </div>
                   <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
                     streamStatus === 'STREAMING_ACTIVE' 
@@ -7322,7 +8950,7 @@ export function MultiAgentSwarmView({
                 <div className="min-h-[160px] max-h-[220px] overflow-y-auto p-3 rounded-lg bg-white/[.04]/50 border border-white/[.08] text-[#f5f5f2] leading-relaxed text-[13px] font-sans">
                   {streamTokens.length === 0 && !isStreaming && (
                     <span className="text-white/50 italic font-mono text-xs block py-8 text-center">
-                      Select a topic and click "Start SSE Stream" to witness off-chain token counting and batch settlement. Click "Abort" anytime to test zero overcharge.
+                      Select a topic and click "Start SSE Stream" to preview off-chain token counting and an evaluation receipt. No live payment is sent in this experimental stream. Click "Abort" anytime to stop delivery.
                     </span>
                   )}
 
@@ -7371,13 +8999,13 @@ export function MultiAgentSwarmView({
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 rounded bg-[#d7ff4f] text-[#0c0f12] font-black text-xs font-mono">
-                  DESKTOP AI WALLET
+                  DESKTOP AI PAYMENTS
                 </span>
                 <h3 className="font-bold text-sm text-[#f5f5f2] flex items-center">
                   <span>Connect Claude Desktop &amp; Cursor to Tempo L1</span>
                   <InfoBadge
                     title="Desktop AI Micro-Payments"
-                    text="Connects an AI client to the payment flow. It can request approved licensed or private resources within a strict $0.05 limit; a live wallet is needed before funds move."
+                    text="Connects an AI client to the payment flow. It can request approved licensed or private resources within a strict job maximum; live funds move only after the configured Treasury relayer confirms settlement."
                   />
                 </h3>
               </div>
@@ -7574,7 +9202,7 @@ export function MultiAgentSwarmView({
                 />
               </h3>
               <p className="text-xs text-zinc-300 mt-1 max-w-3xl leading-relaxed">
-                Traditional crawlers can be blocked by web firewalls. Synapse402 gives an approved agent a paid, structured response; the budget is checked before the request and a live wallet is needed for on-chain settlement.
+                Traditional crawlers can be blocked by web firewalls. Synapse402 gives an approved agent a paid, structured response; the budget is checked before the request and live settlement records the on-chain payment.
               </p>
             </div>
 
@@ -7692,7 +9320,7 @@ export function MultiAgentSwarmView({
               <div className="flex items-center justify-between border-b border-white/10 pb-3">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 rounded-lg bg-[#d7ff4f]/20 text-[#d7ff4f]">
-                    <CheckCircle2 className="w-4 h-4" />
+                                <Bot className="w-4 h-4" />
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-[#d7ff4f] font-mono uppercase tracking-wider">
@@ -7723,7 +9351,7 @@ export function MultiAgentSwarmView({
                 <div className="p-2 rounded bg-black/40 border border-white/5">
                   <span className="text-[10px] text-zinc-400 block">Publisher Revenue</span>
                   <strong className="text-[#d7ff4f] text-sm">{synapseResult ? synapseResult.publisherEarned : '—'}</strong>
-                  <span className="text-[9px] text-zinc-500 block">Direct into merchant vault</span>
+                  <span className="text-[9px] text-zinc-500 block">Demo receiver; production payee is configurable</span>
                 </div>
                 <div className="p-2 rounded bg-black/40 border border-white/5">
                   <span className="text-[10px] text-zinc-400 block">Operator Cost</span>
@@ -7743,7 +9371,7 @@ export function MultiAgentSwarmView({
               <div className="p-2.5 rounded-lg bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 text-[11px] text-zinc-300 flex items-start gap-2">
                 <Zap className="w-4 h-4 text-[#d7ff4f] shrink-0 mt-0.5" />
                 <span>
-                  <strong>Closed economic loop:</strong> The provider can charge per approved request and the agent receives structured data. In this environment the amount is recorded as an evaluation step; live settlement requires a wallet.
+                  <strong>Payment loop:</strong> An approved request is priced, checked against the job limit, and recorded with its result. Evaluation records the plan without a chain write; live mode sends the approved amount through the configured receiver and returns the receipt.
                 </span>
               </div>
             </div>
@@ -7767,12 +9395,12 @@ export function MultiAgentSwarmView({
                   <tr>
                     <td className="py-2.5 px-3 font-semibold text-white">Success Reliability</td>
                     <td className="py-2.5 px-3 text-rose-400">~20–40% (Frequent IP bans & CAPTCHA)</td>
-                    <td className="py-2.5 px-3 text-[#d7ff4f] font-bold">Cryptographic SLA ($0.00 Lost on Error)</td>
+                    <td className="py-2.5 px-3 text-[#d7ff4f] font-bold">Provider error can be voided before settlement</td>
                   </tr>
                   <tr>
                     <td className="py-2.5 px-3 font-semibold text-white">Execution Latency</td>
                     <td className="py-2.5 px-3 text-zinc-400">800–2,500ms (Heavy proxy overhead)</td>
-                    <td className="py-2.5 px-3 text-[#d7ff4f] font-bold">Budget check before delivery; chain time depends on live wallet</td>
+                    <td className="py-2.5 px-3 text-[#d7ff4f] font-bold">Budget check before delivery; chain receipt appears after live settlement</td>
                   </tr>
                   <tr>
                     <td className="py-2.5 px-3 font-semibold text-white">Data Quality</td>
@@ -7782,7 +9410,7 @@ export function MultiAgentSwarmView({
                   <tr>
                     <td className="py-2.5 px-3 font-semibold text-white">Publisher Revenue</td>
                     <td className="py-2.5 px-3 text-rose-400">$0.00 (Incurs WAF & server costs)</td>
-                    <td className="py-2.5 px-3 text-[#d7ff4f] font-bold">0.1¢/req instant deposit (99.9% to seller)</td>
+                    <td className="py-2.5 px-3 text-[#d7ff4f] font-bold">Illustrative 0.1¢/request payout; production payee is configurable</td>
                   </tr>
                   <tr>
                     <td className="py-2.5 px-3 font-semibold text-white">Billing Model</td>
@@ -7791,59 +9419,6 @@ export function MultiAgentSwarmView({
                   </tr>
                 </tbody>
               </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* DELIVERABLE PREVIEW MODAL */}
-      {selectedDeliverablePreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-2xl bg-white/[.04] backdrop-blur-xl border border-[#d7ff4f]/40 rounded-2xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <div>
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#d7ff4f] px-2 py-0.5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/30">
-                  {selectedDeliverablePreview.badge}
-                </span>
-                <h3 className="text-base sm:text-lg font-bold text-white mt-1.5">{selectedDeliverablePreview.title}</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedDeliverablePreview(null)}
-                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto bg-black/60 rounded-xl p-4 border border-white/[0.06] font-mono text-xs text-zinc-300 whitespace-pre-wrap leading-relaxed">
-              {evaluationCopy(selectedDeliverablePreview.content)}
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-white/10 text-xs font-mono">
-              <span className="text-zinc-500 text-[11px]">{batchTxHash ? 'Settled on Tempo L1 (Chain 42431)' : 'Evaluation deliverable · no chain receipt'} • Zero Subscriptions</span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    soundEngine.playClick();
-                    navigator.clipboard.writeText(evaluationCopy(selectedDeliverablePreview.content));
-                    setCopiedKey('deliverable_modal');
-                    setTimeout(() => setCopiedKey(null), 2000);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-[#d7ff4f] text-[#08090c] font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>{copiedKey === 'deliverable_modal' ? '✓ Copied to Clipboard' : 'Copy Content'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedDeliverablePreview(null)}
-                  className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 transition cursor-pointer"
-                >
-                  Close
-                </button>
-              </div>
             </div>
           </div>
         </div>

@@ -1,58 +1,73 @@
-﻿import React, { useState } from 'react';
+import { TEMPO_EXPLORER_URL, tempoTransactionUrl } from '../config/network';
+import React, { useState } from 'react';
 import { LivePaymentEvent } from '../types/synapse402';
 import { Activity, ExternalLink, Zap, Clock, FileText, Download, ShieldCheck, Loader2, Plus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { soundEngine } from '../utils/audioEffects';
 import { InfoBadge } from './InfoBadge';
+import { normalizeSynapseStatus } from '../shared/types';
+import { SynapseStatusBadge } from './shared/SynapseStatusBadge';
+import { useSynapseState } from '../shared/SynapseStateContext';
 
 interface LivePaymentsFeedProps {
   events: LivePaymentEvent[];
+  summary?: {
+    confirmedPaymentsCount: number;
+    evaluationEventsCount: number;
+    voidedEventsCount: number;
+    totalReceiptsCount: number;
+    totalVolumeSettledPathUsd: number;
+  };
   onInspectEvent?: (event: LivePaymentEvent) => void;
   onRefresh?: () => void;
+  onNavigateToTab?: (tab: 'demo') => void;
+  executionMode?: 'LIVE_TESTNET' | 'RESILIENT_SANDBOX';
 }
 
 const SIMULATION_SCENARIOS = [
   {
     keyId: 'key_cortex_research',
-    agentName: 'Knowledge Retrieval Bot',
-    targetUrl: 'https://api.vector-index.io/v1/embeddings/query',
-    serviceName: 'Enterprise Vector DB Context',
+    agentName: 'Knowledge Retrieval Agent',
+    targetUrl: '/api/v1/data/unlocked-article',
+    serviceName: 'Sample document-search provider response',
     price: 0.0010,
-    category: 'Vector Search',
-    deliverable: 'Vector Index Query (quarterly_liquidity_model) — 3 verified chunks retrieved with 0.942 cosine similarity in 11ms.',
+    category: 'Research & Data',
+    deliverable: 'Example document-search result — 3 sample context chunks for a quarterly liquidity question.',
   },
   {
     keyId: 'key_quant_alpha',
-    agentName: 'Reasoning Inference Bot',
-    targetUrl: 'https://api.deepseek.com/v1/chat/completions',
-    serviceName: 'DeepSeek R1 Reasoning Compute Gate',
+    agentName: 'Reasoning Inference Agent',
+    targetUrl: '/api/v1/market/sol-depth',
+    serviceName: 'Sample reasoning-provider response',
     price: 0.0020,
     category: 'AI Inference',
-    deliverable: 'DeepSeek R1 Reasoning Token Stream — 890 tokens returned (124 t/s). Executed optimal allocation trace.',
+    deliverable: 'Example reasoning result — a sample allocation summary used to show the payment flow.',
   },
   {
     keyId: 'key_polyglot_translator',
-    agentName: 'Web Research Bot',
-    targetUrl: 'https://api.scrape-proxy.dev/v1/scrape',
-    serviceName: 'Headless Web Scraping Gateway',
+    agentName: 'Web Research Agent',
+    targetUrl: '/api/v1/data/unlocked-article',
+    serviceName: 'Sample web-extraction provider response',
     price: 0.0015,
     category: 'Data Extraction',
-    deliverable: 'Headless Scraping Gateway (news.ycombinator.com) — 48.2 KB clean markdown extracted (0ms Captcha).',
+    deliverable: 'Example extraction result — sample clean text used to show a paid resource response.',
   },
   {
     keyId: 'key_sec_audit',
-    agentName: 'Code Security Bot',
-    targetUrl: 'https://api.sandbox-python.dev/v1/run',
-    serviceName: 'Isolated Python Cloud Sandbox',
+    agentName: 'Code Security Agent',
+    targetUrl: '/api/v1/data/python-sandbox',
+    serviceName: 'Sample sandbox-provider response',
     price: 0.0025,
     category: 'Cloud Sandbox',
-    deliverable: 'Python 3.11 Isolated Container (cnt_safe_9842a) — All test assertions passed with exit code 0.',
+    deliverable: 'Example sandbox result — sample successful test output used to show the paid step.',
   },
 ];
 
-export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onInspectEvent, onRefresh }) => {
+export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, summary, onInspectEvent, onRefresh, onNavigateToTab, executionMode = 'RESILIENT_SANDBOX' }) => {
   const [isTriggering, setIsTriggering] = useState(false);
   const [copiedSimHash, setCopiedSimHash] = useState(false);
   const [scenarioIndex, setScenarioIndex] = useState(0);
+  const [testBudgetInput, setTestBudgetInput] = useState<string>(SIMULATION_SCENARIOS[0].price.toFixed(4));
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'CONFIRMED' | 'DEMO' | 'VOIDED'>('ALL');
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'FINANCE' | 'RESEARCH' | 'SECURITY' | 'INFERENCE'>('ALL');
   const [simulationResult, setSimulationResult] = useState<{
     txHash: string;
@@ -63,19 +78,54 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
     latencyMs: number;
     deliverable: string;
   } | null>(null);
+  const [simulationError, setSimulationError] = useState<string | null>(null);
 
   const filterTabs = [
-    { id: 'ALL', label: 'All Bot Payments' },
+    { id: 'ALL', label: 'All Agents' },
     { id: 'FINANCE', label: 'Finance & Quants' },
     { id: 'RESEARCH', label: 'Market Research' },
     { id: 'SECURITY', label: 'Security & Code' },
     { id: 'INFERENCE', label: 'AI Inference' },
   ];
 
+  const isConfirmed = (event: LivePaymentEvent) => event.executionMode === 'LIVE_TESTNET'
+    && event.status === 'SETTLED'
+    && event.receiptVerified === true
+    && typeof event.txHash === 'string'
+    && /^0x[a-fA-F0-9]{64}$/.test(event.txHash)
+    && event.id !== 'trace_init_001';
+  const isLivePending = (event: LivePaymentEvent) => event.executionMode === 'LIVE_TESTNET'
+    && !isConfirmed(event)
+    && event.status !== 'VOIDED'
+    && event.status !== 'REFUNDED'
+    && event.status !== 'REJECTED'
+    && event.status !== 'FAILED';
+  const isLiveFailed = (event: LivePaymentEvent) => event.executionMode === 'FAILED_REVERT'
+    || event.status === 'REJECTED'
+    || event.status === 'FAILED';
+  const isVoidedOrRefunded = (event: LivePaymentEvent) => event.status === 'VOIDED' || event.status === 'REFUNDED';
+  const isEvaluation = (event: LivePaymentEvent) => !isConfirmed(event) && !isLivePending(event) && !isLiveFailed(event) && !isVoidedOrRefunded(event);
+
+  const { latestReceipts, executePayment } = useSynapseState();
+  const effectiveEvents = React.useMemo(() => {
+    const existing = new Set((events || []).map((e) => e.id));
+    const newItems = (latestReceipts || []).filter((r) => !existing.has(r.id));
+    return [...newItems, ...(events || [])];
+  }, [events, latestReceipts]);
+
+  const confirmedCount = summary?.confirmedPaymentsCount ?? effectiveEvents.filter(isConfirmed).length;
+  const pendingCount = effectiveEvents.filter(isLivePending).length;
+  const evaluationCount = summary?.evaluationEventsCount ?? effectiveEvents.filter(isEvaluation).length;
+  const voidedCount = summary?.voidedEventsCount ?? effectiveEvents.filter(isVoidedOrRefunded).length;
+
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
 
-  const filteredEvents = (events || []).filter((ev) => {
+  const filteredEvents = effectiveEvents.filter((ev) => {
+    if (statusFilter === 'CONFIRMED' && !isConfirmed(ev)) return false;
+    if (statusFilter === 'DEMO' && !isEvaluation(ev) && !isLivePending(ev)) return false;
+    if (statusFilter === 'VOIDED' && !isVoidedOrRefunded(ev) && !isLiveFailed(ev)) return false;
+
     if (activeFilter === 'ALL') return true;
     const sName = (ev.serviceName || '').toLowerCase();
     const aName = (ev.agentName || '').toLowerCase();
@@ -94,57 +144,59 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
   const handleTriggerMicropayment = async () => {
     soundEngine.playClick();
     setIsTriggering(true);
+    setSimulationError(null);
     const t0 = performance.now();
     const scenario = SIMULATION_SCENARIOS[scenarioIndex % SIMULATION_SCENARIOS.length];
     setScenarioIndex((prev) => prev + 1);
+    const enteredBudgetUsd = Number(testBudgetInput);
+    const effectiveTestBudgetUsd = Number.isFinite(enteredBudgetUsd) && enteredBudgetUsd >= scenario.price
+      ? enteredBudgetUsd
+      : scenario.price;
+    setTestBudgetInput(effectiveTestBudgetUsd.toFixed(4));
 
     try {
-      const res = await fetch('/api/mpp/settle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          keyId: scenario.keyId,
-          targetUrl: scenario.targetUrl,
-          pricePathUsd: scenario.price,
-          category: scenario.category,
-          allowDynamicWhitelist: true,
-        }),
+      const settleRes = await executePayment({
+        keyId: scenario.keyId,
+        targetUrl: scenario.targetUrl,
+        pricePathUsd: scenario.price,
+        category: scenario.category,
+        evaluationOnly: executionMode !== 'LIVE_TESTNET',
+        jobId: `receipt_test_${scenario.keyId}_${Date.now()}`,
+        jobBudgetPathUsd: effectiveTestBudgetUsd,
+        serviceName: scenario.serviceName,
+        providerName: scenario.targetUrl,
       });
-      const latency = Math.round(performance.now() - t0);
-      const data = await res.json().catch(() => null);
-      if (res.ok) {
-        const liveConfirmed = data?.trace?.executionMode === 'LIVE_TESTNET'
-          && data?.trace?.status === 'SETTLED'
-          && typeof data?.trace?.txHash === 'string'
-          && data.trace.txHash.startsWith('0x');
-        if (liveConfirmed) soundEngine.playSettlementChime();
-        setSimulationResult({
-          txHash: liveConfirmed ? data.trace.txHash : '',
-          liveConfirmed,
-          agentName: scenario.agentName,
-          serviceName: scenario.serviceName,
-          costUsd: scenario.price,
-          latencyMs: latency || 135,
-          deliverable: scenario.deliverable,
-        });
-        if (onRefresh) onRefresh();
-      } else {
-        soundEngine.playDefenseIntercept();
-      }
-    } catch {
+      const latency = settleRes.latencyMs;
+      const liveConfirmed = settleRes.status === 'CONFIRMED'
+        && settleRes.trace.receiptVerified === true
+        && typeof settleRes.txHash === 'string'
+        && /^0x[a-fA-F0-9]{64}$/.test(settleRes.txHash);
+      if (liveConfirmed) soundEngine.playSettlementChime();
+      setSimulationResult({
+        txHash: liveConfirmed ? settleRes.txHash! : '',
+        liveConfirmed,
+        agentName: scenario.agentName,
+        serviceName: scenario.serviceName,
+        costUsd: scenario.price,
+        // The pipeline already measures wall-clock latency when the trace does
+        // not contain a provider-reported value. Never invent a fixed number
+        // for a receipt that did not return one.
+        latencyMs: Number.isFinite(Number(latency)) ? Number(latency) : 0,
+        deliverable: scenario.deliverable,
+      });
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
       soundEngine.playDefenseIntercept();
+      setSimulationError(err?.message || 'Payment test could not reach the policy engine.');
     } finally {
       setIsTriggering(false);
     }
   };
   return (
     <section id="section-live-payments-feed" className="space-y-4 font-sans">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 sm:p-5 rounded-xl bg-[#0c0e14]/90 border border-white/10 shadow-lg">
+      <div className="ui-section flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 sm:p-5 rounded-xl bg-[#0c0e14]/90 border border-white/10 shadow-lg">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-md bg-[#d7ff4f] text-[#08090c] font-black text-[10px] tracking-wider uppercase">
-              PAYMENTS HISTORY
-            </span>
             <h2 className="text-sm font-bold text-white tracking-tight">
               Payment Receipts
             </h2>
@@ -155,6 +207,12 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
           <p className="text-[11px] text-zinc-400 font-sans mt-0.5">
             Every payment records the resource, amount, provider and transaction proof.
           </p>
+          <div className="flex flex-wrap gap-1.5 mt-2 text-[10px] font-mono uppercase tracking-wide">
+            <span className="px-2 py-0.5 rounded border border-[#d7ff4f]/30 bg-[#d7ff4f]/10 text-[#d7ff4f]">{confirmedCount} chain-verified</span>
+            {pendingCount > 0 && <span className="px-2 py-0.5 rounded border border-amber-300/30 bg-amber-300/10 text-amber-200">{pendingCount} live pending</span>}
+            <span className="px-2 py-0.5 rounded border border-white/10 bg-white/[.04] text-zinc-400">{evaluationCount} evaluation</span>
+          </div>
+          <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">Payment proof and provider output are separate: a receipt proves the charge; sample or demo output is labelled as such.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs font-sans">
@@ -180,34 +238,21 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
             </a>
           </div>
 
-          <span className="px-2.5 py-1.5 rounded-lg bg-white/[.03] border border-white/10 text-zinc-400 font-mono text-xs">
-            Tempo Testnet (42431)
-          </span>
-
           <button
-            onClick={handleTriggerMicropayment}
-            disabled={isTriggering}
-            className="px-4 py-2 rounded-xl bg-[#d7ff4f] hover:bg-[#cbf540] text-[#08090c] font-black text-xs flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 cursor-pointer"
-            title="Run the payment flow; a chain receipt appears only after live confirmation"
+            type="button"
+            onClick={() => onNavigateToTab?.('demo')}
+            className="px-4 py-2 rounded-xl bg-[#d7ff4f] hover:bg-[#cbf540] text-[#08090c] font-black text-xs flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+            title="Open the payment walkthrough to run a test"
           >
-            {isTriggering ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Checking Payment...</span>
-              </>
-            ) : (
-              <>
-                <Zap className="w-3.5 h-3.5 fill-current text-[#08090c]" />
-                <span>Test payment flow</span>
-              </>
-            )}
+            <Zap className="w-3.5 h-3.5 fill-current" />
+            <span>Open payment walkthrough</span>
           </button>
         </div>
       </div>
 
       {/* Interactive Simulation Result Card */}
       {simulationResult && (
-        <div className="p-4 rounded-xl bg-white/[.03] backdrop-blur-md border border-white/[.08] flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn">
+        <div data-state={simulationResult.liveConfirmed ? 'success' : 'evaluation'} className="ui-result p-4 rounded-xl bg-white/[.03] backdrop-blur-md border border-white/[.08] flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-white/[0.05] text-[#d7ff4f] border border-white/10 flex items-center justify-center shrink-0">
               <ShieldCheck className="w-5 h-5 text-[#d7ff4f]" />
@@ -216,25 +261,25 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-white">Payment activity</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.05] text-zinc-300 border border-white/10 font-bold">
-                  {simulationResult.liveConfirmed ? 'Confirmed on Tempo L1' : 'Evaluation response'}
+                  {simulationResult.liveConfirmed ? 'Mode: LIVE_TESTNET · SETTLED' : 'Mode: DEMO · EVALUATION'}
                 </span>
               </div>
               <p className="text-[11px] text-zinc-400 mt-0.5">
-                {simulationResult.liveConfirmed ? 'Confirmed ' : 'Planned '}<strong className="text-white font-mono">${simulationResult.costUsd.toFixed(4)} USD</strong> for [<strong className="text-zinc-200">{simulationResult.agentName}</strong>] and returned <strong className="text-white">{simulationResult.serviceName}</strong>.{simulationResult.liveConfirmed ? ' The chain receipt is available below.' : ' No blockchain transaction was submitted.'}
+                {simulationResult.liveConfirmed ? 'Confirmed ' : 'Planned '}<strong className="text-white font-mono">${simulationResult.costUsd.toFixed(4)} USD</strong> for [<strong className="text-zinc-200">{simulationResult.agentName}</strong>].{simulationResult.liveConfirmed ? ' The verified Tempo receipt is available below.' : ' No verified blockchain receipt was returned.'}
               </p>
               <div className="mt-1.5 p-2.5 rounded bg-black/40 border border-white/10 text-[10.5px] font-sans text-zinc-300 leading-snug space-y-1">
                 <div className="flex items-center justify-between text-[9px] font-mono uppercase font-bold text-zinc-400">
                   <span className="flex items-center gap-1">
                     <Zap className="w-3 h-3 text-[#d7ff4f]" />
-                    <span>Production Execution Outcome:</span>
+                    <span>Demo Provider response:</span>
                   </span>
-                  <span className="text-zinc-500 font-mono text-[10px]">{simulationResult.liveConfirmed ? 'CHAIN RECEIPT CONFIRMED' : 'EVALUATION ONLY'}</span>
+                  <span className="text-zinc-500 font-mono text-[10px]">{simulationResult.liveConfirmed ? 'PAYMENT CONFIRMED' : 'PAYMENT NOT CONFIRMED'}</span>
                 </div>
                 <p className="text-zinc-200 text-[11px] font-mono">
-                  Production Deliverable: {simulationResult.deliverable}
+                  Sample result: {simulationResult.deliverable}
                 </p>
                 <span className="text-[9.5px] text-zinc-400 block font-sans mt-1">
-                  <strong className="text-zinc-300">What this proves:</strong> {simulationResult.liveConfirmed ? 'Confirms the payment trace on Tempo L1.' : 'Shows the payment flow and provider response without claiming a chain receipt.'} It does not independently verify external provider data accuracy.
+                  <strong className="text-zinc-300">What this proves:</strong> {simulationResult.liveConfirmed ? 'Tempo confirms this payment trace.' : 'This run has no verified Tempo receipt.'} The result above is sample provider data; it does not claim that an external service answered live.
                 </span>
               </div>
             </div>
@@ -256,7 +301,7 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
               )}
             </button>}
             {simulationResult.liveConfirmed && <a
-              href="https://explore.tempo.xyz"
+              href={tempoTransactionUrl(simulationResult.txHash)}
               target="_blank"
               rel="noopener noreferrer"
               className="px-3 py-1.5 rounded-lg bg-[#d7ff4f]/15 hover:bg-[#d7ff4f]/25 text-[#d7ff4f] border border-[#d7ff4f]/30 flex items-center gap-1.5 transition-colors"
@@ -267,11 +312,56 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
           </div>
         </div>
       )}
+      {simulationError && !isTriggering && (
+        <div role="alert" className="p-3 rounded-xl border border-red-300/25 bg-red-300/[.06] text-xs text-red-100">
+          <strong className="text-red-200">Payment test stopped:</strong> {simulationError} No funds were charged.
+        </div>
+      )}
 
       {/* Receipts Filter Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+      <div className="space-y-2 pt-1">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Status Filters */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+            <span className="text-[10.5px] font-mono uppercase text-zinc-400 font-bold mr-1">Type:</span>
+            {[
+              { id: 'ALL', label: `All (${effectiveEvents.length})` },
+              { id: 'CONFIRMED', label: `Confirmed (${confirmedCount})` },
+              { id: 'DEMO', label: `Demo (${evaluationCount})` },
+              { id: 'VOIDED', label: `Voided (${voidedCount})` },
+            ].map((tab) => {
+              const isSelected = statusFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    soundEngine.playClick();
+                    setStatusFilter(tab.id as any);
+                    setCurrentPage(1);
+                  }}
+                  className={`ui-interactive px-2.5 py-1 rounded-lg text-[11px] font-mono transition cursor-pointer flex items-center gap-1 ${
+                    isSelected
+                      ? tab.id === 'CONFIRMED'
+                        ? 'bg-[#d7ff4f] text-[#08090c] font-bold shadow-sm'
+                        : 'bg-white text-[#08090c] font-bold shadow-sm'
+                      : 'bg-white/[0.04] text-zinc-400 hover:text-white hover:bg-white/[0.08] border border-white/10'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <span className="text-xs font-mono text-zinc-400">
+            Showing <strong className="text-white">{filteredEvents.length > 0 ? startIndex + 1 : 0}–{Math.min(startIndex + pageSize, filteredEvents.length)}</strong> of {filteredEvents.length} payment receipts <span className="text-zinc-500">(Page {safePage} of {totalPages})</span>
+          </span>
+        </div>
+
+        {/* Agent Filters */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-          <span className="text-[10.5px] font-mono uppercase text-zinc-400 font-bold mr-1">Filter by Bot:</span>
+          <span className="text-[10.5px] font-mono uppercase text-zinc-400 font-bold mr-1">Agent:</span>
           {filterTabs.map((tab) => {
             const isSelected = activeFilter === tab.id;
             return (
@@ -283,36 +373,33 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
                   setActiveFilter(tab.id as any);
                   setCurrentPage(1);
                 }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-mono transition cursor-pointer flex items-center gap-1.5 ${
+                className={`ui-interactive px-2.5 py-1 rounded-lg text-[11px] font-mono transition cursor-pointer flex items-center gap-1 ${
                   isSelected
-                    ? 'bg-[#d7ff4f] text-[#08090c] font-bold shadow-sm'
-                    : 'bg-white/[0.04] text-zinc-400 hover:text-white hover:bg-white/[0.08] border border-white/10'
+                    ? 'bg-[#d7ff4f]/20 text-[#d7ff4f] border border-[#d7ff4f]/50 font-bold'
+                    : 'bg-white/[0.03] text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.06] border border-white/5'
                 }`}
+                data-selected={isSelected}
               >
                 <span>{tab.label}</span>
               </button>
             );
           })}
         </div>
-
-        <span className="text-xs font-mono text-zinc-400">
-          Showing <strong className="text-white">{filteredEvents.length > 0 ? startIndex + 1 : 0}–{Math.min(startIndex + pageSize, filteredEvents.length)}</strong> of {filteredEvents.length} payment receipts <span className="text-zinc-500">(Page {safePage} of {totalPages})</span>
-        </span>
       </div>
 
       {/* Live Table */}
-      <div className="bg-white/[.03] backdrop-blur-md border border-white/[.08] rounded-xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs font-sans">
-            <thead className="bg-white/[.02] border-b border-white/[.08] text-zinc-400 text-[11px] uppercase font-semibold">
+      <div className="ui-meta bg-white/[.03] backdrop-blur-md border border-white/[.08] rounded-xl overflow-hidden shadow-sm">
+        <div className="overflow-x-auto w-full">
+          <table className="w-full min-w-[760px] text-left text-xs font-sans">
+            <thead className="bg-white/[.02] border-b border-white/[.08] text-zinc-400 text-[10.5px] uppercase font-semibold">
               <tr>
-                <th className="py-3 px-4">AI Agent</th>
-                <th className="py-3 px-4">What it bought</th>
-                <th className="py-3 px-4">Provider</th>
-                <th className="py-3 px-4 font-mono">Amount</th>
-                <th className="py-3 px-4 font-mono">Status</th>
-                <th className="py-3 px-4 text-center">Proof / Receipt</th>
-                <th className="py-3 px-4 text-right">Time</th>
+                <th className="py-2.5 px-2.5 min-w-[105px] w-[125px]">AI Agent</th>
+                <th className="py-2.5 px-2.5 min-w-[135px]">What it bought</th>
+                <th className="py-2.5 px-2.5 min-w-[110px] w-[120px]">Provider</th>
+                <th className="py-2.5 px-2 w-[90px] font-mono">Paid / Plan</th>
+                <th className="py-2.5 px-2 w-[125px] font-mono">Status</th>
+                <th className="py-2.5 px-2 min-w-[105px] text-center">Proof / Receipt</th>
+                <th className="py-2.5 px-2 w-[70px] text-right font-mono">Time</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[.06] text-zinc-300">
@@ -325,126 +412,95 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
               ) : (
                 paginatedEvents.map((event) => {
                   const isVoidedOrZero = event.amountUsd === 0 || event.status === 'VOIDED' || event.status === 'REFUNDED';
-                  const isLiveConfirmed = event.executionMode === 'LIVE_TESTNET'
-                    && event.status === 'SETTLED'
-                    && typeof event.txHash === 'string'
-                    && event.txHash.startsWith('0x');
+                  const isLiveConfirmed = isConfirmed(event);
+                  const isPending = isLivePending(event);
+                  const isFailed = isLiveFailed(event);
                   
-                  // Bulletproof service name sanitize
-                  let cleanServiceName = event.serviceName || '';
-                  if (!cleanServiceName || cleanServiceName.startsWith('MPP:') || cleanServiceName.startsWith('SLA_REFUND:') || cleanServiceName.startsWith('pacs.008') || cleanServiceName.includes('REFUND_') || cleanServiceName.includes('HTTP 400 Error')) {
-                    const ep = (event.serviceUrl || '').toLowerCase();
-                    if (ep.includes('binance') || ep.includes('depth') || ep.includes('orderbook') || ep.includes('fin-depth')) {
-                      cleanServiceName = isVoidedOrZero ? 'Market Depth (Orderbook Data) — Voided' : 'Market Depth (Orderbook Data)';
-                    } else if (ep.includes('academic') || ep.includes('licensing') || ep.includes('paper')) {
-                      cleanServiceName = isVoidedOrZero ? 'Licensed Research Paper — Voided' : 'Licensed Research Paper (Nature Physics)';
-                    } else if (ep.includes('sec') || ep.includes('10k') || ep.includes('filing')) {
-                      cleanServiceName = isVoidedOrZero ? 'Audited Financial Statements — Voided' : 'Audited Financial Statements (10-K)';
-                    } else if (ep.includes('deepseek')) {
-                      cleanServiceName = isVoidedOrZero ? 'DeepSeek R1 Reasoning — Voided' : 'DeepSeek R1 Reasoning Inference';
-                    } else if (ep.includes('sandbox') || ep.includes('python')) {
-                      cleanServiceName = isVoidedOrZero ? 'Isolated Python Cloud Sandbox — Voided' : 'Isolated Python Cloud Sandbox';
-                    } else {
-                      cleanServiceName = isVoidedOrZero ? 'Upstream Service (Payment Voided)' : 'HTTP 402 Monetized Resource';
-                    }
-                  }
-
-                  // Derive clean provider name and host
-                  const ep = (event.serviceUrl || '').toLowerCase();
-                  let providerName = 'API Provider';
-                  let providerHost = 'api.partner.io';
-                  if (ep.includes('binance') || ep.includes('market-depth')) {
-                    providerName = 'Market Depth Mesh';
-                    providerHost = 'api.market-depth-mesh.io';
-                  } else if (ep.includes('nature') || ep.includes('academic') || ep.includes('paper')) {
-                    providerName = 'Nature Research';
-                    providerHost = 'nature.com';
-                  } else if (ep.includes('sec') || ep.includes('edgar')) {
-                    providerName = 'SEC EDGAR';
-                    providerHost = 'sec.gov';
-                  } else if (ep.includes('deepseek')) {
-                    providerName = 'DeepSeek AI';
-                    providerHost = 'api.deepseek.com';
-                  } else if (ep.includes('sandbox') || ep.includes('python')) {
-                    providerName = 'Cloud Sandbox';
-                    providerHost = 'compute.internal';
-                  } else if (ep.includes('adroll') || ep.includes('meta') || ep.includes('google')) {
-                    providerName = 'Ad Exchange';
-                    providerHost = 'ad-network.net';
-                  } else if (ep.includes('crm') || ep.includes('hubspot')) {
-                    providerName = 'CRM Gateway';
-                    providerHost = 'api.hubspot.com';
-                  } else {
-                    try {
-                      if (event.serviceUrl && event.serviceUrl.startsWith('http')) {
-                        const u = new URL(event.serviceUrl);
-                        providerName = u.hostname.replace('api.', '').split('.')[0].toUpperCase();
-                        providerHost = u.hostname;
-                      }
-                    } catch {
-                      // fallback
-                    }
-                  }
+                  const isSampleProvider = event.providerDataStatus === 'EVALUATION_FIXTURE';
+                  const cleanServiceName = event.serviceName || (isSampleProvider ? 'Demo Provider response' : 'Configured provider route');
+                  const providerName = event.providerName || (isSampleProvider ? 'Demo Provider' : 'Configured provider');
+                  const providerHost = isSampleProvider
+                    ? 'Demo response · payment tracked separately'
+                    : (() => {
+                        try {
+                          return event.serviceUrl && event.serviceUrl.startsWith('http')
+                            ? new URL(event.serviceUrl).hostname
+                            : 'Backend route';
+                        } catch {
+                          return 'Backend route';
+                        }
+                      })();
 
                   return (
                     <tr key={event.id} className="hover:bg-white/[.04] transition-colors">
                       {/* AI Agent */}
-                      <td className="py-3 px-4 font-semibold text-white">
-                        <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f]"></span>
-                          <span className="truncate max-w-[140px]">{event.agentName || 'Market Research Bot'}</span>
+                      <td className="py-2.5 px-3 font-semibold text-white whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f] shrink-0"></span>
+                          <span className="truncate max-w-[130px]" title={String(event.agentName || 'Market Research Agent')}>
+                            {String(event.agentName || 'Market Research Agent').replace(/\bBot\b/g, 'Agent')}
+                          </span>
                         </div>
                       </td>
 
                       {/* What it bought */}
-                      <td className="py-3 px-4">
-                        <div className="font-medium text-white">{cleanServiceName}</div>
-                        <div className="text-[10.5px] font-mono text-zinc-500 hover:text-zinc-300 transition-colors truncate max-w-[240px]" title={event.serviceUrl}>
-                          {event.serviceUrl}
+                      <td className="py-2.5 px-3">
+                        <div className="font-medium text-white truncate max-w-[220px]" title={cleanServiceName}>
+                          {cleanServiceName}
+                        </div>
+                        <div className="text-[10px] font-mono text-zinc-500 hover:text-zinc-300 transition-colors truncate max-w-[220px]" title={event.serviceUrl}>
+                          {(() => {
+                            if (!event.serviceUrl) return 'Protected endpoint';
+                            try {
+                              const parsed = new URL(event.serviceUrl);
+                              return (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost')
+                                ? parsed.pathname
+                                : `${parsed.hostname}${parsed.pathname}`;
+                            } catch {
+                              return event.serviceUrl;
+                            }
+                          })()}
                         </div>
                       </td>
 
                       {/* Provider */}
-                      <td className="py-3 px-4">
-                        <div className="font-medium text-zinc-200">{providerName}</div>
-                        <div className="text-[10.5px] font-mono text-zinc-500 truncate max-w-[160px]">
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        <div className="font-medium text-zinc-200 truncate max-w-[130px]" title={providerName}>{providerName}</div>
+                        <div className="text-[10px] font-mono text-zinc-500 truncate max-w-[130px]" title={providerHost}>
                           {providerHost}
                         </div>
-                      </td>
-
-                      {/* Amount */}
-                      <td className="py-3 px-4">
-                        {isVoidedOrZero ? (
-                          <span className="px-2.5 py-0.5 rounded bg-white/[0.04] text-zinc-400 font-mono border border-white/10 text-[11px]">
-                            Voided ($0.00)
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-0.5 rounded bg-[#d7ff4f]/10 text-[#d7ff4f] font-mono font-bold border border-[#d7ff4f]/30 text-[11px]">
-                            ${Number(event.amountUsd || 0).toFixed(4)} USD
+                        {event.providerDataStatus === 'EVALUATION_FIXTURE' && (
+                          <span className="mt-0.5 inline-block rounded border border-amber-300/25 bg-amber-300/[.06] px-1 py-0.2 text-[8px] font-mono font-bold uppercase text-amber-200">
+                            Demo Provider
                           </span>
                         )}
                       </td>
 
+                      {/* Paid amount and evaluation plan are shown separately. */}
+                      <td className="py-2.5 px-2 whitespace-nowrap">
+                        <span className={`inline-block whitespace-nowrap px-1.5 py-0.5 rounded font-mono font-bold border text-[10px] ${isLiveConfirmed ? 'bg-[#d7ff4f]/10 text-[#d7ff4f] border-[#d7ff4f]/30' : 'bg-white/[0.04] text-zinc-300 border-white/10'}`}>
+                          ${Number(isLiveConfirmed ? event.amountUsd || 0 : 0).toFixed(4)}
+                        </span>
+                        <span className="block mt-0.5 text-[8.5px] text-zinc-500 font-mono">
+                          {isLiveConfirmed ? 'Paid' : isPending ? `Pending · $${Number(event.amountUsd || 0).toFixed(4)}` : isFailed || isVoidedOrZero ? 'Not charged' : `Plan · $${Number(event.amountUsd || 0).toFixed(4)}`}
+                        </span>
+                      </td>
+
                       {/* Status */}
-                      <td className="py-3 px-4 font-mono">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-[9px] px-2 py-0.5 rounded font-mono font-semibold ${
-                            isLiveConfirmed
-                              ? 'bg-[#d7ff4f]/10 text-[#d7ff4f] border border-[#d7ff4f]/30'
-                              : isVoidedOrZero
-                              ? 'bg-white/[0.04] text-zinc-400 border border-white/10'
-                              : 'bg-white/[0.04] text-zinc-300 border border-white/10'
-                          }`}>
-                            {isLiveConfirmed ? 'ON-CHAIN' : isVoidedOrZero ? 'VOIDED' : 'EVALUATION'}
+                      <td className="py-2.5 px-2.5 font-mono whitespace-nowrap">
+                        <div className="flex items-center gap-1">
+                          <SynapseStatusBadge status={normalizeSynapseStatus(event)} size="sm" />
+                          <span className="text-[8.5px] px-1.5 py-0.5 rounded font-mono font-semibold bg-white/[.04] text-zinc-400 border border-white/10 shrink-0">
+                            {event.paymentMode || (event.executionMode === 'LIVE_TESTNET' ? 'LIVE' : 'DEMO')}
                           </span>
-                          <span className="text-zinc-500 text-[10px]">
+                          <span className="text-zinc-500 text-[9.5px] shrink-0">
                             {event.latencyMs}ms
                           </span>
                         </div>
                       </td>
 
                       {/* Proof / Receipt */}
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
                           {onInspectEvent && (
                             <button
@@ -452,7 +508,7 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
                                 soundEngine.playClick();
                                 onInspectEvent(event);
                               }}
-                              className="px-2.5 py-1 rounded bg-white/[.04] hover:bg-white/10 border border-white/15 text-[10px] text-[#d7ff4f] font-semibold transition-colors cursor-pointer flex items-center gap-1"
+                              className="px-2 py-0.5 rounded bg-white/[.04] hover:bg-white/10 border border-white/15 text-[10px] text-[#d7ff4f] font-semibold transition-colors cursor-pointer flex items-center gap-1 shrink-0"
                               title="Inspect cryptographic receipt"
                             >
                               <FileText className="w-3 h-3 text-[#d7ff4f]" />
@@ -460,15 +516,27 @@ export const LivePaymentsFeed: React.FC<LivePaymentsFeedProps> = ({ events, onIn
                             </button>
                           )}
                           {event.txHash && event.txHash.length > 14 && (
-                            <span className="text-[10px] font-mono text-zinc-500 hidden xl:inline">
-                              {event.txHash.slice(0, 6)}...{event.txHash.slice(-4)}
-                            </span>
+                            <>
+                              {isLiveConfirmed && (
+                                <a
+                                  href={tempoTransactionUrl(event.txHash)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-1.5 py-0.5 rounded bg-[#d7ff4f]/15 hover:bg-[#d7ff4f]/25 border border-[#d7ff4f]/30 text-[9.5px] text-[#d7ff4f] font-mono font-bold inline-flex items-center gap-0.5 shrink-0 transition"
+                                  title="View receipt on Tempo L1 Explorer"
+                                >
+                                  <span>Explorer</span>
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                              )}
+                            </>
                           )}
+                          {isPending && !event.txHash && <span className="text-[9.5px] font-mono text-amber-200/80">Confirming...</span>}
                         </div>
                       </td>
 
                       {/* Timestamp */}
-                      <td className="py-3 px-4 text-right text-zinc-400 font-mono text-[11px]">
+                      <td className="py-2.5 px-3 text-right text-zinc-400 font-mono text-[10.5px] whitespace-nowrap">
                         {event.timestamp}
                       </td>
                     </tr>

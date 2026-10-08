@@ -1,6 +1,7 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Activity, ShieldCheck, Zap, Volume2, VolumeX, Layers, CheckCircle2, Copy, Check, X, ExternalLink } from 'lucide-react';
 import { soundEngine } from '../utils/audioEffects';
+import { TEMPO_CHAIN_ID, TEMPO_PATHUSD_ADDRESS, TEMPO_RECEIVER_ADDRESS, TEMPO_VAULT_ADDRESS, tempoAddressUrl } from '../config/network';
 
 interface NetworkTelemetryRibbonProps {
   currentBlock: number;
@@ -74,9 +75,9 @@ export const NetworkTelemetryRibbon: React.FC<NetworkTelemetryRibbonProps> = ({ 
   };
 
   const contracts = [
-    { label: 'SynapseVault (Escrow & Policy)', address: '0x3c42E274FAdd8e371fB84f97203CC2F2125c8775', key: 'vault' },
-    { label: 'SynapseMPPReceiver (Gateway)', address: '0xfCEb1a2633881c19283836a2E17Ba25E612724A0', key: 'receiver' },
-    { label: 'pathUSD (Payment Token)', address: '0x9aa3ef4B60B6e3c440711658ee05780e236ac714', key: 'token' },
+    { label: 'SynapseVault (Escrow & Policy)', address: TEMPO_VAULT_ADDRESS, key: 'vault' },
+    { label: 'SynapseMPPReceiver (Gateway)', address: TEMPO_RECEIVER_ADDRESS, key: 'receiver' },
+    { label: 'pathUSD (Payment Token)', address: TEMPO_PATHUSD_ADDRESS, key: 'token' },
   ];
 
   return (
@@ -137,7 +138,7 @@ export const NetworkTelemetryRibbon: React.FC<NetworkTelemetryRibbonProps> = ({ 
             title={networkMode === 'LIVE_TESTNET' && bytecodePresent ? 'View verified smart contract addresses on Tempo L1' : 'View configured contract addresses; live bytecode verification is unavailable'}
           >
             <CheckCircle2 className="w-3 h-3 text-[#d7ff4f]" />
-            <span className="font-bold">Tempo testnet (42431)</span>
+            <span className="font-bold">Tempo testnet ({TEMPO_CHAIN_ID})</span>
             <span className="underline opacity-80 text-[9px]">Contracts ↗</span>
           </button>
         </div>
@@ -166,29 +167,41 @@ export const NetworkTelemetryRibbon: React.FC<NetworkTelemetryRibbonProps> = ({ 
                 <div className="text-[10px] text-zinc-400 font-semibold">{c.label}</div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[#d7ff4f] text-[10px] truncate">{c.address}</span>
-                  <button
-                    onClick={() => copyToClipboard(c.address, c.key)}
-                    className="px-2 py-0.5 rounded bg-white/[.06] hover:bg-[#d7ff4f]/20 text-zinc-300 hover:text-[#d7ff4f] border border-white/10 text-[10px] flex items-center gap-1 transition-colors shrink-0"
-                  >
-                    {copiedKey === c.key ? (
-                      <>
-                        <Check className="w-2.5 h-2.5 text-emerald-400" />
-                        <span className="text-emerald-400">Copied</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-2.5 h-2.5" />
-                        <span>Copy</span>
-                      </>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <a
+                      href={tempoAddressUrl(c.address)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2 py-0.5 rounded bg-[#d7ff4f]/10 hover:bg-[#d7ff4f]/20 text-[#d7ff4f] border border-[#d7ff4f]/30 text-[10px] flex items-center gap-1 transition-colors"
+                      title="View contract on Tempo Explorer"
+                    >
+                      <span>Explorer</span>
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                    <button
+                      onClick={() => copyToClipboard(c.address, c.key)}
+                      className="px-2 py-0.5 rounded bg-white/[.06] hover:bg-[#d7ff4f]/20 text-zinc-300 hover:text-[#d7ff4f] border border-white/10 text-[10px] flex items-center gap-1 transition-colors"
+                    >
+                      {copiedKey === c.key ? (
+                        <>
+                          <Check className="w-2.5 h-2.5 text-emerald-400" />
+                          <span className="text-emerald-400">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-2.5 h-2.5" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
 
           <div className="text-[10px] text-zinc-400 pt-1 flex items-center justify-between border-t border-white/10">
-            <span>Chain ID: <strong>42431</strong></span>
+            <span>Chain ID: <strong>{TEMPO_CHAIN_ID}</strong></span>
             <span>Network: <strong>Tempo Moderato</strong></span>
           </div>
         </div>

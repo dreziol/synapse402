@@ -1,8 +1,9 @@
-import express from 'express';
 import type { Server } from 'http';
+import { createIsolatedTestRuntime } from './isolated-test-runtime';
 
-let GATEWAY_URL = process.env.GATEWAY_URL || 'http://127.0.0.1:3001';
+let GATEWAY_URL = 'http://127.0.0.1:0';
 let ephemeralServer: Server | null = null;
+let cleanupTestRuntime: (() => void) | null = null;
 
 interface TestResult {
   vector: string;
@@ -38,57 +39,21 @@ async function runVector(
 }
 
 async function ensureGatewayActive(): Promise<void> {
-  let isUp = false;
-  try {
-    const check = await fetch(`${GATEWAY_URL}/api/health`, { signal: AbortSignal.timeout(400) });
-    if (check.status < 500) isUp = true;
-  } catch (err: any) {
-    // Gateway not responding yet, will launch ephemeral mock
-  }
+  // Always use a clean temporary runtime and the real app. Never send the
+  // evaluation suite to the user's daemon or load its wallet configuration.
+  cleanupTestRuntime = createIsolatedTestRuntime('synapse402-defense-');
+  const { app } = await import('../server');
 
-  if (!isUp) {
-    const { synapseEngine } = await import('../server/synapseCore');
-    const app = express();
-    app.use(express.json());
-    app.post('/api/mpp/settle', async (req, res) => {
-      const { keyId, targetUrl, pricePathUsd, category, simulateFailure, allowDynamicWhitelist, corruptSignature } = req.body;
-      const idempotencyKey = (req.headers['idempotency-key'] as string) || req.body.idempotencyKey;
-      try {
-        const result = await synapseEngine.settle402(
-          String(keyId).trim(),
-          String(targetUrl).trim(),
-          Number(pricePathUsd),
-          category,
-          {
-            simulateFailure: Boolean(simulateFailure),
-            allowDynamicWhitelist: Boolean(allowDynamicWhitelist),
-            corruptSignature: Boolean(corruptSignature),
-            idempotencyKey: idempotencyKey ? String(idempotencyKey).trim() : undefined,
-          }
-        );
-        res.json({
-          status: result.status || 'SETTLED',
-          trace: result.trace,
-          updatedKey: result.updatedKey,
-          blockHeight: result.blockHeight,
-        });
-      } catch (error: any) {
-        const msg = error.message || 'Payment execution failed.';
-        const statusCode = msg.includes('401') ? 401 : msg.includes('403') ? 403 : (msg.includes('exceeds') || msg.includes('budget')) ? 402 : 400;
-        res.status(statusCode).json({ error: msg });
+  await new Promise<void>((resolve) => {
+    ephemeralServer = app.listen(0, '127.0.0.1', () => {
+      const addr = ephemeralServer?.address();
+      if (addr && typeof addr === 'object') {
+        GATEWAY_URL = `http://127.0.0.1:${addr.port}`;
+        process.env.PORT = String(addr.port);
       }
+      resolve();
     });
-
-    await new Promise<void>((resolve) => {
-      ephemeralServer = app.listen(0, '127.0.0.1', () => {
-        const addr = ephemeralServer?.address();
-        if (addr && typeof addr === 'object') {
-          GATEWAY_URL = `http://127.0.0.1:${addr.port}`;
-        }
-        resolve();
-      });
-    });
-  }
+  });
 }
 
 async function main() {
@@ -101,7 +66,7 @@ async function main() {
 
   const results: TestResult[] = [];
 
-  // Vector 1: Clean 402 Micropayment
+  // Vector 1: Clean 402 Micropayment (Happy Path)
   results.push(
     await runVector('1. Clean Micropayment', async () => {
       const t0 = performance.now();
@@ -114,13 +79,16 @@ async function main() {
           pricePathUsd: 0.001,
           category: 'Market Data',
           asyncRelay: true,
+          evaluationOnly: true,
+          jobId: `clean_test_${Date.now()}`,
+          jobBudgetPathUsd: 0.005,
         }),
       });
       const latencyMs = Math.round(performance.now() - t0);
       const data = await res.json();
-      const passed = res.status === 200 && data.status === 'SETTLED';
+      const passed = res.status === 200 && (data.status === 'SIMULATED_PASS' || data.status === 'SETTLED') && !data.trace?.txHash;
       return {
-        expected: 'HTTP 200 SETTLED',
+        expected: 'HTTP 200 SIMULATED_PASS (Valid Evaluation Receipt)',
         actual: `HTTP ${res.status} ${data.status || data.error}`,
         latencyMs,
         passed,
@@ -128,26 +96,28 @@ async function main() {
     })
   );
 
-  // Vector 2: Prompt Injection / Rogue Host Interception
+  // Vector 2: Over Budget (Exceeds Job Maximum, Halted Off-Chain)
   results.push(
-    await runVector('2. Prompt Injection Defense', async () => {
+    await runVector('2. Over Budget Protection', async () => {
       const t0 = performance.now();
       const res = await fetch(`${GATEWAY_URL}/api/mpp/settle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           keyId: 'key_quant_alpha',
-          targetUrl: 'https://api.rogue-drainer.xyz/v1/exploit',
-          pricePathUsd: 0.05,
-          category: 'Malicious Drain Probe',
-          allowDynamicWhitelist: false,
+          targetUrl: 'https://api.fin-depth.io/v2/aapl/orderbook',
+          pricePathUsd: 0.006,
+          category: 'Market Data',
+          evaluationOnly: true,
+          jobId: `overbudget_test_${Date.now()}`,
+          jobBudgetPathUsd: 0.005,
         }),
       });
       const latencyMs = Math.round(performance.now() - t0);
       const data = await res.json();
-      const passed = (res.status === 403 || res.status === 400) && data.error && (data.error.includes('Merkle') || data.error.includes('whitelisted'));
+      const passed = (res.status === 402 || res.status === 400) && data.error && (data.error.includes('limit') || data.error.includes('budget') || data.error.includes('exceeds'));
       return {
-        expected: 'HTTP 403 (Blocked by Merkle Proof)',
+        expected: 'HTTP 402 (Job Limit Exceeded Halt)',
         actual: `HTTP ${res.status} (${data.error?.slice(0, 45) || 'No error'})`,
         latencyMs,
         passed,
@@ -155,9 +125,37 @@ async function main() {
     })
   );
 
-  // Vector 3: Cryptographic Signature Tamper Defense
+  // Vector 3: Non-Whitelisted Provider (Merkle / Policy Reject)
   results.push(
-    await runVector('3. Signature Tamper Defense', async () => {
+    await runVector('3. Unapproved Provider Defense', async () => {
+      const t0 = performance.now();
+      const res = await fetch(`${GATEWAY_URL}/api/mpp/settle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyId: 'key_quant_alpha',
+          targetUrl: 'https://api.rogue-drainer.xyz/v1/exploit',
+          pricePathUsd: 0.001,
+          category: 'Malicious Drain Probe',
+          allowDynamicWhitelist: false,
+          evaluationOnly: true,
+        }),
+      });
+      const latencyMs = Math.round(performance.now() - t0);
+      const data = await res.json();
+      const passed = (res.status === 403 || res.status === 400) && data.error && (data.error.includes('whitelist') || data.error.includes('Merkle') || data.error.includes('approved'));
+      return {
+        expected: 'HTTP 403 (Blocked by Allowlist Merkle Proof)',
+        actual: `HTTP ${res.status} (${data.error?.slice(0, 45) || 'No error'})`,
+        latencyMs,
+        passed,
+      };
+    })
+  );
+
+  // Vector 4: Cryptographic Signature Tamper Defense
+  results.push(
+    await runVector('4. Signature Tamper Defense', async () => {
       const t0 = performance.now();
       const res = await fetch(`${GATEWAY_URL}/api/mpp/settle`, {
         method: 'POST',
@@ -168,6 +166,7 @@ async function main() {
           pricePathUsd: 0.001,
           category: 'Market Data',
           corruptSignature: true,
+          evaluationOnly: true,
         }),
       });
       const latencyMs = Math.round(performance.now() - t0);
@@ -182,9 +181,9 @@ async function main() {
     })
   );
 
-  // Vector 4: Overdraft / Budget Cap Protection
+  // Vector 5: Provider Failure (Pre-settlement Voided, $0 Lost)
   results.push(
-    await runVector('4. Budget Overdraft Cap', async () => {
+    await runVector('5. Provider Failure Voided', async () => {
       const t0 = performance.now();
       const res = await fetch(`${GATEWAY_URL}/api/mpp/settle`, {
         method: 'POST',
@@ -192,40 +191,49 @@ async function main() {
         body: JSON.stringify({
           keyId: 'key_quant_alpha',
           targetUrl: 'https://api.fin-depth.io/v2/aapl/orderbook',
-          pricePathUsd: 999.0,
+          pricePathUsd: 0.001,
           category: 'Market Data',
+          simulateFailure: true,
+          evaluationOnly: true,
+          jobId: `provider_fail_job_${Date.now()}`,
+          jobBudgetPathUsd: 0.005,
         }),
       });
       const latencyMs = Math.round(performance.now() - t0);
       const data = await res.json();
-      const passed = (res.status === 402 || res.status === 400) && data.error && (data.error.includes('budget') || data.error.includes('limit') || data.error.includes('exceeds'));
+      const passed = res.status === 200 && data.status === 'VOIDED' && data.trace?.status === 'VOIDED' && (data.trace?.cost === 0 || data.trace?.costPathUsd === 0);
       return {
-        expected: 'HTTP 402 (Budget Exceeded Halt)',
-        actual: `HTTP ${res.status} (${data.error?.slice(0, 45) || 'No error'})`,
+        expected: 'HTTP 200 VOIDED (Pre-settlement Void, $0 Charged)',
+        actual: `HTTP ${res.status} status=${data.status} cost=$${data.trace?.cost ?? data.trace?.costPathUsd ?? '?'}`.slice(0, 45),
         latencyMs,
         passed,
       };
     })
   );
 
-  // Vector 5: Idempotency Replay Protection
+  // Vector 6: Idempotency Replay Guard (0 Duplicate Charge, Replay Cached)
   results.push(
-    await runVector('5. Idempotency Replay Guard', async () => {
-      const idempKey = `idemp_cli_${Date.now()}`;
+    await runVector('6. Idempotency Replay Guard', async () => {
+      const idempKey = `idemp_cli_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const jobId = `idemp_job_${Date.now()}`;
       const payload = {
         keyId: 'key_quant_alpha',
         targetUrl: 'https://api.fin-depth.io/v2/aapl/orderbook',
         pricePathUsd: 0.001,
         category: 'Market Data',
         idempotencyKey: idempKey,
+        jobId,
+        jobBudgetPathUsd: 0.005,
         asyncRelay: true,
+        evaluationOnly: true,
       };
 
-      await fetch(`${GATEWAY_URL}/api/mpp/settle`, {
+      const res1 = await fetch(`${GATEWAY_URL}/api/mpp/settle`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempKey },
         body: JSON.stringify(payload),
       });
+      const data1 = await res1.json();
 
       const t0 = performance.now();
       const res2 = await fetch(`${GATEWAY_URL}/api/mpp/settle`, {
@@ -235,10 +243,59 @@ async function main() {
       });
       const latencyMs = Math.round(performance.now() - t0);
       const data2 = await res2.json();
-      const passed = res2.status === 200 && data2.status === 'SETTLED';
+
+      const sameTraceId = Boolean(data1.trace?.id && data2.trace?.id && data1.trace.id === data2.trace.id);
+      const isCacheHit = Boolean(data2.trace?.isIdempotentCacheHit);
+      const passed = res2.status === 200 && (data2.status === 'SIMULATED_PASS' || data2.status === 'SETTLED') && sameTraceId && isCacheHit;
       return {
-        expected: 'HTTP 200 (Replay Cached, $0 Duplicate Charge)',
-        actual: `HTTP ${res2.status} in ${latencyMs}ms (Replay Cached)`,
+        expected: 'HTTP 200 (Replay Cached, Same Trace, $0 Duplicate Charge)',
+        actual: `HTTP ${res2.status} in ${latencyMs}ms (Replay Cached, trace match: ${sameTraceId})`,
+        latencyMs,
+        passed,
+      };
+    })
+  );
+
+  // Vector 7: Explicit Prepare Key Binding (Unknown key must not fall back)
+  results.push(
+    await runVector('7. Prepare Key Binding', async () => {
+      const t0 = performance.now();
+      const res = await fetch(`${GATEWAY_URL}/api/mpp/prepare`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyId: `missing_key_${Date.now()}`,
+          targetUrl: 'https://api.fin-depth.io/v2/aapl/orderbook',
+          pricePathUsd: 0.001,
+        }),
+      });
+      const latencyMs = Math.round(performance.now() - t0);
+      const data = await res.json();
+      const passed = res.status === 400
+        && typeof data.error === 'string'
+        && data.error.includes('does not exist');
+      return {
+        expected: 'HTTP 400 (Unknown explicit key rejected; no fallback)',
+        actual: `HTTP ${res.status} (${data.error?.slice(0, 45) || 'No error'})`,
+        latencyMs,
+        passed,
+      };
+    })
+  );
+
+  // Vector 8: Crawler User-Agent Cannot Bypass a Paid Route
+  results.push(
+    await runVector('8. Crawler Paywall Guard', async () => {
+      const t0 = performance.now();
+      const res = await fetch(`${GATEWAY_URL}/api/v1/data/stock-orderbook`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)' },
+      });
+      const latencyMs = Math.round(performance.now() - t0);
+      const data = await res.json();
+      const passed = res.status === 402 && data.status === 402;
+      return {
+        expected: 'HTTP 402 (Crawler-looking User-Agent still needs payment)',
+        actual: `HTTP ${res.status} (${data.error || data.status || 'No challenge'})`,
         latencyMs,
         passed,
       };
@@ -253,7 +310,7 @@ async function main() {
   for (const r of results) {
     if (!r.passed) allPassed = false;
     const mark = r.passed ? '✓ PASS' : '✕ FAIL';
-    const vName = r.vector.padEnd(26);
+    const vName = r.vector.padEnd(28);
     const status = mark.padEnd(6);
     const lat = `${r.latencyMs}ms`.padEnd(7);
     const details = r.actual.slice(0, 33).padEnd(33);
@@ -262,11 +319,14 @@ async function main() {
   console.log('-------------------------------------------------------------------------------------\n');
 
   if (ephemeralServer) {
-    ephemeralServer.close();
+    await new Promise<void>((resolve) => ephemeralServer!.close(() => resolve()));
+    ephemeralServer = null;
   }
+  cleanupTestRuntime?.();
+  cleanupTestRuntime = null;
 
   if (allPassed) {
-    console.log('✓ ALL 5 DEFENSE VECTORS PASSED.');
+    console.log(`✓ ALL ${results.length} DEFENSE VECTORS PASSED.`);
     console.log('  Cryptographic integrity, budget caps, and replay filtering are fully operational.\n');
     process.exitCode = 0;
   } else {
@@ -281,6 +341,8 @@ main().catch((err) => {
       console.debug('Ephemeral server close notice:', closeErr?.message);
     }
   }
+  cleanupTestRuntime?.();
   console.error('Fatal test error:', err);
   process.exitCode = 1;
+  process.exit(1);
 });

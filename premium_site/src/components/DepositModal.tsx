@@ -1,19 +1,22 @@
-﻿import React, { useState } from 'react';
+import { TEMPO_EXPLORER_URL, tempoTransactionUrl } from '../config/network';
+import React, { useState } from 'react';
 import { ethers } from 'ethers';
 import { Wallet, X, ArrowRight, CheckCircle2, Loader2, ExternalLink, Zap } from 'lucide-react';
 import { soundEngine } from '../utils/audioEffects';
 import { InfoBadge } from './InfoBadge';
+import { TEMPO_PATHUSD_ADDRESS, TEMPO_VAULT_ADDRESS } from '../config/network';
 
 interface DepositModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onDeposit: (amount: number) => Promise<void> | void;
+  onDeposit: (amount: number) => Promise<{ depositTxHash?: string } | void> | void;
   isRealWalletConnected?: boolean;
   walletAddress?: string | null;
+  networkMode?: 'LIVE_TESTNET' | 'RESILIENT_SANDBOX';
 }
 
-const PATH_USD_ADDRESS = '0x9aa3ef4B60B6e3c440711658ee05780e236ac714';
-const VAULT_ADDRESS = '0x3c42E274FAdd8e371fB84f97203CC2F2125c8775';
+const PATH_USD_ADDRESS = TEMPO_PATHUSD_ADDRESS;
+const VAULT_ADDRESS = TEMPO_VAULT_ADDRESS;
 
 const ERC20_ABI = [
   'function approve(address spender, uint256 amount) external returns (bool)',
@@ -32,8 +35,10 @@ export const DepositModal: React.FC<DepositModalProps> = ({
   onDeposit,
   isRealWalletConnected = false,
   walletAddress = null,
+  networkMode = 'RESILIENT_SANDBOX',
 }) => {
   const [amount, setAmount] = useState('10.00');
+  const isLiveNetwork = networkMode === 'LIVE_TESTNET';
   const [depositMode, setDepositMode] = useState<'instant' | 'metamask'>('instant');
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
@@ -53,6 +58,9 @@ export const DepositModal: React.FC<DepositModalProps> = ({
     setTxHash(null);
 
     try {
+      if (depositMode === 'metamask' && (!isRealWalletConnected || !walletAddress)) {
+        throw new Error('Connect MetaMask before making a live deposit.');
+      }
       let liveChainDeposit = false;
       if (depositMode === 'metamask' && isRealWalletConnected && walletAddress && typeof window !== 'undefined' && (window as any).ethereum) {
         setStatusMsg('Connecting to Tempo L1 via MetaMask...');
@@ -83,18 +91,29 @@ export const DepositModal: React.FC<DepositModalProps> = ({
         await txDeposit.wait();
         liveChainDeposit = true;
       } else {
-        // Instant 1-Click Deposit (Zero-Friction Faucet / Vault Credit)
-        setStatusMsg('Crediting SynapseVault treasury pool...');
+        setStatusMsg(isLiveNetwork ? 'Submitting project-wallet deposit to Tempo testnet...' : 'Adding evaluation credit...');
       }
 
       // Synchronize backend telemetry state
-      await onDeposit(val);
+      if (!liveChainDeposit) {
+        const result = await onDeposit(val);
+        if (isLiveNetwork) {
+          const confirmedHash = result && typeof result === 'object' ? result.depositTxHash : undefined;
+          if (!confirmedHash || !/^0x[a-fA-F0-9]{64}$/.test(confirmedHash)) {
+            throw new Error('Live deposit did not return a confirmed transaction.');
+          }
+          setTxHash(confirmedHash);
+          liveChainDeposit = true;
+        }
+      } else {
+        await onDeposit(0);
+      }
       if (liveChainDeposit) {
         soundEngine.playSettlementChime();
-        setStatusMsg('✓ Deposit confirmed on Tempo L1 and credited to SynapseVault.');
+        setStatusMsg('Deposit confirmed on Tempo L1 and credited to SynapseVault.');
       } else {
         soundEngine.playClick();
-        setStatusMsg('✓ Evaluation credit added locally; no blockchain deposit was submitted.');
+        setStatusMsg('Evaluation credit added locally; no blockchain deposit was submitted.');
       }
       setTimeout(() => {
         onClose();
@@ -125,14 +144,14 @@ export const DepositModal: React.FC<DepositModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-base text-[#f5f5f2] flex items-center">
-                <span>{isRealWalletConnected ? 'MetaMask Vault Allocation' : 'Add evaluation credit'}</span>
+                <span>{isLiveNetwork ? 'Add testnet funds to SynapseVault' : 'Add evaluation credit'}</span>
                 <InfoBadge
                   title="SynapseVault On-Chain Collateral"
-                  text={isRealWalletConnected ? 'Funds are held in SynapseVault.sol on Tempo Moderato (42431). Deposits back agent spending accounts and are only debitable by valid cryptographic session signatures.' : 'Evaluation mode updates a local balance only. Connect MetaMask when you want an actual ERC-20 deposit on Tempo L1.'}
+                  text={isLiveNetwork ? 'The existing project wallet deposits testnet pathUSD into SynapseVault. A personal wallet is optional.' : 'Evaluation mode updates a local balance only.'}
                 />
               </h3>
               <p className="text-[11px] text-zinc-400 font-sans">
-                {isRealWalletConnected ? 'Sign allocation voucher with connected wallet' : 'Add local sandbox credit without a wallet transaction'}
+                {isLiveNetwork ? 'Use the existing project wallet; no personal MetaMask approval needed' : 'Add local sandbox credit without a wallet transaction'}
               </p>
             </div>
           </div>
@@ -148,36 +167,38 @@ export const DepositModal: React.FC<DepositModalProps> = ({
               <span>Deposit Pipeline:</span>
               <InfoBadge
                 title="Deposit Routing Modes"
-                text="Evaluation mode updates a local balance only. MetaMask Tx executes the real ERC-20 approval and deposit on Tempo L1."
+                text={isLiveNetwork ? 'Project wallet signs the testnet deposit on the server. MetaMask is optional for a deposit from your personal wallet.' : 'Evaluation mode updates a local balance only.'}
               />
             </span>
-            <div className="grid grid-cols-2 gap-2">
+            <div className={`grid gap-2 ${isRealWalletConnected ? 'grid-cols-2' : 'grid-cols-1'}`}>
               <button
                 type="button"
                 onClick={() => setDepositMode('instant')}
+                title={isLiveNetwork ? 'Deposit from the existing project wallet' : 'Add local evaluation credit'}
                 className={`py-2 px-3 rounded-lg border text-xs font-mono font-semibold transition flex items-center justify-center gap-1.5 ${
                   depositMode === 'instant'
                     ? 'bg-[#d7ff4f]/15 border-[#d7ff4f]/50 text-[#d7ff4f]'
-                    : 'bg-black/40 border-white/[.08] text-zinc-400 hover:text-white'
-                }`}
-              >
-                <Zap className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                <span>1-Click Instant</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setDepositMode('metamask')}
-                disabled={!isRealWalletConnected}
-                title={!isRealWalletConnected ? 'Connect MetaMask first to use this option' : 'Sign on-chain deposit with connected wallet'}
-                className={`py-2 px-3 rounded-lg border text-xs font-mono font-semibold transition flex items-center justify-center gap-1.5 ${
-                  depositMode === 'metamask'
-                    ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
                     : 'bg-black/40 border-white/[.08] text-zinc-400 hover:text-white disabled:opacity-40 disabled:hover:text-zinc-400'
                 }`}
               >
-                <Wallet className="w-3.5 h-3.5 text-emerald-400" />
-                <span>MetaMask Tx</span>
+                <Zap className="w-3.5 h-3.5 text-[#d7ff4f]" />
+                <span>{isLiveNetwork ? 'Project wallet' : '1-Click Instant'}</span>
               </button>
+              {isRealWalletConnected && (
+                <button
+                  type="button"
+                  onClick={() => setDepositMode('metamask')}
+                  title="Sign on-chain deposit with connected wallet"
+                  className={`py-2 px-3 rounded-lg border text-xs font-mono font-semibold transition flex items-center justify-center gap-1.5 ${
+                    depositMode === 'metamask'
+                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                      : 'bg-black/40 border-white/[.08] text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>MetaMask Tx</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -246,7 +267,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
                       {copiedDepositHash ? <span className="text-emerald-400 font-bold">Copied!</span> : 'Copy'}
                     </button>
                     <a
-                      href={depositMode === 'metamask' && !txHash.startsWith('sim_') ? `https://explore.tempo.xyz/tx/${txHash}` : 'https://explore.tempo.xyz'}
+                      href={txHash.startsWith('0x') ? tempoTransactionUrl(txHash) : TEMPO_EXPLORER_URL}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-[10px] text-[#d7ff4f] hover:underline font-mono flex items-center gap-0.5"
@@ -262,8 +283,10 @@ export const DepositModal: React.FC<DepositModalProps> = ({
 
           <div className="bg-black/40 p-3 rounded-lg border border-white/[.08] text-xs text-zinc-300 font-sans leading-relaxed">
             {depositMode === 'metamask'
-              ? 'Real on-chain transaction via MetaMask on Tempo Moderato (42431). Digital USD is transferred from your wallet into your agent fund.'
-              : 'Evaluation credit: updates the local sandbox balance without a wallet transaction.'}
+              ? 'Your MetaMask wallet deposits pathUSD into SynapseVault on Tempo Moderato (42431).'
+              : isLiveNetwork
+              ? 'The existing project wallet deposits testnet pathUSD into SynapseVault. Success appears only after the transaction is confirmed.'
+              : 'Evaluation credit updates the local sandbox balance without a wallet transaction.'}
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
@@ -276,7 +299,7 @@ export const DepositModal: React.FC<DepositModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isProcessing}
+              disabled={isProcessing || (depositMode === 'metamask' && !isRealWalletConnected)}
               className="px-5 py-2 bg-[#d7ff4f] hover:bg-[#bce63b] text-[#0c0f12] font-bold rounded-lg shadow-sm flex items-center gap-2 font-sans text-xs disabled:opacity-50"
             >
               {isProcessing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -285,6 +308,8 @@ export const DepositModal: React.FC<DepositModalProps> = ({
                   ? 'Processing Deposit...'
                   : depositMode === 'metamask'
                   ? 'Sign & Deposit via MetaMask'
+                  : isLiveNetwork
+                  ? 'Add testnet funds'
                   : 'Deposit Instantly (1-Click)'}
               </span>
             </button>

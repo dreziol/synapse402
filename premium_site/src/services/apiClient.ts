@@ -56,7 +56,17 @@ export async function settlePaymentOnServer(
   const res = await fetch('/api/mpp/settle', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ keyId, targetUrl, pricePathUsd, category }),
+    body: JSON.stringify({
+      keyId,
+      targetUrl,
+      pricePathUsd,
+      category,
+      // This convenience helper is used for local previews. Live SDK calls
+      // must opt into a bounded job and client-signed authorization instead.
+      evaluationOnly: true,
+      jobId: `api_client_preview_${Date.now()}`,
+      jobBudgetPathUsd: pricePathUsd,
+    }),
   });
 
   if (!res.ok) {

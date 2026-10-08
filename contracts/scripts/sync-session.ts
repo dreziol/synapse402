@@ -15,19 +15,26 @@ async function main() {
   console.log("Current on-chain Merkle root:", currentConfig.merkleRoot);
   console.log("Status:", currentConfig.status.toString());
 
-  console.log("Registering updated Merkle root on Tempo L1:", newMerkleRoot);
-  const tx = await vault.registerSessionKey(
-    sessionKey,
-    ethers.parseUnits("10", 6),
-    ethers.parseUnits("50", 6),
-    BigInt(Math.floor(Date.now() / 1000) + 86400 * 30),
-    newMerkleRoot,
-    { gasLimit: 500000 }
-  );
-
-  console.log("Tx hash:", tx.hash);
-  await tx.wait(1);
-  console.log("Successfully updated Merkle root on-chain!");
+  const status = Number(currentConfig.status);
+  if (status === 0) {
+    console.log("Session is inactive; registering it with the updated Merkle root:", newMerkleRoot);
+    const tx = await vault.registerSessionKey(
+      sessionKey,
+      ethers.parseUnits("10", 6),
+      ethers.parseUnits("50", 6),
+      BigInt(Math.floor(Date.now() / 1000) + 86400 * 30),
+      newMerkleRoot,
+      { gasLimit: 500000 }
+    );
+    console.log("Tx hash:", tx.hash);
+    await tx.wait(1);
+  } else {
+    console.log("Updating Merkle root without resetting cumulative spend:", newMerkleRoot);
+    const tx = await vault.updateSessionMerkleRoot(sessionKey, newMerkleRoot, { gasLimit: 500000 });
+    console.log("Tx hash:", tx.hash);
+    await tx.wait(1);
+  }
+  console.log("Successfully synchronized Merkle root on-chain!");
 
   const updatedConfig = await vault.sessionKeys(sessionKey);
   console.log("Verified on-chain Merkle root:", updatedConfig.merkleRoot);

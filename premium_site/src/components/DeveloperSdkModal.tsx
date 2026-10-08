@@ -1,4 +1,6 @@
-﻿import React, { useState } from 'react';
+import { TEMPO_EXPLORER_URL, tempoTransactionUrl } from '../config/network';
+import React, { useState } from 'react';
+import { TEMPO_CHAIN_ID, TEMPO_RPC_URL } from '../config/network';
 import { 
   X, 
   Copy, 
@@ -18,6 +20,7 @@ import {
 } from 'lucide-react';
 import { soundEngine } from '../utils/audioEffects';
 import { InfoBadge } from './InfoBadge';
+import { useSynapseState } from '../shared/SynapseStateContext';
 
 interface DeveloperSdkModalProps {
   isOpen: boolean;
@@ -34,6 +37,7 @@ interface LiveStep {
 }
 
 export const DeveloperSdkModal: React.FC<DeveloperSdkModalProps> = ({ isOpen, onClose }) => {
+  const { executePayment } = useSynapseState();
   const [activeTab, setActiveTab] = useState<'ai_side' | 'provider_side' | 'terminal_cli' | 'mcp'>('ai_side');
   const [copied, setCopied] = useState(false);
   const [isRunningTest, setIsRunningTest] = useState(false);
@@ -84,26 +88,19 @@ export const DeveloperSdkModal: React.FC<DeveloperSdkModalProps> = ({ isOpen, on
         ]);
 
         // Step 2: Settle payment via Synapse402 Gateway
-        const settleRes = await fetch('/api/mpp/settle', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            keyId: 'key_quant_alpha',
-            targetUrl: '/api/v1/test-provider-data',
-            pricePathUsd: 0.002,
-            category: 'SDK Integration Verification',
-            allowDynamicWhitelist: true,
-            // This button demonstrates the SDK flow; it must never spend a
-            // real relayer balance just because the testnet is reachable.
-            evaluationOnly: true,
-          }),
+        const settleRes = await executePayment({
+          keyId: 'key_quant_alpha',
+          targetUrl: '/api/v1/test-provider-data',
+          pricePathUsd: 0.002,
+          category: 'SDK Integration Verification',
+          evaluationOnly: true,
+          serviceName: 'SDK Verification Provider',
         });
 
-        const settleData = await settleRes.json();
-        if (!settleRes.ok) throw new Error(settleData.error || 'Settlement failed');
-
-        const txHash = settleData.trace?.txHash || '';
-        const isLiveSettlement = settleData.trace?.executionMode === 'LIVE_TESTNET' && Boolean(txHash);
+        const isLiveSettlement = settleRes.status === 'CONFIRMED'
+          && typeof settleRes.txHash === 'string'
+          && /^0x[a-fA-F0-9]{64}$/.test(settleRes.txHash);
+        const txHash = isLiveSettlement ? settleRes.txHash! : '';
 
         // Step 3: Receive payload
         setTestSteps((prev) => [
@@ -123,7 +120,7 @@ export const DeveloperSdkModal: React.FC<DeveloperSdkModalProps> = ({ isOpen, on
             label: '4. Resource Returned',
             detail: 'Provider verified authorization proof and returned HTTP 200 payload',
             status: 'done',
-            payload: settleData.trace?.liveProxyPayload || {
+            payload: settleRes.trace?.liveProxyPayload || {
               status: 'ok',
               service: 'DeepQuant Orderbook L2 Depth',
               symbol: 'TEMPO/USD',
@@ -178,7 +175,7 @@ const agent = createSynapseAgent({
 // 2. Fetch protected resources normally
 // The SDK automatically:
 // - detects HTTP 402 challenge from provider
-// - authorizes payment within assigned daily limit
+// - authorizes payment within assigned reusable cap
 // - attaches cryptographic payment proof and returns unlocked resource
 const response = await agent.fetch('https://api.provider.com/v1/orderbook');
 const data = await response.json();
@@ -194,11 +191,10 @@ import { withTempoMpp } from './sdk';
 
 const app = express();
 
-// Protect any route with HTTP 402 Machine Payments Protocol:
+// Keep human HTML on its own route; this JSON route is paid for every request:
 app.get('/api/v1/market-depth', withTempoMpp({
   priceUsd: 0.001,                                   // Price per call in pathUSD
   payee: '0xYourWallet', // Replace with the provider wallet that should receive payment
-  allowSearchCrawlers: true                          // Googlebot passes free for SEO
 }), (req, res) => {
   // Only reached after verified payment authorization:
   res.json({
@@ -237,8 +233,8 @@ npx tsx scripts/agent-demo.ts
       "command": "npx",
       "args": ["tsx", "server/mcpServer.ts"],
       "env": {
-        "TEMPO_CHAIN_ID": "42431",
-        "TEMPO_RPC_URL": "https://rpc.moderato.tempo.xyz",
+        "TEMPO_CHAIN_ID": "${TEMPO_CHAIN_ID}",
+        "TEMPO_RPC_URL": "${TEMPO_RPC_URL}",
         "SYNAPSE_SESSION_KEY": "\${SYNAPSE_SESSION_KEY}"
       }
     }
@@ -373,7 +369,7 @@ npx tsx scripts/agent-demo.ts
             }`}
           >
             <Terminal className="w-3.5 h-3.5" />
-            <span>CLI Terminal Bot</span>
+            <span>CLI Terminal Agent</span>
           </button>
 
           <button
@@ -418,7 +414,7 @@ npx tsx scripts/agent-demo.ts
               {activeTab === 'mcp' && 'How MCP desktop integration works:'}
             </span>
             <p className="text-[11.5px] leading-relaxed text-zinc-400">
-              {activeTab === 'ai_side' && 'The AI client wraps standard fetch. When an endpoint returns HTTP 402 Payment Required, the client checks the price against your daily cap and retries with authorization; a live wallet is required for Tempo L1 settlement.'}
+              {activeTab === 'ai_side' && 'The AI client wraps standard fetch. When an endpoint returns HTTP 402 Payment Required, the client checks the price against your job maximum and retries with authorization; live settlement is submitted by the configured Treasury relayer.'}
               {activeTab === 'provider_side' && 'The withTempoMpp middleware intercepts requests. If no payment proof is attached, it issues an RFC 9110 HTTP 402 challenge. Once payment proof is verified, it yields control to your route handler.'}
               {activeTab === 'terminal_cli' && 'Runs an automated example: the AI agent discovers a paid route, checks a sub-cent payment against its cap, and handles a sample surge-pricing condition.'}
               {activeTab === 'mcp' && 'Exposes standard JSON-RPC 2.0 tools so autonomous agents in Claude Desktop or Cursor can discover paywalled tools, check remaining allowances, and authorize payments.'}
@@ -475,11 +471,11 @@ npx tsx scripts/agent-demo.ts
                           <strong className="text-zinc-200">{st.label}:</strong>
                           <span className="text-zinc-400">{st.detail}</span>
                         </div>
-                        {st.txHash && (
+                        {st.txHash && /^0x[a-fA-F0-9]{64}$/.test(st.txHash) && (
                           <div className="text-[10px] text-zinc-500 mt-0.5 flex items-center gap-1.5">
                             <span>Tx: {st.txHash.slice(0, 20)}...</span>
                             <a
-                              href={`https://explore.tempo.xyz/tx/${st.txHash}`}
+                              href={tempoTransactionUrl(st.txHash)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-[#d7ff4f] hover:underline flex items-center gap-1"

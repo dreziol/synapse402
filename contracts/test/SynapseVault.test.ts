@@ -85,6 +85,69 @@ describe("Synapse402 on Tempo L1: Smart Contracts Test Suite", function () {
       expect(session.currentSpent).to.equal(0n);
       expect(session.merkleRoot).to.equal(merkleRoot);
     });
+
+    it("Should REJECT re-registering an already active session key (preventing silent spend reset)", async function () {
+      const maxPerCall = parseUSD(0.10);
+      const totalBudget = parseUSD(5.00);
+      const validBefore = Math.floor(Date.now() / 1000) + 86400 * 7;
+
+      await vault.registerSessionKey(
+        agentSigner.address,
+        maxPerCall,
+        totalBudget,
+        validBefore,
+        merkleRoot
+      );
+
+      // Attempting to register again on an active session must revert with SessionAlreadyActive
+      await expect(
+        vault.registerSessionKey(
+          agentSigner.address,
+          maxPerCall,
+          totalBudget,
+          validBefore,
+          merkleRoot
+        )
+      ).to.be.revertedWithCustomError(vault, "SessionAlreadyActive");
+
+      // Explicit demo reset must succeed
+      await expect(
+        vault.resetDemoSession(
+          agentSigner.address,
+          maxPerCall,
+          totalBudget,
+          validBefore,
+          merkleRoot
+        )
+      ).to.not.be.reverted;
+    });
+
+    it("Should REJECT re-registering paused, depleted, or revoked sessions", async function () {
+      const maxPerCall = parseUSD(0.10);
+      const totalBudget = parseUSD(5.00);
+      const validBefore = Math.floor(Date.now() / 1000) + 86400 * 7;
+
+      await vault.registerSessionKey(
+        agentSigner.address,
+        maxPerCall,
+        totalBudget,
+        validBefore,
+        merkleRoot
+      );
+
+      for (const status of [2, 3, 4]) {
+        await vault.setSessionStatus(agentSigner.address, status);
+        await expect(
+          vault.registerSessionKey(
+            agentSigner.address,
+            maxPerCall,
+            totalBudget,
+            validBefore,
+            merkleRoot
+          )
+        ).to.be.revertedWithCustomError(vault, "SessionAlreadyRegistered");
+      }
+    });
   });
 
   describe("HTTP 402 Settlement Execution & Policy Enforcement", function () {
@@ -251,6 +314,38 @@ describe("Synapse402 on Tempo L1: Smart Contracts Test Suite", function () {
           signature: "0x",
         })
       ).to.be.revertedWithCustomError(vault, "ExceedsMaxPerCall");
+    });
+
+    it("Should leave an expired session ACTIVE while expiry is derived", async function () {
+      const latestBlock = await ethers.provider.getBlock("latest");
+      const expiry = Number(latestBlock?.timestamp || Math.floor(Date.now() / 1000)) + 2;
+      await vault.registerSessionKey(
+        rogueSigner.address,
+        parseUSD(0.10),
+        parseUSD(1.00),
+        expiry,
+        merkleRoot
+      );
+      await ethers.provider.send("evm_increaseTime", [3]);
+      await ethers.provider.send("evm_mine");
+
+      await expect(
+        vault.connect(relayer).settle402Payment({
+          sessionKey: rogueSigner.address,
+          channelId: 1,
+          nonce: 1,
+          payee: merchant.address,
+          amount: parseUSD(0.01),
+          endpoint: allowedEndpoints[0],
+          merkleProof: [],
+          memo: ethers.encodeBytes32String("expired_session"),
+          deadline: validBefore,
+          signature: "0x",
+        })
+      ).to.be.revertedWithCustomError(vault, "SessionExpired");
+
+      const session = await vault.sessionKeys(rogueSigner.address);
+      expect(session.status).to.equal(1); // ACTIVE; expiry is not a persisted status write
     });
 
     it("Should REJECT payment to an unwhitelisted endpoint (Prompt Injection defense)", async function () {

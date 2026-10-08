@@ -16,7 +16,7 @@ export interface ScopedSessionKey {
   channelId: number; // 2D nonce channel index
   sequenceNonce: number;
   lastActive: string;
-  merkleRoot?: string; // Dynamic SHA-256 Merkle root of whitelisted domains
+  merkleRoot?: string; // OpenZeppelin StandardMerkleTree root of whitelisted domains
 }
 
 export interface MPPChallenge {
@@ -41,6 +41,27 @@ export interface MPPExecutionTrace {
   latencyMs: number;
   httpStatusBefore: 402;
   httpStatusAfter: 200;
+  status?: 'SETTLED' | 'FAILED' | 'VOIDED' | 'PENDING' | 'SIMULATED_PASS' | 'REJECTED' | 'REFUNDED';
+  /** True when the gateway returned a previously settled request by idempotency key. */
+  isIdempotentCacheHit?: boolean;
+  executionMode?: 'LIVE_TESTNET' | 'RESILIENT_SANDBOX' | 'LIVE_TESTNET_PENDING_CONFIRMATION' | 'FAILED_REVERT' | string;
+  txHash?: string | null;
+  /** Set only after the canonical Tempo receipt verifier finds the exact TIP-20 transfer. */
+  receiptVerified?: boolean;
+  providerDataStatus?: 'EVALUATION_FIXTURE' | 'UPSTREAM_RESPONSE';
+  mppCredential?: {
+    signer: string;
+    channelId: number;
+    nonce: number;
+    payee: string;
+    amountMicro: string;
+    endpoint: string;
+    endpointHash: string;
+    memo: string;
+    validBefore: number;
+    chainId: number;
+    verifyingContract: string;
+  };
   challengeHeader: string;
   authAuthorizationHeader: string;
   eip712Signature: string;
@@ -55,14 +76,14 @@ export interface MPPExecutionTrace {
     categoryCode: string;
     invoiceDigest: string;
   };
-  merkleProof?: string[]; // Actual SHA-256 Merkle proof verifying target domain
-  merkleRoot?: string; // Dynamic SHA-256 Merkle root
-  domainHash?: string; // SHA-256 Hash of the requested target domain
+  merkleProof?: string[]; // StandardMerkleTree proof verifying the target domain
+  merkleRoot?: string; // OpenZeppelin StandardMerkleTree root
+  domainHash?: string; // Canonical double-keccak endpoint leaf
   eip712DomainSeparator?: string; // Real EIP-712 domain hash separator
   eip712StructHash?: string; // Real EIP-712 message structure hash
   liveProxyPayload?: any; // Real HTTP payload fetched through reverse proxy
   sanctionsCompliance?: {
-    status: 'CLEARED' | 'FLAGGED';
+    status: 'CLEARED' | 'FLAGGED' | 'UNVERIFIED';
     policy: string;
     checkedAt: string;
   };
@@ -86,6 +107,7 @@ export interface VaultMetrics {
   totalVolumeSettledPathUsd: number;
   totalTransactionsCount: number;
   protocolFeeRevenuePathUsd: number; // 0.1% protocol micro-cut & yield reserve
+  averageResponseLatencyMs?: number;
   averageFinalityMs: number;
   settlementSuccessRate: number;
   blockHeight?: number;

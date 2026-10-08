@@ -1,9 +1,9 @@
 ﻿/**
- * Safely formats TEMPO native gas balance.
+ * Safely formats a selectable Tempo TIP-20 fee-token balance.
  * Prevents BigInt / Wei saturation overflow into scientific notation (e.g. e+57)
  * and formats clean, human-readable numbers like "1,000.00" or "50.00".
  */
-export function formatTempoGas(bal: number | undefined | null): string {
+export function formatFeeTokenBalance(bal: number | undefined | null): string {
   if (bal === undefined || bal === null || !Number.isFinite(bal)) {
     return '0.00';
   }

@@ -113,7 +113,7 @@ export const ExecutiveThesisBanner: React.FC<ExecutiveThesisBannerProps> = ({
                   <div className="w-5 h-5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 text-[#d7ff4f] flex items-center justify-center shrink-0 mt-0.5">
                     <ShieldCheck className="w-3 h-3" />
                   </div>
-                  <span><strong>Bounded spending:</strong> daily limits and approved providers keep each agent inside its job.</span>
+                  <span><strong>Bounded spending:</strong> reusable caps and approved providers keep each repeated or background run inside its policy.</span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <div className="w-5 h-5 rounded bg-[#d7ff4f]/10 border border-[#d7ff4f]/30 text-[#d7ff4f] flex items-center justify-center shrink-0 mt-0.5">

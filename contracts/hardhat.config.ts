@@ -1,8 +1,13 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import * as dotenv from "dotenv";
+import * as path from "path";
 
-dotenv.config();
+// Keep deployment credentials in the ignored runtime directory. A caller can
+// override this path for CI or a dedicated deployment host.
+dotenv.config({
+  path: process.env.SYNAPSE_CONTRACT_ENV_FILE || path.join(__dirname, ".runtime", "relayer.env"),
+});
 
 const config: HardhatUserConfig = {
   solidity: {

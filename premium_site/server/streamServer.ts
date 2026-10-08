@@ -16,15 +16,14 @@ const SAMPLE_GENERATIONS: Record<string, string[]> = {
     " routes.", " Concurrently,", " TIP-20", " sub-cent", " pathUSD", " transfers", " execute", " with", " sub-second", " finality."
   ],
   sec_audit: [
-    "Autonomous", " regulatory", " scan", " initialized", " across", " SEC", " EDGAR", " structured", " 10-K", " filings.",
-    " Analyzing", " Item", " 1A", " Risk", " Factors", " against", " on-chain", " smart", " contract", " bytecode.",
-    " Discovered", " 0", " direct", " sanctions", " overlaps", " under", " OFAC", " sanctions", " compliance", " registry.",
-    " Audit", " result", " prepared", " with", " ISO-20022", " remittance", " details", " for", " review."
+    "Example", " compliance", " response", " prepared", " from", " the", " supplied", " evaluation", " fixture.",
+    " No", " live", " SEC", " EDGAR", " OFAC", " AML", " or", " sanctions", " lookup", " was", " run.",
+    " The", " payment", " record", " and", " ISO-20022", " fields", " remain", " available", " for", " review."
   ],
   general_ai: [
     "Model", " Context", " Protocol", " (MCP)", " streaming", " inference", " active.", " Real-time", " token", " throughput",
     " tracked", " against", " the", " configured", " budget.", " A", " final", " payment", " record", " is", " created",
-    " on", " completion", " when", " a", " live", " wallet", " is", " connected."
+    " on", " completion", " as", " an", " evaluation", " receipt.", " Live", " streaming", " stays", " disabled", " until", " a", " pre-authorized", " hold", " exists."
   ]
 };
 
@@ -33,13 +32,13 @@ function generateDynamicTokens(prompt: string | undefined, topic: string, key: a
     const p = prompt.toLowerCase();
     let text = '';
     if (p.includes('tempo') || p.includes('l1') || p.includes('chain')) {
-      text = `Tempo L1 can provide the settlement layer for autonomous machine-to-machine micropayments. Synapse402 uses 2D nonces (ChannelID : SequenceNonce) to keep agent payment lanes independent. This evaluation counts the work first; a live wallet is required before a chain receipt exists.`;
+      text = `Tempo L1 can provide the settlement layer for autonomous machine-to-machine micropayments. Synapse402 uses 2D nonces (ChannelID : SequenceNonce) to keep agent payment lanes independent. This stream is evaluation-only: it counts the work and records a local receipt; live output stays disabled until a pre-authorized hold exists.`;
     } else if (p.includes('guardrail') || p.includes('security') || p.includes('merkle') || p.includes('injection')) {
-      text = `Synapse402 enforces cryptographic policy boundaries through scoped EIP-712 session delegations. Authorized API endpoints are anchored to an on-chain Merkle tree. If an adversarial prompt injection instructs an agent to exfiltrate funds to an unwhitelisted destination, SynapseVault.sol mathematically rejects the transaction with EndpointNotWhitelisted, guaranteeing corporate treasury immunity.`;
+      text = `Synapse402 enforces cryptographic policy boundaries through scoped EIP-712 session delegations. Authorized API endpoints are anchored to an on-chain Merkle tree. If a request targets an unapproved destination, the policy check rejects it before any payment is sent.`;
     } else if (p.includes('deepseek') || p.includes('llm') || p.includes('token') || p.includes('model') || p.includes('ai')) {
-      text = `On-demand LLM token streaming avoids fixed monthly commitments. The agent counts generated tokens against its cap and creates one final payment record for the delivered portion. If the client disconnects, counting stops at the last delivered token.`;
+      text = `On-demand LLM token streaming avoids fixed monthly commitments. This evaluation demo counts generated tokens against its cap and creates one local receipt for the delivered portion. If the client disconnects, counting stops at the last delivered token.`;
     } else if (p.includes('arbitrage') || p.includes('market') || p.includes('trade') || p.includes('quant')) {
-      text = `Quantitative agents can compare cross-venue market depth and prepare an arbitrage plan. Ephemeral feeds are requested on demand within the session budget; execution requires a separate live wallet and trading integration.`;
+      text = `Quantitative agents can compare cross-venue market depth and prepare an arbitrage plan. Ephemeral feeds are requested on demand within the job maximum; this demo prepares the report and does not submit a trade.`;
     } else {
       text = `Processing autonomous inquiry "${prompt.trim()}". Session key [${key.agentName}] checked against its policy and authorized endpoints. Structured output is assembled for review; channel ${key.channelId} tracks the payment plan.`;
     }
@@ -50,7 +49,7 @@ function generateDynamicTokens(prompt: string | undefined, topic: string, key: a
     return SAMPLE_GENERATIONS[topic];
   }
 
-  return `Inference stream activated for topic [${topic}]. Counting tokens against the pathUSD budget. Payment channel ${key.channelId} is ready for a live receipt when a wallet is connected.`.split(/(\s+)/).filter(Boolean);
+  return `Evaluation stream activated for topic [${topic}]. Counting tokens against the pathUSD budget and recording one local receipt. Live output requires a pre-authorized hold.`.split(/(\s+)/).filter(Boolean);
 }
 
 export async function handleStreamInference(req: Request, res: Response) {
@@ -62,13 +61,41 @@ export async function handleStreamInference(req: Request, res: Response) {
 
   const keyId = (req.query.keyId as string) || (req.body?.keyId as string);
   const topic = (req.query.topic as string) || (req.body?.topic as string) || 'tempo_arbitrage';
-  const pricePerToken = Number(req.query.pricePerToken || req.body?.pricePerToken || 0.00002);
+  const rawPricePerToken = req.query.pricePerToken ?? req.body?.pricePerToken;
+  const pricePerToken = rawPricePerToken === undefined ? 0.00002 : Number(rawPricePerToken);
+  const evaluationOnly = String(req.query.evaluationOnly ?? req.body?.evaluationOnly ?? 'true').toLowerCase() !== 'false';
+
+  // Tokens are emitted before the final aggregate settlement. Do not expose
+  // that experimental ordering as a live payment product: live mode would
+  // give the provider output away before a chain receipt exists. The UI uses
+  // evaluationOnly=true; a future prepaid stream can explicitly replace this
+  // guard once a real hold/escrow is wired in.
+  if (!evaluationOnly) {
+    res.write(`data: ${JSON.stringify({
+      event: 'STREAM_UNAVAILABLE_LIVE',
+      message: 'Live streamed output requires a pre-authorized stream hold. This demo endpoint is evaluation-only until that hold is available.',
+      executionMode: 'RESILIENT_SANDBOX',
+      paymentStatus: 'EVALUATION_ONLY'
+    })}\n\n`);
+    res.end();
+    return;
+  }
 
   const keys = synapseEngine.getKeys();
-  const key = keys.find((k) => k.id === keyId) || keys.find((k) => k.status === 'ACTIVE') || keys[0];
+  if (!keyId || !String(keyId).trim()) {
+    res.write(`data: ${JSON.stringify({ error: 'keyId is required; streaming cannot choose another spending policy.' })}\n\n`);
+    res.end();
+    return;
+  }
+  const key = keys.find((k) => k.id === String(keyId).trim());
 
   if (!key) {
-    res.write(`data: ${JSON.stringify({ error: 'No active session key available for streaming settlement.' })}\n\n`);
+    res.write(`data: ${JSON.stringify({ error: `Session key "${String(keyId).trim()}" does not exist.` })}\n\n`);
+    res.end();
+    return;
+  }
+  if (key.status !== 'ACTIVE') {
+    res.write(`data: ${JSON.stringify({ error: `Session key "${key.id}" is not active for streaming settlement.` })}\n\n`);
     res.end();
     return;
   }
@@ -102,6 +129,8 @@ export async function handleStreamInference(req: Request, res: Response) {
     streamId,
     agentId: key.agentId,
     pricePerTokenPathUsd: pricePerToken,
+    executionMode: 'RESILIENT_SANDBOX',
+    settlementPolicy: 'Evaluation stream: output is delivered before a local receipt; no live payment is sent.',
     sessionPublicKey: key.sessionPublicKey,
     timestamp: new Date().toISOString()
   })}\n\n`);
@@ -150,20 +179,58 @@ export async function handleStreamInference(req: Request, res: Response) {
 
   // Finalize settlement record in Synapse Engine (commits totalCostCharged exactly once)
   if (totalTokensStreamed > 0) {
-    if (totalTokensStreamed > 1) {
-      key.sequenceNonce += totalTokensStreamed - 1;
+    const maxStreamCost = Number((tokens.length * pricePerToken).toFixed(6));
+    let finalTrace: any;
+    try {
+      // Use the same canonical job ledger and settlement endpoint as every
+      // other payment path. Streaming remains evaluation-only until a real
+      // prepayment hold exists, but it still gets durable idempotency/history.
+      const settlementResponse = await fetch(`http://127.0.0.1:${process.env.PORT || 3001}/api/mpp/settle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': streamId },
+        body: JSON.stringify({
+          keyId: key.id,
+          // The stream itself is a first-party evaluation route. Point the
+          // receipt at the local gateway route so the same SSRF/allowlist
+          // policy recognizes it and the final local receipt can be recorded.
+          targetUrl: `/api/stream/inference`,
+          pricePathUsd: Number(totalCostCharged.toFixed(6)),
+          category: `SSE Stream: ${totalTokensStreamed} tokens`,
+          idempotencyKey: streamId,
+          jobId: streamId,
+          jobBudgetPathUsd: maxStreamCost,
+          evaluationOnly: true,
+          recipient: synapseEngine.receiverAddress,
+          asset: 'pathUSD',
+          realm: 'Tempo-L1',
+        }),
+      });
+      const settlementData = await settlementResponse.json().catch(() => null);
+      if (!settlementResponse.ok || !settlementData?.trace) {
+        throw new Error(settlementData?.error || `Streaming settlement failed (HTTP ${settlementResponse.status}).`);
+      }
+      finalTrace = {
+        trace: settlementData.trace,
+        blockHeight: settlementData.blockHeight,
+      };
+    } catch (settlementError: any) {
+      res.write(`data: ${JSON.stringify({
+        event: 'STREAM_SETTLEMENT_FAILED',
+        streamId,
+        totalTokens: totalTokensStreamed,
+        finalCostPathUsd: Number(totalCostCharged.toFixed(6)),
+        executionMode: 'RESILIENT_SANDBOX',
+        paymentStatus: 'EVALUATION_ONLY',
+        message: settlementError?.message || 'Evaluation receipt could not be recorded.',
+      })}\n\n`);
+      res.end();
+      return;
     }
-    const finalTrace = await synapseEngine.settle402(
-      key.id,
-      `https://api.stream.tempo/v1/sse/${topic}`,
-      Number(totalCostCharged.toFixed(6)),
-      `SSE Stream: ${totalTokensStreamed} tokens`,
-      { allowDynamicWhitelist: true, asyncRelay: true }
-    );
     const liveConfirmed = finalTrace.trace.executionMode === 'LIVE_TESTNET'
       && finalTrace.trace.status === 'SETTLED'
+      && finalTrace.trace.receiptVerified === true
       && typeof finalTrace.trace.txHash === 'string'
-      && finalTrace.trace.txHash.startsWith('0x');
+      && /^0x[a-fA-F0-9]{64}$/.test(finalTrace.trace.txHash);
 
     res.write(`data: ${JSON.stringify({
       event: isAborted ? 'STREAM_ABORTED_BY_CLIENT' : 'STREAM_COMPLETED',
@@ -175,6 +242,7 @@ export async function handleStreamInference(req: Request, res: Response) {
       finalTraceId: finalTrace.trace.id,
       executionMode: finalTrace.trace.executionMode,
       paymentStatus: liveConfirmed ? 'SETTLED' : 'EVALUATION_ONLY',
+      settlementPolicy: 'Evaluation stream: no blockchain payment was sent.',
       txHash: liveConfirmed ? finalTrace.trace.txHash : null,
       blockHeight: finalTrace.blockHeight
     })}\n\n`);

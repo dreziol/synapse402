@@ -9,6 +9,8 @@
  * verifying Merkle policy, signing EIP-712 MPP auth, and settling on Tempo L1.
  */
 
+import { tempoTransactionUrl } from '../src/config/tempoExplorer.mjs';
+
 const GATEWAY_URL = process.env.GATEWAY_URL || 'http://localhost:3001';
 
 async function runAutonomousAgent() {
@@ -76,9 +78,12 @@ async function runAutonomousAgent() {
     console.log(`   2D Nonce Index:    ${data.trace.nonce2D}`);
     console.log(`   EIP-712 Sig:       ${data.trace.eip712Signature.slice(0, 32)}...`);
     console.log(`   TIP-20 Memo:       ${data.trace.tip20Memo} (ISO 20022 pacs.008)`);
-    console.log(`   Sanctions Screen:  ${data.trace.sanctionsCompliance?.policy || 'OFAC/AML Cleared'}`);
+    console.log(`   Sanctions Screen:  ${data.trace.sanctionsCompliance?.policy || 'Not run in this demo'}`);
     console.log(`   Merkle Root:       ${data.trace.merkleRoot ? data.trace.merkleRoot.slice(0, 22) + '...' : 'Wildcard Whitelist'}`);
-    console.log(`   Explorer Link:     \x1b[4mhttps://explore.moderato.tempo.xyz/tx/${data.trace.txHash}\x1b[0m`);
+    const explorerLink = isLive && /^0x[a-fA-F0-9]{64}$/.test(String(data.trace.txHash || ''))
+      ? tempoTransactionUrl(data.trace.txHash)
+      : 'No chain receipt (evaluation run)';
+    console.log(`   Explorer Link:     \x1b[4m${explorerLink}\x1b[0m`);
     console.log('-----------------------------------------------------------');
     console.log('✅ \x1b[32mDeliverable unlocked successfully for Autonomous AI Agent!\x1b[0m\n');
 

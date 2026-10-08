@@ -10,9 +10,26 @@ __v0_jsx-dev-runtime.ts
 .env
 .env.*
 *.env
+*.env.zip
 !.env.example
 
 # Common ignores
 node_modules
 .next/
+dist/
 .DS_Store
+*.log
+*.err
+
+# State persistence & secrets (NEVER COMMIT)
+server/synapseState.json*
+server/synapseState.json.bak
+server/jobBudgets.json*
+server/idempotency.json*
+server/*.bak
+server/.runtime/
+.runtime/
+submission-safe/
+*.key
+*.pem
+private_keys/

@@ -1,7 +1,8 @@
 import { ethers } from 'ethers';
+import { TEMPO_RPC_URL, TEMPO_VAULT_ADDRESS } from '../src/config/network';
 
 async function main() {
-  const provider = new ethers.JsonRpcProvider('https://rpc.moderato.tempo.xyz');
+  const provider = new ethers.JsonRpcProvider(TEMPO_RPC_URL);
   const txHash = process.argv[2] || process.env.TEMPO_TX_HASH;
   if (!txHash || !ethers.isHexString(txHash, 32)) {
     console.error('Usage: tsx scripts/decode-revert.ts <confirmed 0x transaction hash>');
@@ -12,7 +13,7 @@ async function main() {
     console.log('Tx not found');
     return;
   }
-  const vaultAddress = '0x3c42E274FAdd8e371fB84f97203CC2F2125c8775';
+  const vaultAddress = TEMPO_VAULT_ADDRESS;
   const iface = new ethers.Interface([
     "function settle402Payment((address sessionKey, uint64 channelId, uint64 nonce, address payee, uint256 amount, string endpoint, bytes32[] merkleProof, bytes32 memo, uint256 deadline, bytes signature) p) external",
     "function sessionKeys(address) view returns (uint256 maxPerCall, uint256 totalBudget, uint256 currentSpent, uint256 validBefore, bytes32 merkleRoot, uint8 status)",

@@ -35,7 +35,7 @@ async function main() {
     console.log('  Status Code       : 200 OK (Unlocked!)');
     console.log('  Settlement Status : Verified Type 0x76 MPP Authorization');
     console.log('  Provider Payload  :', JSON.stringify(data.payload || data, null, 2));
-    console.log('  Trace / Status    :', data.status, '| Signer:', data.signer);
+    console.log('  Trace / Status    :', data.status, '| Signer:', data.signer || data.trace?.mppCredential?.signer || 'gateway-managed');
   } catch (err: any) {
     console.error('  Settlement Error  :', err.message);
   }

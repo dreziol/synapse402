@@ -1,8 +1,8 @@
-﻿import React, { useState, useEffect } from 'react';
-import { 
-  Play, X, ChevronRight, ChevronLeft, Sparkles, ShieldAlert, 
-  FileText, Wallet, Check, AlertTriangle, Store, Cpu, Layers, 
-  Minimize2, Maximize2, MoveHorizontal 
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Play, Pause, X, ChevronRight, ChevronLeft, ShieldAlert,
+  FileText, Wallet, Store, Cpu, Layers, Minimize2, Maximize2,
+  MoveHorizontal, CircleDollarSign,
 } from 'lucide-react';
 import { soundEngine } from '../utils/audioEffects';
 
@@ -15,127 +15,38 @@ export interface TourStep {
   what: string;
   why: string;
   result: string;
-  tab: 'demo' | 'dashboard' | 'live' | 'monetize' | 'swarm' | 'architecture';
+  log: string;
+  tab: 'demo' | 'missions' | 'dashboard' | 'live' | 'monetize' | 'swarm' | 'architecture';
   icon: React.ComponentType<{ className?: string }>;
   targetElementId: string;
   actionLabel: string;
   subView?: 'swarm' | 'stream' | 'mcp';
+  substeps?: TourSubstep[];
+}
+
+interface TourSubstep {
+  title: string;
+  description: string;
+  result: string;
+  targetElementId: string;
 }
 
 export const TOUR_STEPS: TourStep[] = [
-  {
-    step: 1,
-    total: 8,
-    title: 'A paid request an agent can understand',
-    tag: 'STEP 1 / 8',
-    description: 'A site can ask an agent to pay for a structured response instead of serving the same page to every visitor.',
-    what: 'Agent asks for data → the service returns a payment request → the rules are checked → the response is delivered after confirmation.',
-    why: 'The service gets paid per approved request, while the agent only spends within its assigned limits.',
-    result: 'Walkthrough complete: request, rule check, payment status, and delivered result are shown together.',
-    tab: 'demo',
-    targetElementId: 'demo-action-box',
-    actionLabel: 'Run Payment',
-    icon: Sparkles,
-  },
-  {
-    step: 2,
-    total: 8,
-    title: 'Rogue Website & Drainer Interception',
-    tag: 'STEP 2 / 8',
-    description: 'Malicious prompt attempts to drain funds to rogue host. Approved Merkle whitelist blocks it in <3ms.',
-    what: 'Attacker injects untrusted URL (api.rogue-drainer.xyz) -> Protocol intercepts before debit occurs.',
-    why: 'Wallet protection: Prevents runaway bot prompt injections from draining your funds.',
-    result: 'Blocked: $0.00 debited. Exact attack reason logged in audit receipt ($0.00 net loss).',
-    tab: 'demo',
-    targetElementId: 'demo-test-matrix',
-    actionLabel: 'Run Attack Test',
-    icon: ShieldAlert,
-  },
-  {
-    step: 3,
-    total: 8,
-    title: 'Crash Auto-Refund (Atomic SLA Protection)',
-    tag: 'STEP 3 / 8',
-    description: 'A third-party API fails with HTTP 500. The walkthrough shows the request as failed instead of pretending it was paid successfully.',
-    what: 'Bot authorizes payment -> Upstream server fails to deliver payload -> Escrow refunded automatically.',
-    why: 'Cryptographic SLA: Ensures bot operators never pay when external vendors experience downtime or timeouts ($0.00 Lost).',
-    result: 'Failed request recorded. The interface shows what was rejected and what amount, if any, was confirmed.',
-    tab: 'demo',
-    targetElementId: 'demo-pipeline-section',
-    actionLabel: 'Test Crash Auto-Refund',
-    icon: AlertTriangle,
-  },
-  {
-    step: 4,
-    total: 8,
-    title: 'Itemized Receipts & Unlocked Payload Proof',
-    tag: 'STEP 4 / 8',
-    description: 'Open a receipt to see what the service returned and what payment status the system actually recorded.',
-    what: 'Bot received this exact file/payload (stock depth, article text, or AI analysis) and only 0.1¢ was debited.',
-    why: 'Proves the bot received a real result for its small payment, with a receipt you can check.',
-    result: 'Receipt view: the delivered payload and the available payment trace are shown together.',
-    tab: 'live',
-    targetElementId: 'section-live-payments-feed',
-    actionLabel: 'Inspect Receipt',
-    icon: FileText,
-  },
-  {
-    step: 5,
-    total: 8,
-    title: 'Autonomous Agent Budgets & Scoped Daily Limits',
-    tag: 'STEP 5 / 8',
-    description: 'Assign scoped session keys with hard daily budget caps ($5–$25/day) to prevent runaway bot spending.',
-    what: 'Each AI bot receives a dedicated session key that auto-freezes once its daily cap is reached.',
-    why: 'Prevents infinite billing loops: agents can never exceed their authorized department allowance.',
-    result: 'Budget capped: Real-time spend tracking with automatic lock when quota exhausted.',
-    tab: 'dashboard',
-    targetElementId: 'section-agent-wallet-budget',
-    actionLabel: 'Create Session Key',
-    icon: Wallet,
-  },
-  {
-    step: 6,
-    total: 8,
-    title: 'Turn Bot Crawlers into Direct Revenue',
-    tag: 'STEP 6 / 8',
-    description: 'Add a small payment gate to an API or site so an agent can request structured access.',
-    what: 'Agent requests a resource → the service states its price → the request is approved or rejected by the rules.',
-    why: 'Service owners can charge for machine access without creating a separate human checkout flow.',
-    result: 'Walkthrough complete: price, approval, and returned resource are visible in one flow.',
-    tab: 'monetize',
-    targetElementId: 'section-api-monetization',
-    actionLabel: 'Test Merchant Paywall',
-    icon: Store,
-  },
-  {
-    step: 7,
-    total: 8,
-    title: 'One job across several agents',
-    tag: 'STEP 7 / 8',
-    description: 'A lead agent can split a larger job into smaller tasks for specialist agents and services.',
-    what: 'Workforce executes approved tasks concurrently and pays per request within the configured budget; a live wallet enables Tempo L1 settlement.',
-    why: 'Replaces thousands in agency fees and SaaS retainers with pay-as-you-go micro-settlements.',
-    result: 'The walkthrough shows each task, its limit, and the combined result before claiming a live settlement.',
-    tab: 'swarm',
-    subView: 'swarm',
-    targetElementId: 'section-swarm-view',
-    actionLabel: 'Execute Workforce Mission',
-    icon: Cpu,
-  },
-  {
-    step: 8,
-    total: 8,
-    title: 'Parallel payment lanes',
-    tag: 'STEP 8 / 8',
-    description: 'Separate channels let several agent tasks move through the same payment system without sharing one queue.',
-    what: 'Each task keeps its own payment sequence, so one slow task does not hold up the others.',
-    why: 'This matters when a larger job uses several services at once.',
-    result: 'Architecture view: the concurrency model and configured network are shown without claiming a new deployment.',
-    tab: 'architecture',
-    targetElementId: 'architecture-specs-section',
-    actionLabel: 'Verify Architecture',
-    icon: Layers,
-  },
+  { step: 1, total: 8, title: 'Choose one job and one cap', tag: 'STEP 1 / 8', description: 'Pick the SOL/USDT brief. You set the maximum; the Lead Agent chooses the allowed steps.', what: 'One job. One cap. The system handles routing and keeps every request inside that limit.', why: 'You control the outcome and the maximum without configuring every worker.', result: 'Ready: SOL/USDT brief · cap $0.005', log: 'Selected job, maximum budget, and approved inputs.', tab: 'missions', targetElementId: 'tour-sol-mission', actionLabel: 'Open SOL job', icon: Wallet },
+  { step: 2, total: 8, title: 'Watch the Lead Agent run it', tag: 'STEP 2 / 8', description: 'The Lead Agent moves from free market data to local analysis, one paid depth input, and the final brief.', what: 'Lead Agent → free market data → local analysis → Amberdata depth → CoinGlass gap → final brief.', why: 'Free inputs are used first; payment happens only for an approved extra input.', result: 'One market brief with zones, momentum, paid depth, and the missing liquidation context.', log: 'Pipeline states, worker outputs, and one shared job maximum.', tab: 'swarm', subView: 'swarm', targetElementId: 'tour-sol-lead-agent', actionLabel: 'Show workforce', icon: Cpu, substeps: [
+    { title: 'Lead Agent', description: 'Sets the order, checks the cap, and directs every worker.', result: 'Current: Lead Agent · coordinating', targetElementId: 'tour-sol-lead-agent' },
+    { title: 'Market Data · FREE', description: 'Free public candles and volume start the job.', result: 'Current: market data · FREE · $0', targetElementId: 'tour-sol-bybit-free' },
+    { title: 'Local Analysis · FREE', description: 'Trend, zones, and volatility are calculated locally for $0.', result: 'Current: Local Analysis · FREE · $0', targetElementId: 'tour-sol-local-analysis' },
+    { title: 'Amberdata · PAID', description: 'One approved market-depth snapshot costs $0.001.', result: 'Current: Amberdata · PAID · $0.001', targetElementId: 'tour-sol-amberdata-depth' },
+    { title: 'CoinGlass · NO ROUTE', description: 'The AI needs this liquidation query, but CoinGlass needs to add our SDK before it can become a purchase.', result: 'Current: CoinGlass · no data · $0 revenue', targetElementId: 'tour-sol-coinglass-skipped' },
+    { title: 'Final Market Brief', description: 'The Lead Agent combines the available evidence and flags the missing liquidation data.', result: 'Current: Final Report · ready to review', targetElementId: 'tour-sol-final-report' },
+  ] },
+  { step: 3, total: 8, title: 'Show the payment moment', tag: 'STEP 3 / 8', description: 'A premium resource states its price, the rules check the job limit, and the agent can continue after approval.', what: 'Need resource → price → rule check → payment → resource received → work continues.', why: 'The agent does not stop for a human checkout or a new subscription.', result: 'The payment walkthrough shows the approved request and its returned resource.', log: 'Resource price, policy decision, payment state, and response.', tab: 'demo', targetElementId: 'execution-stage', actionLabel: 'Show payment flow', icon: CircleDollarSign },
+  { step: 4, total: 8, title: 'Show that rules cannot be bypassed', tag: 'STEP 4 / 8', description: 'One compact safety view covers the outcomes that protect the shared balance.', what: 'Over budget → blocked · unapproved provider → blocked · invalid payment → rejected · duplicate → no second charge.', why: 'Economic autonomy does not mean unlimited spending.', result: 'The safety matrix shows the request outcome and the amount protected.', log: 'Rule result, reason, and confirmed debit amount.', tab: 'demo', targetElementId: 'demo-test-matrix', actionLabel: 'Show safety rules', icon: ShieldAlert },
+  { step: 5, total: 8, title: 'Use controls when work repeats', tag: 'STEP 5 / 8', description: 'One maximum is enough for a normal mission. Reusable rules are for recurring or background work.', what: 'Shared balance, reusable limit, approved providers, and active or paused rules are visible together.', why: 'A company can tighten repeated work without forcing every normal mission through manual setup.', result: 'The spending controls explain the simple path and the advanced path separately.', log: 'Balance, reusable rule, provider allowlist, and rule state.', tab: 'dashboard', targetElementId: 'section-agent-wallet-budget', actionLabel: 'Show controls', icon: Wallet },
+  { step: 6, total: 8, title: 'Show why providers would join', tag: 'STEP 6 / 8', description: 'CoinGlass is the concrete provider opportunity: the request is useful, but there is no machine payment route yet.', what: 'Without the SDK: one liquidation query → no purchase → no data → $0. With the SDK: query → small payment → data → provider revenue.', why: 'Synapse402 adds an additional per-request channel for customers who would not buy a full API subscription.', result: 'The provider view shows the SDK as an opportunity, not a claimed partnership or guaranteed revenue.', log: 'Route, price example, provider response, and revenue state.', tab: 'monetize', targetElementId: 'section-api-monetization', actionLabel: 'Show provider opportunity', icon: Store },
+  { step: 7, total: 8, title: 'Leave a payment record', tag: 'STEP 7 / 8', description: 'Receipts show what was bought, the amount, the status, and the Tempo Explorer link when a payment is confirmed.', what: 'Payment proof identifies the transaction; provider output remains labelled live, sample, or demo.', why: 'A receipt proves payment, not the authenticity of an external sample response.', result: 'The receipt table makes spending and evidence easy to audit.', log: 'Resource, amount, provider label, status, tx hash, and Explorer link.', tab: 'live', targetElementId: 'section-live-payments-feed', actionLabel: 'Show receipts', icon: FileText },
+  { step: 8, total: 8, title: 'Zoom out: the product loop', tag: 'STEP 8 / 8', description: 'The same pattern scales from one narrow job to more providers and longer-running machine work.', what: 'Job + budget → AI works → needs resource → rules check → pay or block → result → receipt.', why: 'SOL is the example; the payment layer can later serve other machine-paid resources.', result: 'The architecture view closes with a realistic path from today’s loop to broader provider access.', log: 'Configured network, contracts, payment proof, and roadmap context.', tab: 'architecture', targetElementId: 'architecture-specs-section', actionLabel: 'Show the roadmap', icon: Layers },
 ];
 
 interface AutoPilotTourBarProps {
@@ -147,310 +58,150 @@ interface AutoPilotTourBarProps {
   onStop: () => void;
   onTriggerAction?: () => void;
   onStepSelect?: (index: number) => void;
+  executionMode?: 'LIVE_TESTNET' | 'RESILIENT_SANDBOX';
+  dockSide?: 'right' | 'left';
+  onDockSideChange?: (side: 'right' | 'left') => void;
 }
 
-export const AutoPilotTourBar: React.FC<AutoPilotTourBarProps> = ({
-  currentStepIndex,
-  onNext,
-  onPrev,
-  onStop,
-  onTriggerAction,
-  onStepSelect,
-}) => {
+export const AutoPilotTourBar: React.FC<AutoPilotTourBarProps> = ({ currentStepIndex, isPaused, onTogglePause, onNext, onPrev, onStop, onTriggerAction, onStepSelect, executionMode = 'RESILIENT_SANDBOX', dockSide = 'right', onDockSideChange }) => {
   const [isMinimized, setIsMinimized] = useState(false);
-  const [dockSide, setDockSide] = useState<'right' | 'left'>('right');
-
+  const [targetReady, setTargetReady] = useState(true);
+  const [workforceSubstepIndex, setWorkforceSubstepIndex] = useState(0);
+  const autoActionStepRef = useRef<number | null>(null);
+  const previousStepRef = useRef(currentStepIndex);
   const currentStep = TOUR_STEPS[currentStepIndex] || TOUR_STEPS[0];
-  const Icon = currentStep.icon;
+  const narrationStep = targetReady || currentStepIndex === 0 ? currentStep : TOUR_STEPS[currentStepIndex - 1] || currentStep;
+  const Icon = narrationStep.icon;
   const isLastStep = currentStepIndex === TOUR_STEPS.length - 1;
+  const isLiveMode = executionMode === 'LIVE_TESTNET';
+  const activeSubstep = currentStep.substeps?.[workforceSubstepIndex];
+  const activeTargetElementId = activeSubstep?.targetElementId || currentStep.targetElementId;
+  const isWorkforceSubstep = currentStepIndex === 1 && Boolean(activeSubstep);
+  const displayTitle = activeSubstep?.title || narrationStep.title;
+  const displayDescription = activeSubstep?.description || narrationStep.description;
+  const displayResult = activeSubstep?.result || narrationStep.result;
+  const progress = useMemo(() => ((currentStepIndex + 1) / TOUR_STEPS.length) * 100, [currentStepIndex]);
 
-  // Auto-scroll and spotlight the target element on step change
+  useEffect(() => { setWorkforceSubstepIndex(0); }, [currentStepIndex]);
+
   useEffect(() => {
-    // Remove previous spotlight
-    document.querySelectorAll('.tour-spotlight-active').forEach((el) => {
-      el.classList.remove('tour-spotlight-active');
-    });
-
-    const timer = setTimeout(() => {
-      if (currentStep.targetElementId) {
-        const target = document.getElementById(currentStep.targetElementId);
-        if (target) {
-          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          target.classList.add('tour-spotlight-active');
-        }
+    document.querySelectorAll('.tour-spotlight-active').forEach((el) => el.classList.remove('tour-spotlight-active'));
+    setTargetReady(false);
+    let readyTimer: number | undefined;
+    const timer = window.setTimeout(() => {
+      const target = document.getElementById(activeTargetElementId);
+      if (target) {
+        window.scrollTo({ left: 0, behavior: 'auto' });
+        // Keep the split layout anchored horizontally; only pan vertically to
+        // the active card so the narrator column never hides the workspace.
+        const workforceAnchorId = currentStepIndex === 1
+          ? (workforceSubstepIndex === 0 ? 'tour-sol-lead-agent' : 'tour-sol-bybit-free')
+          : activeTargetElementId;
+        const scrollTarget = document.getElementById(workforceAnchorId) || target;
+        scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        target.classList.add('tour-spotlight-active');
+        readyTimer = window.setTimeout(() => {
+          const latestRect = scrollTarget.getBoundingClientRect();
+          const viewportTop = window.innerHeight * 0.28;
+          if (latestRect.top < viewportTop || latestRect.bottom > window.innerHeight * 0.78) {
+            const scrollHost = document.scrollingElement || document.documentElement;
+            scrollHost.scrollTo({ top: Math.max(0, scrollHost.scrollTop + latestRect.top - viewportTop), behavior: 'smooth' });
+          }
+          setTargetReady(true);
+        }, 620);
+      } else {
+        setTargetReady(true);
       }
-    }, 180);
+    }, 220);
+    return () => { window.clearTimeout(timer); if (readyTimer) window.clearTimeout(readyTimer); };
+  }, [currentStepIndex, activeTargetElementId]);
 
-    return () => clearTimeout(timer);
-  }, [currentStepIndex, currentStep.targetElementId]);
+  useEffect(() => () => { document.querySelectorAll('.tour-spotlight-active').forEach((el) => el.classList.remove('tour-spotlight-active')); }, []);
 
-  // Cleanup spotlight on unmount
   useEffect(() => {
-    return () => {
-      document.querySelectorAll('.tour-spotlight-active').forEach((el) => {
-        el.classList.remove('tour-spotlight-active');
-      });
-    };
-  }, []);
-
-  // Global keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onStop();
-      else if (e.key === 'ArrowRight') onNext();
-      else if (e.key === 'ArrowLeft') onPrev();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onStop();
+      if (event.key === 'ArrowRight') onNext();
+      if (event.key === 'ArrowLeft') onPrev();
+      if (event.key === ' ') { event.preventDefault(); onTogglePause(); }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onNext, onPrev, onStop]);
+  }, [onNext, onPrev, onStop, onTogglePause]);
 
-  if (isMinimized) {
-    return (
-      <aside
-        role="dialog"
-        aria-label="Interactive Tour Guide (Minimized)"
-        className={`fixed bottom-5 z-40 ${dockSide === 'right' ? 'right-5 sm:right-6' : 'left-5 sm:left-6'} flex items-center gap-3 px-4 py-2.5 rounded-full border-2 border-[#d7ff4f]/80 bg-[#0d1017]/95 backdrop-blur-xl shadow-[0_10px_35px_rgba(0,0,0,0.85),0_0_20px_rgba(215,255,79,0.25)] animate-in fade-in duration-200`}
-      >
-        <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded bg-[#d7ff4f] text-[#08090c] flex items-center justify-center font-black">
-            <Icon className="w-3 h-3 text-[#08090c]" />
-          </div>
-          <span className="text-[11px] font-mono font-bold text-white">
-            STEP {currentStep.step}/8: <span className="text-[#d7ff4f]">{currentStep.actionLabel}</span>
-          </span>
-        </div>
+  useEffect(() => {
+    if (isPaused || isLastStep) return;
+    // The workforce step needs a little longer so the real pipeline can
+    // finish and the final brief is visible before the story moves on.
+    const hasMoreWorkforceSubsteps = currentStepIndex === 1 && Boolean(currentStep.substeps && workforceSubstepIndex < currentStep.substeps.length - 1);
+    const stepDelayMs = currentStepIndex === 1 ? 5200 : currentStepIndex === 2 ? 14000 : 12000;
+    const timer = window.setTimeout(() => {
+      if (hasMoreWorkforceSubsteps) setWorkforceSubstepIndex((index) => index + 1);
+      else onNext();
+    }, stepDelayMs);
+    return () => window.clearTimeout(timer);
+  }, [isPaused, isLastStep, currentStepIndex, currentStep.substeps, workforceSubstepIndex, onNext]);
 
-        {onTriggerAction && (
-          <button
-            onClick={() => {
-              soundEngine.playClick();
-              onTriggerAction();
-            }}
-            className="px-2.5 py-1 rounded bg-[#d7ff4f] hover:bg-[#c6f03d] text-[#08090c] font-bold text-[11px] font-mono transition cursor-pointer"
-          >
-            {currentStep.actionLabel}
-          </button>
-        )}
+  // In evaluation mode, automatic playback performs the safe demo action so
+  // the judge sees the real page move. Live mode remains manual by design.
+  useEffect(() => {
+    if (previousStepRef.current !== currentStepIndex) {
+      previousStepRef.current = currentStepIndex;
+      autoActionStepRef.current = null;
+    }
+  }, [currentStepIndex]);
 
-        <div className="flex items-center gap-1 border-l border-white/10 pl-2">
-          <button
-            onClick={() => {
-              soundEngine.playClick();
-              onPrev();
-            }}
-            disabled={currentStepIndex === 0}
-            className="p-1 rounded text-zinc-300 hover:text-white disabled:opacity-20 cursor-pointer"
-            title="Previous Step"
-          >
-            <ChevronLeft className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => {
-              soundEngine.playClick();
-              if (isLastStep) onStop();
-              else onNext();
-            }}
-            className="p-1 rounded text-zinc-300 hover:text-white cursor-pointer"
-            title={isLastStep ? 'Finish' : 'Next Step'}
-          >
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
+  useEffect(() => {
+    if (isPaused || isLiveMode || !onTriggerAction || ![1, 2, 3].includes(currentStepIndex)) return;
+    const timer = window.setTimeout(() => {
+      if (autoActionStepRef.current === currentStepIndex) return;
+      autoActionStepRef.current = currentStepIndex;
+      onTriggerAction();
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [isPaused, isLiveMode, currentStepIndex]);
 
-        <button
-          onClick={() => {
-            soundEngine.playClick();
-            setIsMinimized(false);
-          }}
-          className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
-          title="Expand Tour Card"
-        >
-          <Maximize2 className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={() => {
-            soundEngine.playClick();
-            onStop();
-          }}
-          className="p-1 rounded text-zinc-400 hover:text-zinc-200 transition cursor-pointer"
-          title="Close Tour"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </aside>
-    );
-  }
+  const runAction = () => { soundEngine.playClick(); if ([1, 2, 3].includes(currentStepIndex)) autoActionStepRef.current = currentStepIndex; onTriggerAction?.(); };
+  const next = () => {
+    soundEngine.playClick();
+    if (currentStepIndex === 1 && currentStep.substeps && workforceSubstepIndex < currentStep.substeps.length - 1) {
+      setWorkforceSubstepIndex((index) => index + 1);
+      return;
+    }
+    isLastStep ? onStop() : onNext();
+  };
+  const prev = () => {
+    soundEngine.playClick();
+    if (currentStepIndex === 1 && workforceSubstepIndex > 0) {
+      setWorkforceSubstepIndex((index) => index - 1);
+      return;
+    }
+    onPrev();
+  };
+
+  if (isMinimized) return (
+    <aside role="dialog" aria-label="Judge Mode (minimized)" className={`fixed bottom-5 z-50 ${dockSide === 'right' ? 'right-5' : 'left-5'} flex items-center gap-3 rounded-full border border-[#d7ff4f]/60 bg-[#0d1017]/95 px-4 py-2.5 shadow-2xl backdrop-blur-xl`}>
+      <span className="h-2 w-2 rounded-full bg-[#d7ff4f] shadow-[0_0_12px_rgba(215,255,79,.7)]" /><span className="text-[11px] font-bold text-white">{currentStep.tag} · {currentStep.title}</span>
+      <button type="button" onClick={next} className="rounded-lg bg-[#d7ff4f] px-2 py-1 text-[10px] font-bold text-[#08090c]">Next</button>
+      <button type="button" onClick={() => setIsMinimized(false)} className="text-zinc-400 hover:text-white" title="Expand Judge Mode"><Maximize2 className="h-4 w-4" /></button>
+      <button type="button" onClick={onStop} className="text-zinc-400 hover:text-white" title="Exit Judge Mode"><X className="h-4 w-4" /></button>
+    </aside>
+  );
 
   return (
-    <aside
-      role="dialog"
-      aria-label="Interactive Tour Guide"
-      className={`fixed bottom-5 z-40 ${dockSide === 'right' ? 'right-5 sm:right-6' : 'left-5 sm:left-6'} w-[440px] max-w-[calc(100vw-2rem)] rounded-2xl border border-white/15 bg-[#0d1017]/95 backdrop-blur-2xl p-4 sm:p-5 shadow-2xl animate-in slide-in-from-bottom-5 duration-200 font-sans`}
-    >
-      {/* Top Header */}
-      <div className="flex items-center justify-between pb-2.5 border-b border-white/10">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-[#d7ff4f] text-[#08090c] flex items-center justify-center font-black">
-            <Icon className="w-4 h-4 text-[#08090c]" />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-mono font-bold tracking-widest text-[#d7ff4f] uppercase">
-                GUIDED TOUR
-              </span>
-              <span className="text-white/30 text-xs">•</span>
-              <span className="text-[10px] font-mono text-zinc-400">
-                STEP {currentStep.step} OF {currentStep.total}
-              </span>
-            </div>
-          </div>
+    <>
+    <aside role="dialog" aria-busy={!targetReady} aria-label="Synapse402 Judge Mode" className={`judge-mode-panel fixed top-4 z-50 ${dockSide === 'right' ? 'right-4' : 'left-4'} w-[min(26vw,380px)] max-h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-3xl border border-white/20 bg-[#0d1219]/96 p-4 shadow-[0_24px_80px_rgba(0,0,0,.7)] backdrop-blur-2xl font-sans sm:p-5`}>
+        <div className="flex items-start justify-between gap-3 border-b border-white/10 pb-4">
+          <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#d7ff4f] text-[#08090c]"><Icon className="h-5 w-5" /></div><div><div className="text-[11px] font-black uppercase tracking-[.22em] text-[#d7ff4f]">SYNAPSE402 · JUDGE MODE</div><div className="mt-1 text-xs text-zinc-400">Follow the product loop · {currentStep.tag}</div></div></div>
+          <div className="flex items-center gap-1"><button type="button" onClick={() => onDockSideChange?.(dockSide === 'right' ? 'left' : 'right')} className="rounded-lg p-2 text-zinc-400 hover:bg-white/10 hover:text-white" title="Move panel"><MoveHorizontal className="h-4 w-4" /></button><button type="button" onClick={() => setIsMinimized(true)} className="rounded-lg p-2 text-zinc-400 hover:bg-white/10 hover:text-white" title="Minimize"><Minimize2 className="h-4 w-4" /></button><button type="button" onClick={onStop} className="rounded-lg p-2 text-zinc-400 hover:text-white" title="Exit Judge Mode"><X className="h-4 w-4" /></button></div>
         </div>
-
-        <div className="flex items-center gap-1">
-          {/* Flip side button */}
-          <button
-            onClick={() => {
-              soundEngine.playClick();
-              setDockSide((prev) => (prev === 'right' ? 'left' : 'right'));
-            }}
-            className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
-            title={dockSide === 'right' ? 'Dock to Left Side' : 'Dock to Right Side'}
-          >
-            <MoveHorizontal className="w-3.5 h-3.5" />
-          </button>
-          {/* Minimize button */}
-          <button
-            onClick={() => {
-              soundEngine.playClick();
-              setIsMinimized(true);
-            }}
-            className="p-1 rounded-md text-zinc-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
-            title="Minimize to Dock Pill"
-          >
-            <Minimize2 className="w-3.5 h-3.5" />
-          </button>
-          {/* Close button */}
-          <button
-            onClick={() => {
-              soundEngine.playClick();
-              onStop();
-            }}
-            className="p-1 rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-white/10 transition cursor-pointer"
-            title="Close Tour (Esc)"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-
-      {/* Step Title & Description */}
-      <div className="mt-3 space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <h4 className="text-sm font-bold text-white tracking-tight">
-            {currentStep.title}
-          </h4>
-          <span className="px-2 py-0.5 rounded bg-white/[.05] border border-white/10 text-[10px] font-mono text-zinc-300 uppercase shrink-0">
-            {currentStep.tab}
-          </span>
-        </div>
-        <p className="text-xs text-zinc-300 leading-relaxed">
-          {currentStep.description}
-        </p>
-
-        {/* Highlights: Action, Utility, Result */}
-        <div className="space-y-1.5 pt-1 text-[11px]">
-          <div className="flex items-start gap-1.5 text-zinc-300">
-            <span className="text-[#d7ff4f] font-mono font-bold shrink-0">▸</span>
-            <span><strong className="text-zinc-100">Action:</strong> {currentStep.what}</span>
-          </div>
-          <div className="flex items-start gap-1.5 text-zinc-300">
-            <span className="text-[#38bdf8] font-mono font-bold shrink-0">▸</span>
-            <span><strong className="text-zinc-100">Utility:</strong> {currentStep.why}</span>
-          </div>
-          <div className="flex items-start gap-1.5 text-zinc-300">
-            <span className="text-emerald-400 font-mono font-bold shrink-0">▸</span>
-            <span><strong className="text-zinc-100">Result:</strong> {currentStep.result}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Footer Controls */}
-      <div className="mt-3.5 pt-3 border-t border-white/10 flex items-center justify-between">
-        {/* Progress dots */}
-        <div className="flex items-center gap-1.5" title="Click any step dot to jump">
-          {TOUR_STEPS.map((s, idx) => (
-            <button
-              key={s.step}
-              type="button"
-              onClick={() => {
-                soundEngine.playClick();
-                if (onStepSelect) onStepSelect(idx);
-              }}
-              className={`h-1.5 rounded-full transition-all cursor-pointer ${
-                idx === currentStepIndex
-                  ? 'w-5 bg-[#d7ff4f]'
-                  : idx < currentStepIndex
-                  ? 'w-1.5 bg-[#d7ff4f]/50 hover:bg-[#d7ff4f]/80'
-                  : 'w-1.5 bg-white/20 hover:bg-white/40'
-              }`}
-              title={`Jump to Step ${s.step}: ${s.title}`}
-            />
-          ))}
-        </div>
-
-        {/* Action & Nav Buttons */}
-        <div className="flex items-center gap-2 font-mono text-xs">
-          {onTriggerAction && (
-            <button
-              onClick={() => {
-                soundEngine.playClick();
-                onTriggerAction();
-              }}
-              className="px-2.5 py-1.5 rounded-lg bg-[#d7ff4f] hover:bg-[#c6f03d] text-[#08090c] font-bold flex items-center gap-1.5 transition cursor-pointer"
-            >
-              <Play className="w-3 h-3 fill-current" />
-              <span>{currentStep.actionLabel}</span>
-            </button>
-          )}
-
-          <button
-            onClick={() => {
-              soundEngine.playClick();
-              onPrev();
-            }}
-            disabled={currentStepIndex === 0}
-            className="p-1.5 rounded-lg bg-white/[.05] hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white transition disabled:opacity-20 cursor-pointer"
-            title="Previous Step (Arrow Left)"
-          >
-            <ChevronLeft className="w-3.5 h-3.5" />
-          </button>
-
-          <button
-            onClick={() => {
-              soundEngine.playClick();
-              if (isLastStep) {
-                onStop();
-              } else {
-                onNext();
-              }
-            }}
-            className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold flex items-center gap-1 transition cursor-pointer"
-            title={isLastStep ? 'Complete Tour' : 'Next Step (Arrow Right)'}
-          >
-            {isLastStep ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-[#d7ff4f]" />
-                <span>Finish</span>
-              </>
-            ) : (
-              <>
-                <span>Next</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </aside>
+        <div className="mt-5 flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-zinc-400"><span>{currentStep.tag}{isWorkforceSubstep ? ` · ${workforceSubstepIndex + 1}/${currentStep.substeps?.length || 0}` : ''}</span><span>{Math.round(progress)}% complete</span></div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-[#d7ff4f] transition-all duration-500" style={{ width: `${progress}%` }} /></div>
+        <section className={`mt-5 ${isWorkforceSubstep ? 'space-y-2' : 'space-y-3'}`}><h2 className="text-xl font-black leading-tight tracking-tight text-white sm:text-2xl">{displayTitle}</h2><p className="text-[13px] leading-relaxed text-zinc-300">{displayDescription}</p>{!isWorkforceSubstep && <><div className="rounded-2xl border border-[#d7ff4f]/25 bg-[#d7ff4f]/[.07] p-3"><div className="flex items-start gap-2 text-[13px] font-semibold leading-relaxed text-white"><span className="mt-1 text-[#d7ff4f]">●</span><span>{narrationStep.what}</span></div></div><div className="rounded-xl border border-emerald-300/20 bg-emerald-300/[.05] p-3"><span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">{currentStepIndex === 0 ? 'READY TO RUN' : 'RESULT'}</span><p className="mt-1 text-xs leading-relaxed text-zinc-200">{currentStepIndex === 0 ? 'SOL/USDT analysis · max spend $0.005' : narrationStep.result}</p></div></>}{isWorkforceSubstep && <div className="rounded-xl border border-emerald-300/20 bg-emerald-300/[.05] p-3"><span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">CURRENT</span><p className="mt-1 text-xs leading-relaxed text-zinc-200">{displayResult}</p></div>}</section>
+        {!isWorkforceSubstep && (isLiveMode ? <div className="mt-5 rounded-xl border border-amber-300/25 bg-amber-300/[.06] p-3 text-xs leading-relaxed text-amber-100">Live proof is manual. Judge Mode will not send a payment by itself.</div> : <div className="mt-5 rounded-xl border border-sky-300/20 bg-sky-300/[.05] p-3 text-xs leading-relaxed text-sky-100">Evaluation mode: inspect the real flow without sending a blockchain payment.</div>)}
+        <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-white/10 pt-4"><button type="button" onClick={onTogglePause} className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[.06] px-3 py-2 text-xs font-semibold text-white hover:bg-white/10">{isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}{isPaused ? 'Play automatically' : 'Pause tour'}</button>{onTriggerAction && (!isWorkforceSubstep || workforceSubstepIndex === 0) && <button type="button" onClick={runAction} className="inline-flex items-center gap-2 rounded-xl bg-[#d7ff4f] px-3 py-2 text-xs font-black text-[#08090c] hover:bg-[#c6f03d]"><Play className="h-3.5 w-3.5 fill-current" />{isLiveMode && currentStepIndex === 1 ? 'Run live workforce proof' : isLiveMode && currentStepIndex === 2 ? 'Run live proof' : currentStepIndex === 1 ? 'Run evaluation workforce' : currentStep.actionLabel}</button>}<button type="button" onClick={prev} disabled={currentStepIndex === 0 && workforceSubstepIndex === 0} className="rounded-xl border border-white/10 bg-white/[.04] p-2 text-zinc-300 hover:text-white disabled:opacity-30" title="Back"><ChevronLeft className="h-4 w-4" /></button><button type="button" onClick={next} className="inline-flex items-center gap-1 rounded-xl border border-white/15 bg-white/[.10] px-3 py-2 text-xs font-semibold text-white hover:bg-white/15">{isLastStep ? 'Finish' : 'Next'}<ChevronRight className="h-4 w-4" /></button></div>
+        <div className="mt-4 grid grid-cols-8 gap-1.5" aria-label="Judge Mode progress">{TOUR_STEPS.map((step, index) => <button key={step.step} type="button" onClick={() => onStepSelect?.(index)} title={step.title} className={`h-1.5 rounded-full transition-all ${index === currentStepIndex ? 'bg-[#d7ff4f]' : index < currentStepIndex ? 'bg-[#d7ff4f]/45' : 'bg-white/15 hover:bg-white/30'}`} />)}</div>
+      </aside>
+    </>
   );
 };

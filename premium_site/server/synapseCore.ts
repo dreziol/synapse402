@@ -1,12 +1,23 @@
 import * as dotenv from 'dotenv';
-dotenv.config({ quiet: true } as any);
-
 import { Request, Response } from 'express';
 import crypto from 'crypto';
+import net from 'net';
+import { lookup as dnsLookup } from 'node:dns/promises';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { ethers } from 'ethers';
+import {
+  TEMPO_CHAIN_ID,
+  tempoTransactionUrl,
+  TEMPO_PATHUSD_ADDRESS,
+  TEMPO_RECEIVER_ADDRESS,
+  TEMPO_RPC_URL,
+  TEMPO_VAULT_ADDRESS,
+} from '../src/config/network';
+import { canonicalEndpointHash } from '../src/shared/endpointHash';
+import { tempoPayeeAmountMicro, verifyTempoPaymentReceipt as verifyTempoPaymentReceiptProof } from '../src/shared/tempoReceipt';
+import { CANONICAL_PROVIDER_REGISTRY } from '../src/config/providerRegistry';
 
 declare const __dirname: string | undefined;
 const currentDir = (() => {
@@ -17,6 +28,36 @@ const currentDir = (() => {
   } catch {
     return process.cwd();
   }
+})();
+
+// Keep credentials in the ignored runtime directory during local development.
+// A caller may override this path for a deployment environment.
+const candidateEnvPaths = [
+  process.env.SYNAPSE_ENV_FILE,
+  path.join(currentDir, '.runtime', 'relayer.env'),
+  path.join(process.cwd(), 'server', '.runtime', 'relayer.env'),
+  path.join(process.cwd(), 'premium_site', 'server', '.runtime', 'relayer.env'),
+  path.join(currentDir, '..', '.env'),
+  path.join(process.cwd(), 'premium_site', '.env'),
+  path.join(process.cwd(), '.env'),
+].filter(Boolean) as string[];
+
+for (const envCandidate of candidateEnvPaths) {
+  try {
+    if (fs.existsSync(envCandidate)) {
+      dotenv.config({ path: envCandidate, override: true, quiet: true } as any);
+    }
+  } catch {}
+}
+
+// Runtime ledgers live outside the source tree's tracked files. A clean
+// checkout therefore starts from deterministic seeds, while a running local
+// instance still keeps receipts and idempotency data across restarts.
+const runtimeDirectory = (() => {
+  const configured = typeof process !== 'undefined' ? process.env.SYNAPSE_RUNTIME_DIR : undefined;
+  const dir = configured ? path.resolve(configured) : path.join(process.cwd(), 'server', '.runtime');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
 })();
 
 import { StandardMerkleTree } from '@openzeppelin/merkle-tree';
@@ -54,7 +95,9 @@ export class MerkleTree {
 
   public getLeafHash(domain: string): string {
     const target = domain.toLowerCase().trim();
-    return this.tree.leafHash([target]);
+    // Keep the engine and provider SDK on the same StandardMerkleTree leaf
+    // binding (double-keccak over ABI-encoded, normalized endpoint text).
+    return canonicalEndpointHash(target);
   }
 
   public static verifyProof(leaf: string, proof: string[], root: string): boolean {
@@ -90,18 +133,22 @@ export const SYNAPSE_VAULT_ABI = [
   "event SessionKeyRegistered(address indexed sessionKey, uint256 maxPerCall, uint256 totalBudget, uint256 validBefore, bytes32 merkleRoot)",
   "event SessionKeyStatusUpdated(address indexed sessionKey, uint8 status)",
   "event SessionBudgetUpdated(address indexed sessionKey, uint256 newTotalBudget, uint256 newMaxPerCall)",
+  "event SessionMerkleRootUpdated(address indexed sessionKey, bytes32 oldMerkleRoot, bytes32 newMerkleRoot)",
   "event PaymentSettled(address indexed sessionKey, address indexed payee, uint256 amount, uint64 channelId, uint64 nonce, bytes32 indexed memo, string endpoint)",
   "function deposit(uint256 amount) external",
   "function withdraw(address recipient, uint256 amount) external",
   "function registerSessionKey(address sessionKey, uint256 maxPerCall, uint256 totalBudget, uint256 validBefore, bytes32 merkleRoot) external",
+  "function resetDemoSession(address sessionKey, uint256 maxPerCall, uint256 totalBudget, uint256 validBefore, bytes32 merkleRoot) external",
   "function setSessionStatus(address sessionKey, uint8 newStatus) external",
   "function updateSessionBudget(address sessionKey, uint256 newTotalBudget, uint256 newMaxPerCall) external",
+  "function updateSessionMerkleRoot(address sessionKey, bytes32 newMerkleRoot) external",
   "function settle402Payment((address sessionKey, uint64 channelId, uint64 nonce, address payee, uint256 amount, string endpoint, bytes32[] merkleProof, bytes32 memo, uint256 deadline, bytes signature) p) external",
   "function getRemainingBudget(address sessionKey) external view returns (uint256)",
   "function totalVaultBalance() external view returns (uint256)",
   "function lastNonce(address sessionKey, uint64 channelId) external view returns (uint64)",
   "function sessionKeys(address sessionKey) external view returns (uint256 maxPerCall, uint256 totalBudget, uint256 currentSpent, uint256 validBefore, bytes32 merkleRoot, uint8 status)",
-  "function paymentToken() external view returns (address)"
+  "function paymentToken() external view returns (address)",
+  "function owner() external view returns (address)"
 ];
 
 export const SYNAPSE_RECEIVER_ABI = [
@@ -128,6 +175,10 @@ export interface MPPTraceRecord {
   blockNumber: number;
   agentId: string;
   agentName: string;
+  /** Stable mission identifier used to group receipts from one job. */
+  jobId?: string;
+  /** Provider label supplied by the backend record; never inferred in the UI from a URL. */
+  providerName?: string;
   targetEndpoint: string;
   method: 'GET' | 'POST';
   costPathUsd: number;
@@ -138,6 +189,8 @@ export interface MPPTraceRecord {
   authAuthorizationHeader: string;
   eip712Signature: string;
   txHash: string;
+  /** Canonical chain explorer link for the active network. */
+  explorerUrl?: string;
   executionMode: 'LIVE_TESTNET' | 'RESILIENT_SANDBOX' | 'FAILED_REVERT';
   tempoTxType?: '0x76';
   nonce2D: string;
@@ -155,20 +208,224 @@ export interface MPPTraceRecord {
   domainHash: string;
   eip712DomainSeparator: string;
   eip712StructHash: string;
+  /** Signed fields forwarded to a provider so its middleware can verify the
+   * EIP-712 credential instead of trusting a signature-shaped header. */
+  mppCredential?: {
+    signer: string;
+    channelId: number;
+    nonce: number;
+    payee: string;
+    amountMicro: string;
+    endpoint: string;
+    endpointHash: string;
+    memo: string;
+    validBefore: number;
+    chainId: number;
+    verifyingContract: string;
+  };
   liveProxyPayload?: any;
   sanctionsCompliance: {
-    status: 'CLEARED' | 'FLAGGED';
+    status: 'UNVERIFIED' | 'FLAGGED';
     policy: string;
     checkedAt: string;
   };
   complianceVerification?: {
-    status: 'CLEARED' | 'FLAGGED';
+    status: 'CLEARED' | 'UNVERIFIED' | 'FLAGGED';
     policy: string;
     checkedAt: string;
   };
   isIdempotentCacheHit?: boolean;
-  status?: 'SETTLED' | 'SIMULATED_PASS' | 'PENDING' | 'VOIDED' | 'REJECTED' | 'REFUNDED';
+  status?: 'SETTLED' | 'FAILED' | 'SIMULATED_PASS' | 'PENDING' | 'VOIDED' | 'REJECTED' | 'REFUNDED';
+  /** True only after the canonical receipt verifier accepted the TIP-20 transfer. */
+  receiptVerified?: boolean;
+  /** Canonical provider-data provenance; independent from payment proof. */
+  providerDataStatus?: 'EVALUATION_FIXTURE' | 'UPSTREAM_RESPONSE' | 'CACHED_TRACE_PAYLOAD' | 'PAYMENT_PENDING' | 'UNVERIFIED';
 }
+
+const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
+const isVerifiedTxHash = (value: unknown): value is string =>
+  typeof value === 'string' && /^0x[a-fA-F0-9]{64}$/.test(value);
+
+const LEGACY_ALLOWLIST_ARTIFACTS = [
+  '127.0.0.1:',
+  'localhost:',
+  'httpstat.us',
+  'non-existent-domain',
+  'unreliable-upstream',
+];
+
+export const isBlockedOutboundHostname = (hostname: string): boolean => {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+  if (!host || host === 'localhost' || host.endsWith('.localhost') || host === 'metadata.google.internal') return true;
+  if (host === '0.0.0.0' || host === '::' || host === '::1' || host === '169.254.169.254') return true;
+  const ipVersion = net.isIP(host);
+  if (ipVersion === 4) {
+    const octets = host.split('.').map(Number);
+    const [a, b] = octets;
+    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+  }
+  if (ipVersion === 6) {
+    const mappedIpv4 = host.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/)?.[1];
+    if (mappedIpv4) return isBlockedOutboundHostname(mappedIpv4);
+    // WHATWG URL canonicalizes ::ffff:127.0.0.1 to ::ffff:7f00:1.
+    // Decode that hexadecimal IPv4-mapped form before applying the private
+    // network checks, otherwise it becomes an SSRF bypass.
+    const mappedHex = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+    if (mappedHex) {
+      const first = Number.parseInt(mappedHex[1], 16);
+      const second = Number.parseInt(mappedHex[2], 16);
+      const mapped = `${first >>> 8}.${first & 255}.${second >>> 8}.${second & 255}`;
+      return isBlockedOutboundHostname(mapped);
+    }
+    return host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80:');
+  }
+  return false;
+};
+
+export const isBlockedOutboundUrl = (value: string): boolean => {
+  try {
+    const parsed = new URL(value);
+    return isBlockedOutboundHostname(parsed.hostname);
+  } catch {
+    return true;
+  }
+};
+
+/**
+ * Shared outbound target guard used before any gateway/provider fetch. Local
+ * targets are limited to the gateway's known demo routes; every other target
+ * must be public and use http(s).
+ */
+export function isSafeProviderUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+    const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+    const gatewayPort = String(process.env.PORT || 3001);
+    const local = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost';
+    const localPrefixes = [
+      '/api/v1/data/', '/api/v1/due-diligence/', '/api/v1/media/',
+      '/api/v1/market/',
+      '/api/v1/test-provider-data', '/api/v1/mock-500', '/api/v1/surge-demo',
+      '/api/stream/inference',
+    ];
+    if (local) {
+      return port === gatewayPort && localPrefixes.some((prefix) => parsed.pathname === prefix.replace(/\/$/, '') || parsed.pathname.startsWith(prefix));
+    }
+    return !isBlockedOutboundHostname(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Fetch a provider route without following an unvalidated redirect. Public
+ * hostnames are resolved before every request and every resolved address must
+ * remain outside private, loopback, link-local, and metadata ranges. Local
+ * requests are allowed only for the gateway's finite demo-route allowlist.
+ */
+export async function safeProviderFetch(value: string, init: globalThis.RequestInit = {}, maxRedirects = 5): Promise<globalThis.Response> {
+  let current = new URL(value);
+  const visited = new Set<string>();
+  let requestInit: globalThis.RequestInit = { ...init, headers: init.headers ? new Headers(init.headers) : undefined };
+  const sensitiveHeaders = [
+    'authorization', 'proxy-authorization', 'cookie', 'set-cookie', 'x-api-key', 'x-auth-token',
+    'idempotency-key', 'x-tempo-mpp-signature', 'x-tempo-mpp-signer', 'x-tempo-mpp-payee',
+    'x-tempo-mpp-amount-micro', 'x-tempo-mpp-endpoint', 'x-tempo-mpp-endpoint-hash',
+    'x-tempo-mpp-memo', 'x-tempo-mpp-valid-before', 'x-tempo-mpp-chain-id',
+    'x-tempo-mpp-verifying-contract', 'x-tempo-mpp-channel-id', 'x-tempo-mpp-nonce',
+    'x-tempo-tx-hash', 'x-synapse-trace-id', 'x-tempo-challenge-id',
+  ];
+  for (let hop = 0; hop <= maxRedirects; hop += 1) {
+    const currentUrl = current.toString();
+    if (visited.has(currentUrl)) throw new Error('Provider redirect loop detected.');
+    visited.add(currentUrl);
+    if (!isSafeProviderUrl(currentUrl)) throw new Error('Provider target is not an approved public or local demo route.');
+
+    const isLocalGateway = (current.hostname === '127.0.0.1' || current.hostname === 'localhost');
+    if (!isLocalGateway) {
+      const addresses = await dnsLookup(current.hostname, { all: true, verbatim: true });
+      if (!addresses.length || addresses.some((entry) => isBlockedOutboundHostname(entry.address))) {
+        throw new Error('Provider hostname resolves to a private, link-local, or metadata address.');
+      }
+    }
+
+    const response = await fetch(currentUrl, { ...requestInit, redirect: 'manual' });
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+    const location = response.headers.get('location');
+    try { await response.body?.cancel(); } catch { /* best effort */ }
+    if (!location) return response;
+    const next = new URL(location, currentUrl);
+    if (next.origin !== current.origin && requestInit.headers) {
+      const safeHeaders = new Headers(requestInit.headers);
+      for (const header of sensitiveHeaders) safeHeaders.delete(header);
+      requestInit = { ...requestInit, headers: safeHeaders };
+    }
+    current = next;
+  }
+  throw new Error(`Provider redirect limit exceeded (${maxRedirects}).`);
+}
+
+const normalizeAllowlistEntries = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const entries: string[] = [];
+  for (const raw of value) {
+    if (typeof raw !== 'string') continue;
+    const entry = raw.trim();
+    if (!entry || entry.length > 2048) continue;
+    const lower = entry.toLowerCase();
+    if (LEGACY_ALLOWLIST_ARTIFACTS.some((artifact) => lower.includes(artifact))) continue;
+    let canonical = entry;
+    try {
+      // Relative entries are reserved for the gateway's finite local demo
+      // routes. Everything else must be an explicit public http(s) URL; do
+      // not preserve malformed strings from an old state file.
+      const isRelativeLocal = entry.startsWith('/');
+      const parsed = isRelativeLocal
+        ? new URL(entry, `http://127.0.0.1:${process.env.PORT || 3001}`)
+        : new URL(entry);
+      if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname) continue;
+      if (isRelativeLocal) {
+        if (!isSafeProviderUrl(parsed.toString())) continue;
+        canonical = `${parsed.pathname.replace(/\/+$/, '') || '/'}${parsed.search}`;
+      } else {
+        if (isBlockedOutboundHostname(parsed.hostname) || parsed.hash) continue;
+        canonical = `${parsed.protocol}//${parsed.host}${parsed.pathname.replace(/\/+$/, '') || '/'}${parsed.search}`;
+      }
+    } catch {
+      continue;
+    }
+    const dedupeKey = canonical.toLowerCase();
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    entries.push(canonical);
+  }
+  return entries;
+};
+
+/** Match a request to the exact host/port/query and an approved route prefix. */
+const findMatchingAllowlistEntry = (targetUrl: string, allowlist: string[]): string | null => {
+  let target: URL;
+  try { target = new URL(targetUrl, `http://127.0.0.1:${process.env.PORT || 3001}`); } catch { return null; }
+  for (const entry of allowlist) {
+    try {
+      const configured = new URL(entry, `http://127.0.0.1:${process.env.PORT || 3001}`);
+      const targetPort = target.port || (target.protocol === 'https:' ? '443' : '80');
+      const configuredPort = configured.port || (configured.protocol === 'https:' ? '443' : '80');
+      if (configured.protocol !== target.protocol
+        || configured.hostname.toLowerCase() !== target.hostname.toLowerCase()
+        || configuredPort !== targetPort) continue;
+      if ((target.search || configured.search) && target.search !== configured.search) continue;
+      const configuredPath = configured.pathname.replace(/\/+$/, '') || '/';
+      const targetPath = target.pathname.replace(/\/+$/, '') || '/';
+      if (configuredPath === '/' || targetPath === configuredPath || targetPath.startsWith(`${configuredPath}/`)) return entry;
+    } catch {
+      // Invalid legacy entries are ignored; normalization removes them on load.
+    }
+  }
+  return null;
+};
 
 /**
  * Executes an RPC call with exponential backoff retry and per-attempt timeout.
@@ -203,18 +460,33 @@ class SynapseStateEngine {
   private traces: MPPTraceRecord[] = [];
   private idempotencyCache: Map<string, { trace: MPPTraceRecord; timestamp: number }> = new Map();
   private inFlightIdempotency: Map<string, Promise<any>> = new Map();
-  private endpoints: Array<{ id: string; title: string; endpointUrl: string; pricePerCallUsd: number; category: string; totalCalls?: number; totalEarnedUsd?: number }> = [];
+  private settlementLocks: Map<string, Promise<void>> = new Map();
+  private endpoints: Array<{ id: string; title: string; endpointUrl: string; pricePerCallUsd: number; category: string; payee?: string; totalCalls?: number; totalEarnedUsd?: number }> = [];
   private walletBalancesCache: Map<string, { data: any; timestamp: number }> = new Map();
+  // The local trace ledger is rebuilt from these chain events so a restart or
+  // a dropped HTTP response cannot hide a confirmed payment. This cursor is
+  // persisted and advances only after a successful read-only RPC scan.
+  private lastSettlementScanBlock: number = 0;
+  private lastSettlementScanAt: number = 0;
+  private settlementScanInFlight: Promise<void> | null = null;
+
+  private get idempotencyStatePath(): string {
+    return path.join(path.dirname(this.stateFilePath), 'idempotency.json');
+  }
 
   public provider: ethers.JsonRpcProvider;
-  public vaultAddress: string = process.env.TEMPO_VAULT_ADDRESS || '0x3c42E274FAdd8e371fB84f97203CC2F2125c8775';
-  public receiverAddress: string = process.env.TEMPO_RECEIVER_ADDRESS || '0xfCEb1a2633881c19283836a2E17Ba25E612724A0';
-  public pathUsdAddress: string = process.env.TEMPO_PATHUSD_ADDRESS || '0x9aa3ef4B60B6e3c440711658ee05780e236ac714';
-  public chainId: number = 42431;
+  public vaultAddress: string = process.env.TEMPO_VAULT_ADDRESS || TEMPO_VAULT_ADDRESS;
+  public receiverAddress: string = process.env.TEMPO_RECEIVER_ADDRESS || TEMPO_RECEIVER_ADDRESS;
+  public pathUsdAddress: string = process.env.TEMPO_PATHUSD_ADDRESS || TEMPO_PATHUSD_ADDRESS;
+  public chainId: number = TEMPO_CHAIN_ID;
 
   public vaultContract: ethers.Contract;
   public relayerWallet: ethers.Wallet | ethers.HDNodeWallet;
+  private vaultOwnerWallet: ethers.Wallet | ethers.HDNodeWallet | null = null;
+  private vaultAdminReady = false;
+  private vaultAdminReason = 'Checking vault owner authorization…';
   public networkMode: 'LIVE_TESTNET' | 'RESILIENT_SANDBOX' = 'RESILIENT_SANDBOX';
+  public networkModeReason = 'Checking Tempo RPC connectivity…';
   public vaultBytecodePresent: boolean = false;
   public lastMeasuredRpcLatencyMs: number = 14;
   public lastGasPriceGwei: string = '12.4';
@@ -228,7 +500,15 @@ class SynapseStateEngine {
   }
 
   constructor() {
-    this.provider = new ethers.JsonRpcProvider(process.env.TEMPO_RPC_URL || 'https://rpc.moderato.tempo.xyz');
+    // Tempo Moderato exposes a stable chain ID, but its public RPC can
+    // occasionally reject ethers' startup autodetect request. Supplying the
+    // known network keeps a transient detection miss from forcing the whole
+    // app into RESILIENT_SANDBOX while normal RPC calls are still healthy.
+    this.provider = new ethers.JsonRpcProvider(
+      process.env.TEMPO_RPC_URL || TEMPO_RPC_URL,
+      { name: 'tempo-moderato', chainId: TEMPO_CHAIN_ID },
+      { staticNetwork: true },
+    );
     
     // Auto-provision relayer wallet (secure random fallback if no private key configured)
     const relayerKey = process.env.TEMPO_RELAYER_KEY || process.env.PRIVATE_KEY;
@@ -239,51 +519,42 @@ class SynapseStateEngine {
       this.relayerWallet = ethers.Wallet.createRandom(this.provider);
     }
 
+    const vaultOwnerKey = process.env.TEMPO_VAULT_OWNER_KEY || process.env.TEMPO_OWNER_KEY;
+    if (vaultOwnerKey) {
+      this.vaultOwnerWallet = new ethers.Wallet(vaultOwnerKey, this.provider);
+    }
+
     // Connect contract instance
     this.vaultContract = new ethers.Contract(this.vaultAddress, SYNAPSE_VAULT_ABI, this.provider);
 
     const restored = this.loadPersistedState();
     if (!restored) {
       this.seedInitialState();
+      this.seedEndpoints();
       this.persistState();
     }
-    // Start from an explicit evaluation view while the asynchronous RPC probe
-    // decides whether live chain state is available. This prevents an old
-    // local fixture balance or spend counter from flashing as real activity.
-    this.vaultTvl = 0;
-    this.protocolRevenue = 0;
-    this.totalSettlements = 0;
-    this.totalVolume = 0;
-    this.keys.forEach((key) => {
-      key.currentSpentPathUsd = 0;
-      key.status = 'ACTIVE';
-      key.sequenceNonce = 0;
-      key.channelNonces = {};
-    });
-    this.traces = this.traces.map((trace) => ({
-      ...trace,
-      txHash: '',
-      executionMode: 'RESILIENT_SANDBOX' as const,
-      status: trace.status === 'VOIDED' ? 'VOIDED' as const : 'SIMULATED_PASS' as const,
-      blockNumber: 0,
-      tempoTxType: undefined,
-      liveProxyPayload: trace.liveProxyPayload && typeof trace.liveProxyPayload === 'object'
-        ? { ...trace.liveProxyPayload, tempoVerified: false, executionMode: 'RESILIENT_SANDBOX' }
-        : trace.liveProxyPayload,
-    }));
-    this.endpoints = this.endpoints.map((endpoint) => ({ ...endpoint, totalCalls: 0, totalEarnedUsd: 0 }));
-    this.persistState();
+    // Keep persisted live receipts visible while the asynchronous RPC probe
+    // runs. If the probe fails, initLiveSync applies the explicit sandbox reset;
+    // if it succeeds, receipts and counters are reconciled from Tempo instead
+    // of being erased during every server restart.
+    if (!restored) {
+      this.vaultTvl = 0;
+      this.protocolRevenue = 0;
+      this.totalSettlements = 0;
+      this.totalVolume = 0;
+      this.keys.forEach((key) => {
+        key.currentSpentPathUsd = 0;
+        key.status = 'ACTIVE';
+        key.sequenceNonce = 0;
+        key.channelNonces = {};
+      });
+      this.persistState();
+    }
     this.initLiveSync();
   }
 
   private stateFilePath: string = (() => {
-    const candidate1 = path.join(currentDir, 'synapseState.json');
-    const candidate2 = path.join(process.cwd(), 'premium_site', 'server', 'synapseState.json');
-    const candidate3 = path.join(process.cwd(), 'server', 'synapseState.json');
-    if (fs.existsSync(candidate1)) return candidate1;
-    if (fs.existsSync(candidate2)) return candidate2;
-    if (fs.existsSync(candidate3)) return candidate3;
-    return candidate1;
+    return path.join(runtimeDirectory, 'synapseState.json');
   })();
 
   private loadPersistedState(): boolean {
@@ -296,11 +567,53 @@ class SynapseStateEngine {
           this.protocolRevenue = typeof data.protocolRevenue === 'number' ? data.protocolRevenue : this.protocolRevenue;
           this.totalSettlements = typeof data.totalSettlements === 'number' ? data.totalSettlements : this.totalSettlements;
           this.totalVolume = typeof data.totalVolume === 'number' ? data.totalVolume : this.totalVolume;
+          this.lastSettlementScanBlock = typeof data.lastSettlementScanBlock === 'number' ? data.lastSettlementScanBlock : 0;
           this.keys.clear();
+          let allowlistMigrated = false;
           for (const k of data.keys) {
-            if (Array.isArray(k.whitelistedDomains) && k.whitelistedDomains.length > 0) {
-              k.merkleRoot = new MerkleTree(k.whitelistedDomains).getRoot();
+            const originalAllowlist = Array.isArray(k.whitelistedDomains) ? k.whitelistedDomains : [];
+            const cleanedAllowlist = normalizeAllowlistEntries(originalAllowlist);
+            const requiredEndpointsByKey: Record<string, string[]> = {
+              key_quant_alpha: [
+                'https://api.fin-depth.io/v2/aapl/orderbook',
+                'https://api.market-depth-mesh.io/v3/depth/l2',
+                'https://data.sec.gov/api/xbrl/companyfacts',
+                'https://api.certik.com/v1/fuzz/opcodes',
+                'https://api.fin-depth.io/v2/sol/orderbook',
+                '/api/v1/market/sol-depth',
+                '/api/v1/market/sol-orderbook',
+                '/api/v1/data/sol-orderbook',
+                '/api/v1/test-provider-data',
+                '/api/v1/mock-500',
+                '/api/v1/surge-demo',
+                '/api/stream/inference',
+              ],
+              key_cortex_research: [
+                'https://data.sec.gov/api/xbrl/companyfacts',
+              ],
+              key_sec_audit: [
+                'https://api.certik.com/v1/fuzz/opcodes',
+                'https://api.fin-depth.io/v2/aapl/orderbook',
+                'https://api.fin-depth.io/v2/sol/orderbook',
+                '/api/v1/market/sol-depth',
+                '/api/v1/market/sol-orderbook',
+                '/api/v1/data/sol-orderbook',
+              ],
+            };
+            const requiredEndpoints = requiredEndpointsByKey[String(k.id)] || [];
+            if (requiredEndpoints.length > 0) {
+              for (const ep of requiredEndpoints) {
+                if (!cleanedAllowlist.includes(ep)) {
+                  cleanedAllowlist.push(ep);
+                  allowlistMigrated = true;
+                }
+              }
             }
+            if (cleanedAllowlist.length !== originalAllowlist.length || cleanedAllowlist.some((entry, index) => entry !== originalAllowlist[index])) {
+              allowlistMigrated = true;
+            }
+            k.whitelistedDomains = cleanedAllowlist;
+            k.merkleRoot = new MerkleTree(cleanedAllowlist).getRoot();
             // Session wallets are derived from a server secret. Migrate legacy
             // public fixture addresses before they can be used for a payment;
             // live settlement will register the migrated key on-chain.
@@ -312,36 +625,63 @@ class SynapseStateEngine {
             }
             this.keys.set(k.id, k);
           }
-          if (Array.isArray(data.traces) && data.traces.length > 0) {
-            this.traces = data.traces;
-            // A local JSON file cannot prove that a historical hash exists on the
-            // current chain. Rehydrate old entries as evaluation records until a
-            // new settlement returns a verified receipt in this process.
-            this.traces = [];
+          const now = Date.now();
+          const persistedIdempotency = Array.isArray(data.idempotencyCache) ? data.idempotencyCache : [];
+          for (const item of persistedIdempotency) {
+            if (!item || typeof item.key !== 'string' || !item.trace || !Number.isFinite(Number(item.timestamp))) continue;
+            if (now - Number(item.timestamp) >= 24 * 60 * 60 * 1000) continue;
+            this.idempotencyCache.set(item.key, {
+              trace: this.normalizePersistedTrace(item.trace as MPPTraceRecord),
+              timestamp: Number(item.timestamp),
+            });
           }
-          const hasConfirmedLiveTrace = this.traces.some((trace) =>
+          try {
+            if (fs.existsSync(this.idempotencyStatePath)) {
+              const ledger = JSON.parse(fs.readFileSync(this.idempotencyStatePath, 'utf8'));
+              if (Array.isArray(ledger)) {
+                for (const item of ledger) {
+                  if (!item || typeof item.key !== 'string' || !item.trace || !Number.isFinite(Number(item.timestamp))) continue;
+                  if (now - Number(item.timestamp) >= 24 * 60 * 60 * 1000) continue;
+                  this.idempotencyCache.set(item.key, {
+                    trace: this.normalizePersistedTrace(item.trace as MPPTraceRecord),
+                    timestamp: Number(item.timestamp),
+                  });
+                }
+              }
+            }
+          } catch (ledgerErr: any) {
+            console.warn(`[Synapse402 Engine] Idempotency ledger could not be restored: ${ledgerErr?.message || ledgerErr}`);
+          }
+          const persistedTraces = Array.isArray(data.traces) ? data.traces as MPPTraceRecord[] : [];
+          if (persistedTraces.length > 0) {
+            // Older records may store a chain hash only inside the payload;
+            // normalize them first, then let the canonical receipt verifier
+            // promote them to confirmed only after the TIP-20 transfer check.
+            this.traces = persistedTraces.map((trace) => this.normalizePersistedTrace(trace));
+          }
+          const confirmed = this.traces.filter((trace) =>
             trace.executionMode === 'LIVE_TESTNET'
             && trace.status === 'SETTLED'
-            && typeof trace.txHash === 'string'
-            && trace.txHash.startsWith('0x')
+            && trace.receiptVerified === true
+            && isVerifiedTxHash(trace.txHash)
+            && trace.id !== 'trace_init_001'
           );
-          if (!hasConfirmedLiveTrace) {
-            // Persisted sandbox counters are examples, not funds or chain activity.
-            this.vaultTvl = 0;
-            this.protocolRevenue = 0;
-            this.totalSettlements = 0;
-            this.totalVolume = 0;
-          }
+          // Rebuild the aggregate from verified traces. Keeping the larger
+          // persisted value would resurrect phantom settlements after a
+          // receipt was invalidated or removed during reconciliation.
+          this.totalSettlements = confirmed.length;
+          this.totalVolume = Number(confirmed.reduce((sum, trace) => sum + Number(trace.costPathUsd || 0), 0).toFixed(6));
+          this.protocolRevenue = Number(confirmed.reduce((sum, trace) => sum + Math.max(0.000001, Number(trace.costPathUsd || 0) * 0.001), 0).toFixed(6));
           if (Array.isArray(data.endpoints) && data.endpoints.length > 0) {
             // Rebuild provider counters from confirmed traces. Persisted demo counters
             // must never appear as real earnings or request volume after a restart.
             const confirmed = this.traces.filter((trace) =>
               trace.executionMode === 'LIVE_TESTNET'
               && trace.status === 'SETTLED'
-              && typeof trace.txHash === 'string'
-              && trace.txHash.startsWith('0x')
+              && trace.receiptVerified === true
+              && isVerifiedTxHash(trace.txHash)
             );
-            this.endpoints = data.endpoints.map((endpoint: any) => {
+            const restoredEndpoints = data.endpoints.map((endpoint: any) => {
               const matching = confirmed.filter((trace) =>
                 String(trace.targetEndpoint || '').includes(String(endpoint.endpointUrl || ''))
                 || String(endpoint.endpointUrl || '').includes(String(trace.targetEndpoint || ''))
@@ -352,8 +692,22 @@ class SynapseStateEngine {
                 totalEarnedUsd: Number(matching.reduce((sum, trace) => sum + Number(trace.costPathUsd || 0), 0).toFixed(6)),
               };
             });
+            this.endpoints = this.mergeCanonicalEndpoints(restoredEndpoints);
+            // Restore custom routes, but always make the canonical catalog
+            // available so old state files cannot hide a supported demo route.
+            for (const canonical of CANONICAL_PROVIDER_REGISTRY) {
+              if (!this.endpoints.some((endpoint) => endpoint.id === canonical.id || endpoint.endpointUrl === canonical.endpointUrl)) {
+                this.endpoints.push({ ...canonical, totalCalls: 0, totalEarnedUsd: 0 });
+              }
+            }
+            this.persistState();
           } else {
             this.seedEndpoints();
+          }
+          if (allowlistMigrated) {
+            // Persist the cleaned scope so a restart cannot resurrect stale
+            // localhost/test-provider entries or duplicate route leaves.
+            this.persistState();
           }
           const isStdio = typeof process !== 'undefined' && process.argv && process.argv.some(a => a.includes('mcpServer') || a === '--stdio');
           if (isStdio) {
@@ -371,175 +725,258 @@ class SynapseStateEngine {
     return false;
   }
 
-  private seedEndpoints(): void {
-    if (this.endpoints.length === 0) {
-      this.endpoints = [
-        {
-          id: 'ep_1',
-          title: 'Neural Document Translation Provider',
-          endpointUrl: 'https://api.translate-mesh.io/v2/document/instant',
-          pricePerCallUsd: 0.001,
-          category: 'Language AI',
-          totalCalls: 0,
-          totalEarnedUsd: 0,
+  private normalizePersistedTrace(trace: MPPTraceRecord): MPPTraceRecord {
+    const payload = trace.liveProxyPayload && typeof trace.liveProxyPayload === 'object'
+      ? trace.liveProxyPayload as Record<string, any>
+      : null;
+    // Old demo snapshots used compliance words such as CLEARED even though no
+    // sanctions/KYC provider was queried. Normalize that stale copy on restore
+    // so a restart cannot resurrect an unsupported compliance claim.
+    const normalizedSanctionsCompliance = {
+      ...(trace.sanctionsCompliance || {}),
+      status: trace.sanctionsCompliance?.status === 'FLAGGED' ? 'FLAGGED' as const : 'UNVERIFIED' as const,
+      policy: 'Example compliance response — no live sanctions or KYC lookup was run',
+      checkedAt: trace.sanctionsCompliance?.checkedAt || trace.timestamp || new Date().toISOString(),
+    };
+    const payloadTxHash = isVerifiedTxHash(payload?.txHash)
+      ? payload.txHash
+      : '';
+    const chainVerified = payload?.backfilledFromChain === true
+      || String(trace.complianceVerification?.policy || '').toLowerCase().includes('chain receipt verified');
+    if (!isVerifiedTxHash(trace.txHash) && payloadTxHash && chainVerified) {
+      return {
+        ...trace,
+        sanctionsCompliance: normalizedSanctionsCompliance,
+        txHash: payloadTxHash,
+        explorerUrl: tempoTransactionUrl(payloadTxHash),
+        executionMode: 'LIVE_TESTNET',
+        status: trace.receiptVerified === true ? 'SETTLED' : 'PENDING',
+        receiptVerified: trace.receiptVerified === true,
+        blockNumber: Number(payload?.blockNumber || trace.blockNumber || 0),
+        liveProxyPayload: {
+          ...payload,
+          txHash: payloadTxHash,
+          explorerUrl: tempoTransactionUrl(payloadTxHash),
+          upstreamVerified: false,
+          paymentConfirmed: trace.receiptVerified === true,
+          providerDataStatus: payload?.providerDataStatus || 'EVALUATION_FIXTURE',
+          executionMode: 'LIVE_TESTNET',
         },
-        {
-          id: 'ep_2',
-          title: 'AI Vision Background Removal & 4K Upscale',
-          endpointUrl: 'https://api.vision-neural.ai/v1/remove-bg',
-          pricePerCallUsd: 0.002,
-          category: 'Computer Vision',
-          totalCalls: 0,
-          totalEarnedUsd: 0,
-        },
-        {
-          id: 'ep_3',
-          title: 'Pay-per-article Publisher Access',
-          endpointUrl: 'https://api.news-dispatch.net/v1/article/unlock',
-          pricePerCallUsd: 0.001,
-          category: 'Publishing / Media',
-          totalCalls: 0,
-          totalEarnedUsd: 0,
-        },
-        {
-          id: 'ep_4',
-          title: 'Python Isolated Micro-Sandbox Worker',
-          endpointUrl: 'https://api.sandbox-python.dev/v1/containers/exec',
-          pricePerCallUsd: 0.005,
-          category: 'Code Execution',
-          totalCalls: 0,
-          totalEarnedUsd: 0,
-        },
-        {
-          id: 'ep_5',
-          title: 'Approved Web Data Extraction Provider',
-          endpointUrl: 'https://api.stealth-crawler.net/v1/scrape',
-          pricePerCallUsd: 0.003,
-          category: 'Web Data & Scraping',
-          totalCalls: 0,
-          totalEarnedUsd: 0,
-        },
-        {
-          id: 'ep_6',
-          title: 'Low-latency Neural TTS Voice Provider',
-          endpointUrl: 'https://api.voice-neural.io/v1/synthesize',
-          pricePerCallUsd: 0.004,
-          category: 'Voice & Speech',
-          totalCalls: 0,
-          totalEarnedUsd: 0,
-        },
-        {
-          id: 'ep_7',
-          title: 'Flight Availability Data Provider',
-          endpointUrl: 'https://api.gds-flights.network/v1/fares',
-          pricePerCallUsd: 0.002,
-          category: 'Travel / GDS Data',
-          totalCalls: 0,
-          totalEarnedUsd: 0,
-        },
-        {
-          id: 'ep_8',
-          title: 'Identity and Sanctions Screening Provider',
-          endpointUrl: 'https://api.identity-risk.shield/v1/verify',
-          pricePerCallUsd: 0.005,
-          category: 'Compliance & KYC',
-          totalCalls: 0,
-          totalEarnedUsd: 0,
-        },
-        {
-          id: 'ep_9',
-          title: 'Market Orderbook Depth Provider',
-          endpointUrl: 'https://api.market-depth-mesh.io/v3/depth/l2',
-          pricePerCallUsd: 0.001,
-          category: 'Market Depth',
-          totalCalls: 0,
-          totalEarnedUsd: 0,
-        },
-        {
-          id: 'ep_10',
-          title: 'SEC Filing Data Provider',
-          endpointUrl: '/api/v1/data/unlocked-article',
-          pricePerCallUsd: 0.0015,
-          category: 'Academic & Legal',
-          totalCalls: 0,
-          totalEarnedUsd: 0,
-        },
-      ];
+      };
     }
-    // Seed catalog entries describe available services; they are not historical usage.
-    this.endpoints = this.endpoints.map((endpoint) => ({ ...endpoint, totalCalls: 0, totalEarnedUsd: 0 }));
+    if (isVerifiedTxHash(trace.txHash)) {
+      const receiptVerified = trace.receiptVerified === true;
+      return {
+        ...trace,
+        executionMode: 'LIVE_TESTNET',
+        status: trace.status === 'VOIDED'
+          ? 'VOIDED'
+          : (trace.status === 'REFUNDED'
+            ? 'REFUNDED'
+            : (trace.status === 'FAILED' ? 'FAILED' : (receiptVerified ? 'SETTLED' : 'PENDING'))),
+        receiptVerified,
+        sanctionsCompliance: normalizedSanctionsCompliance,
+        explorerUrl: tempoTransactionUrl(trace.txHash),
+        liveProxyPayload: payload
+          ? {
+            ...payload,
+            explorerUrl: tempoTransactionUrl(trace.txHash),
+            paymentConfirmed: receiptVerified,
+            providerDataStatus: payload.providerDataStatus || 'EVALUATION_FIXTURE',
+          }
+          : trace.liveProxyPayload,
+      };
+    }
+    // Evaluation/sandbox records must never retain a proof-looking hash or
+    // explorer URL. A stale URL makes an unsubmitted payment look like a
+    // confirmed chain transaction and leads reviewers to a 404 page.
+    return {
+      ...trace,
+      sanctionsCompliance: normalizedSanctionsCompliance,
+      txHash: '',
+      explorerUrl: undefined,
+      liveProxyPayload: payload
+        ? {
+          ...payload,
+          txHash: undefined,
+          explorerUrl: undefined,
+          paymentConfirmed: false,
+          upstreamVerified: false,
+        }
+        : trace.liveProxyPayload,
+    };
+  }
+
+  /** Fetch and verify one Tempo receipt through the shared TIP-20 proof. */
+  public async verifyTempoPaymentReceipt(
+    txHash: string,
+    expectedPayee: string,
+    expectedGrossAmountMicro: bigint | string | number,
+  ) {
+    const receipt = await retryRpc(() => this.provider.getTransactionReceipt(txHash), 3, 250, 8000);
+    if (!receipt) return { verified: false, reason: 'Tempo transaction receipt is not available yet.' };
+    const netProof = verifyTempoPaymentReceiptProof({
+      receiptStatus: receipt.status,
+      logs: receipt.logs as any,
+      expectedToken: this.pathUsdAddress,
+      expectedRecipient: expectedPayee,
+      expectedAmountMicro: tempoPayeeAmountMicro(expectedGrossAmountMicro),
+      receiptTo: receipt.to,
+      expectedPaymentContract: this.vaultAddress,
+    });
+    if (netProof.verified) return netProof;
+    return verifyTempoPaymentReceiptProof({
+      receiptStatus: receipt.status,
+      logs: receipt.logs as any,
+      expectedToken: this.pathUsdAddress,
+      expectedRecipient: expectedPayee,
+      expectedAmountMicro: BigInt(expectedGrossAmountMicro),
+      receiptTo: receipt.to,
+      expectedPaymentContract: this.vaultAddress,
+    });
+  }
+
+  private seedEndpoints(): void {
+    this.endpoints = CANONICAL_PROVIDER_REGISTRY.map((entry) => ({
+      ...entry,
+      totalCalls: 0,
+      totalEarnedUsd: 0,
+    }));
+    return;
+  }
+
+  private mergeCanonicalEndpoints(existing: any[]): any[] {
+    const legacyIds: Record<string, string> = {
+      ep_9: 'ep_demo_market_depth',
+      ep_10: 'ep_demo_sec',
+      ep_binance: 'ep_demo_market_depth',
+      ep_sec: 'ep_demo_sec',
+    };
+    const byId = new Map<string, any>();
+    for (const endpoint of existing) {
+      const canonicalId = legacyIds[endpoint.id] || endpoint.id;
+      if (!byId.has(canonicalId)) byId.set(canonicalId, endpoint);
+    }
+    const canonicalIds = new Set(CANONICAL_PROVIDER_REGISTRY.map((entry) => entry.id));
+    const canonical = CANONICAL_PROVIDER_REGISTRY.map((entry) => {
+      const stored = byId.get(entry.id);
+      return {
+        ...entry,
+        totalCalls: Number(stored?.totalCalls || 0),
+        totalEarnedUsd: Number(stored?.totalEarnedUsd || 0),
+      };
+    });
+    const custom = existing.filter((endpoint) => {
+      const mappedId = legacyIds[endpoint.id] || endpoint.id;
+      return !canonicalIds.has(mappedId) && !Object.prototype.hasOwnProperty.call(legacyIds, endpoint.id);
+    });
+    return [...canonical, ...custom];
   }
 
   public getEndpoints() {
     return this.endpoints;
   }
 
-  public addEndpoint(ep: { title: string; endpointUrl: string; pricePerCallUsd: number; category: string }) {
+  /** Resolve the payee approved for an exact registered provider route. */
+  public getApprovedPayeeForEndpoint(targetUrl: string): string | null {
+    const match = this.endpoints.find((endpoint) => findMatchingAllowlistEntry(targetUrl, [endpoint.endpointUrl]) !== null);
+    if (!match) return null;
+    return match.payee || this.receiverAddress;
+  }
+
+  public addEndpoint(ep: { title: string; endpointUrl: string; pricePerCallUsd: number; category: string; payee?: string }) {
+    if (this.endpoints.length >= 512) throw new Error('Provider registry is full; remove an unused route before adding another.');
     const title = String(ep.title || '').trim();
     const endpointUrl = String(ep.endpointUrl || '').trim();
     const pricePerCallUsd = Number(ep.pricePerCallUsd);
     if (!title || title.length > 160) throw new Error('Endpoint title must be 1–160 characters.');
+    const category = String(ep.category || 'General API').trim() || 'General API';
+    if (category.length > 120) throw new Error('Endpoint category must be no more than 120 characters.');
     try {
       const parsed = new URL(endpointUrl);
       if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname) throw new Error('invalid protocol');
+      if (isBlockedOutboundHostname(parsed.hostname)) throw new Error('private, localhost, link-local, and metadata endpoints are not allowed.');
     } catch {
       throw new Error('endpointUrl must be a valid http:// or https:// URL.');
     }
     if (!Number.isFinite(pricePerCallUsd) || pricePerCallUsd <= 0 || pricePerCallUsd > 1000) {
       throw new Error('pricePerCallUsd must be a positive number no greater than $1,000.');
     }
+    let payee = this.receiverAddress;
+    if (ep.payee !== undefined && String(ep.payee).trim()) {
+      try { payee = ethers.getAddress(String(ep.payee).trim()); }
+      catch { throw new Error('payee must be a valid EVM address.'); }
+    }
+    // A millisecond timestamp alone collides when two providers are added in
+    // the same tick. Keep ids readable while adding cryptographic entropy.
+    let endpointId = '';
+    do {
+      endpointId = `ep_${Date.now().toString(36)}_${crypto.randomBytes(4).toString('hex')}`;
+    } while (this.endpoints.some((existing) => existing.id === endpointId));
     const newEp = {
-      id: `ep_${Date.now()}`,
+      id: endpointId,
       title,
       endpointUrl,
       pricePerCallUsd,
-      category: String(ep.category || 'General API').trim() || 'General API',
+      category,
+      payee,
     };
     this.endpoints.unshift(newEp);
     this.persistState();
     return newEp;
   }
 
-  public resetDemoState(keyId?: string): { success: boolean; message: string } {
+  public async resetDemoState(keyId?: string): Promise<{ success: boolean; message: string }> {
     const keysToReset = keyId ? [this.keys.get(keyId)].filter(Boolean) : Array.from(this.keys.values());
     for (const key of keysToReset as ScopedSessionKeyRecord[]) {
-      key.currentSpentPathUsd = 0;
-      key.status = 'ACTIVE';
-      key.sequenceNonce = 0;
-      (key as any).lastResetAt = Date.now();
-
-      // Reset on-chain in SynapseVault contract if live relayer present
-      if (this.networkMode === 'LIVE_TESTNET' && this.vaultBytecodePresent && this.relayerWallet && key.sessionPublicKey) {
+      // LIVE state is changed locally only after the explicit reset transaction
+      // has been mined. This keeps the local budget from diverging when the
+      // chain rejects a reset or the relayer is unavailable.
+      if (this.networkMode === 'LIVE_TESTNET') {
+        if (!this.vaultBytecodePresent || !this.relayerWallet || !key.sessionPublicKey) {
+          return { success: false, message: 'Live reset requires a configured SynapseVault, relayer, and session key.' };
+        }
         try {
-          const regBudget = BigInt(Math.round((key.totalBudgetPathUsd || 10) * 1e6));
-          const regMaxPerCall = BigInt(Math.round(Math.min(key.maxPerCallPathUsd || 10, key.totalBudgetPathUsd || 10) * 1e6));
-          const regMerkleRoot = (key.merkleRoot && key.merkleRoot !== '0x0' && key.merkleRoot.length === 66)
+          const resetBudget = BigInt(Math.round((key.totalBudgetPathUsd || 10) * 1e6));
+          const resetMaxPerCall = BigInt(Math.round(Math.min(key.maxPerCallPathUsd || 10, key.totalBudgetPathUsd || 10) * 1e6));
+          const resetMerkleRoot = (key.merkleRoot && key.merkleRoot.length === 66)
             ? key.merkleRoot
-            : ethers.ZeroHash;
-          
-          this.dispatchRelayerTx(async () => {
-            try {
-              const regTx = await (this.vaultContract.connect(this.relayerWallet) as any).registerSessionKey(
-                key.sessionPublicKey,
-                regMaxPerCall,
-                regBudget,
-                BigInt(Math.floor(Date.now() / 1000) + 86400 * 30),
-                regMerkleRoot,
-                { gasLimit: 1600000 }
-              );
-              await regTx.wait(1);
-              console.log(`[Synapse402 Engine] On-chain session key reset confirmed for ${key.sessionPublicKey}: ${regTx.hash}`);
-            } catch (err: any) {
-              console.warn(`[Synapse402 Engine] On-chain reset notice: ${err?.message}`);
-            }
+            : new MerkleTree(key.whitelistedDomains).getRoot();
+          const validBefore = BigInt(Math.floor(Date.now() / 1000) + 86400 * 30);
+          const adminWallet = await this.getVaultAdminWallet();
+          const resetTx = await this.dispatchRelayerTx(async () => {
+            const tx = await (this.vaultContract.connect(adminWallet) as any).resetDemoSession(
+              key.sessionPublicKey,
+              resetMaxPerCall,
+              resetBudget,
+              validBefore,
+              resetMerkleRoot,
+              { gasLimit: 1600000 },
+            );
+            await tx.wait(1);
+            return tx;
           });
-        } catch (dispatchErr: any) {
-          console.debug(`[Synapse402 Engine] On-chain reset dispatch notice: ${dispatchErr?.message}`);
+          console.log(`[Synapse402 Engine] On-chain session key reset confirmed for ${key.sessionPublicKey}: ${resetTx.hash}`);
+        } catch (err: any) {
+          return { success: false, message: `Live reset failed; local state was left unchanged: ${err?.message || 'unknown error'}` };
         }
       }
+
+      key.currentSpentPathUsd = 0;
+      key.status = 'ACTIVE';
+      if (this.networkMode !== 'LIVE_TESTNET') {
+        key.sequenceNonce = 0;
+        key.channelNonces = {};
+      }
+      (key as any).lastResetAt = Date.now();
     }
     this.persistState();
-    return { success: true, message: 'Demo state successfully reset both off-chain and on-chain.' };
+    return {
+      success: true,
+      message: this.networkMode === 'LIVE_TESTNET'
+        ? 'Live session reset confirmed on-chain and local state synchronized.'
+        : 'Demo state successfully reset.'
+    };
   }
 
   public persistState(): void {
@@ -553,9 +990,16 @@ class SynapseStateEngine {
         protocolRevenue: this.protocolRevenue,
         totalSettlements: this.totalSettlements,
         totalVolume: this.totalVolume,
+        lastSettlementScanBlock: this.lastSettlementScanBlock,
         keys: Array.from(this.keys.values()),
-        traces: this.traces.slice(0, 100),
+        // Receipts are the audit ledger. Keep the complete history; UI pages
+        // paginate it, but a restart must never silently delete older proof.
+        traces: this.traces,
         endpoints: this.endpoints,
+        idempotencyCache: Array.from(this.idempotencyCache.entries())
+          .filter(([, value]) => Date.now() - value.timestamp < 24 * 60 * 60 * 1000)
+          .slice(-2000)
+          .map(([key, value]) => ({ key, ...value })),
       };
       try {
         const tmpPath = `${this.stateFilePath}.${process.pid}.tmp`;
@@ -572,9 +1016,266 @@ class SynapseStateEngine {
         console.debug(`[Synapse402 Engine] Fallback direct state write: ${writeErr?.message}`);
         fs.writeFileSync(this.stateFilePath, JSON.stringify(data, null, 2), 'utf-8');
       }
+      this.persistIdempotencyLedger();
     } catch (err: any) {
       console.warn(`[Synapse402 Engine] Could not persist state: ${err?.message}`);
     }
+  }
+
+  private persistIdempotencyLedger(): void {
+    try {
+      const ledger = Array.from(this.idempotencyCache.entries())
+        .filter(([, value]) => Date.now() - value.timestamp < 24 * 60 * 60 * 1000)
+        .slice(-2000)
+        .map(([key, value]) => ({ key, ...value }));
+      const tempPath = `${this.idempotencyStatePath}.${process.pid}.tmp`;
+      fs.writeFileSync(tempPath, JSON.stringify(ledger, null, 2), 'utf-8');
+      try { fs.renameSync(tempPath, this.idempotencyStatePath); }
+      catch { fs.copyFileSync(tempPath, this.idempotencyStatePath); try { fs.unlinkSync(tempPath); } catch {} }
+    } catch (err: any) {
+      console.warn(`[Synapse402 Engine] Idempotency ledger could not be persisted: ${err?.message || err}`);
+    }
+  }
+
+  /**
+   * Reconcile the local receipt feed with SynapseVault.PaymentSettled logs.
+   * This is intentionally read-only: it never signs, sends, or retries a
+   * settlement. It exists so confirmed payments remain visible after a
+   * process restart, even if the original HTTP response was lost.
+   */
+  private async reconcileOnChainSettlements(): Promise<void> {
+    if (this.networkMode !== 'LIVE_TESTNET' || !this.vaultBytecodePresent) return;
+    if (this.settlementScanInFlight) return this.settlementScanInFlight;
+
+    this.settlementScanInFlight = (async () => {
+      try {
+        const latest = await retryRpc(() => this.provider.getBlockNumber(), 3, 250, 8000);
+        const toBlock = Math.max(0, latest - 2);
+        const configuredKeys = Array.from(this.keys.values()).filter((key) => ethers.isAddress(key.sessionPublicKey));
+        if (configuredKeys.length === 0 || toBlock <= 0) return;
+
+        const addressToKey = new Map(configuredKeys.map((key) => [key.sessionPublicKey.toLowerCase(), key]));
+        const indexedKeys = configuredKeys.map((key) => ethers.zeroPadValue(key.sessionPublicKey, 32));
+        const eventTopic = ethers.id('PaymentSettled(address,address,uint256,uint64,uint64,bytes32,string)');
+        // A bounded first scan catches settlements made before this server was
+        // started; subsequent scans use the persisted cursor and are tiny.
+        const fromBlock = this.lastSettlementScanBlock > 0
+          ? this.lastSettlementScanBlock + 1
+          : Math.max(0, toBlock - 50000);
+        if (fromBlock > toBlock) return;
+
+        const existingHashes = new Set(
+          this.traces
+            .filter((trace) => trace.executionMode === 'LIVE_TESTNET' && trace.receiptVerified === true && trace.txHash?.startsWith('0x'))
+            .map((trace) => trace.txHash.toLowerCase()),
+        );
+        const blockTimestamps = new Map<number, number>();
+        const added: MPPTraceRecord[] = [];
+        let updatedExisting = 0;
+        const chunkSize = 1000;
+
+        for (let cursor = fromBlock; cursor <= toBlock; cursor += chunkSize) {
+          const chunkEnd = Math.min(toBlock, cursor + chunkSize - 1);
+          const logs = await retryRpc(
+            () => this.provider.getLogs({
+              address: this.vaultAddress,
+              topics: [eventTopic, indexedKeys],
+              fromBlock: cursor,
+              toBlock: chunkEnd,
+            }),
+            3,
+            250,
+            8000,
+          );
+
+          for (const log of logs) {
+            if (!log.transactionHash) continue;
+            const existingTraceByHash = this.traces.find((trace) => trace.txHash?.toLowerCase() === log.transactionHash!.toLowerCase());
+            if (existingHashes.has(log.transactionHash.toLowerCase()) && existingTraceByHash?.receiptVerified === true) continue;
+            let parsed: any;
+            try {
+              parsed = this.vaultContract.interface.parseLog({ topics: log.topics as string[], data: log.data });
+            } catch {
+              continue;
+            }
+            if (!parsed || parsed.name !== 'PaymentSettled') continue;
+
+            const sessionKey = String(parsed.args.sessionKey || parsed.args[0] || '').toLowerCase();
+            const key = addressToKey.get(sessionKey);
+            if (!key) continue;
+
+            const amount = BigInt(parsed.args.amount ?? parsed.args[2] ?? 0);
+            const payee = String(parsed.args.payee ?? parsed.args[1] ?? '');
+            const channelId = Number(parsed.args.channelId ?? parsed.args[3] ?? 0);
+            const nonce = Number(parsed.args.nonce ?? parsed.args[4] ?? 0);
+            // An async relay can mine before its in-memory callback attaches
+            // the tx hash. Match that pending trace by the signed payment
+            // identity so chain backfill updates it instead of duplicating it.
+            const pendingTrace = this.traces.find((trace) => {
+              if (trace.executionMode !== 'LIVE_TESTNET' || trace.status !== 'PENDING' || trace.receiptVerified === true) return false;
+              if (trace.txHash) return false;
+              const credential = trace.mppCredential;
+              if (!credential) return false;
+              if (String(credential.signer || '').toLowerCase() !== sessionKey) return false;
+              if (Number(credential.channelId) !== channelId || Number(credential.nonce) !== nonce) return false;
+              if (String(credential.payee || '').toLowerCase() !== payee.toLowerCase()) return false;
+              try {
+                return BigInt(credential.amountMicro) === amount;
+              } catch {
+                return false;
+              }
+            });
+            const existingTrace = existingTraceByHash || pendingTrace;
+            const receiptProof = await this.verifyTempoPaymentReceipt(log.transactionHash, payee, amount);
+            if (!receiptProof.verified) {
+              // PaymentSettled alone is not a payment proof. A successful
+              // vault call without the matching TIP-20 transfer is kept out
+              // of the confirmed ledger and can be investigated separately.
+              console.warn(`[Synapse402 Engine] Ignoring ${log.transactionHash}: ${receiptProof.reason}`);
+              continue;
+            }
+            if (existingTrace) {
+              existingTrace.executionMode = 'LIVE_TESTNET';
+              existingTrace.status = 'SETTLED';
+              existingTrace.receiptVerified = true;
+              existingTrace.txHash = log.transactionHash;
+              existingTrace.explorerUrl = tempoTransactionUrl(log.transactionHash);
+              existingTrace.blockNumber = Number(log.blockNumber || existingTrace.blockNumber || 0);
+              if (existingTrace.liveProxyPayload && typeof existingTrace.liveProxyPayload === 'object') {
+                existingTrace.liveProxyPayload = {
+                  ...existingTrace.liveProxyPayload,
+                  txHash: log.transactionHash,
+                  explorerUrl: tempoTransactionUrl(log.transactionHash),
+                  paymentConfirmed: true,
+                  executionMode: 'LIVE_TESTNET',
+                };
+              }
+              existingHashes.add(log.transactionHash.toLowerCase());
+              updatedExisting += 1;
+              continue;
+            }
+            const amountUsd = Number(ethers.formatUnits(amount, 6));
+            const memo = String(parsed.args.memo ?? parsed.args[5] ?? ethers.ZeroHash);
+            const endpoint = String(parsed.args.endpoint ?? parsed.args[6] ?? 'onchain://payment-settled');
+            const blockNumber = Number(log.blockNumber || 0);
+            let timestampMs = Date.now();
+            if (blockNumber > 0) {
+              if (!blockTimestamps.has(blockNumber)) {
+                try {
+                  const block = await retryRpc(() => this.provider.getBlock(blockNumber), 2, 150, 6000);
+                  blockTimestamps.set(blockNumber, Number(block?.timestamp || Math.floor(Date.now() / 1000)) * 1000);
+                } catch {
+                  blockTimestamps.set(blockNumber, timestampMs);
+                }
+              }
+              timestampMs = blockTimestamps.get(blockNumber) || timestampMs;
+            }
+
+            const txHash = log.transactionHash;
+            const nonce2D = `0x${channelId.toString(16).padStart(2, '0')}:0x${nonce.toString(16).padStart(4, '0')}`;
+            const timestamp = new Date(timestampMs).toISOString();
+            const trace: MPPTraceRecord = {
+              id: `trace_chain_${txHash.slice(2, 18)}`,
+              timestamp,
+              blockNumber,
+              agentId: key.agentId,
+              agentName: key.agentName,
+              targetEndpoint: endpoint,
+              method: 'GET',
+              costPathUsd: amountUsd,
+              latencyMs: 0,
+              httpStatusBefore: 402,
+              httpStatusAfter: 200,
+              challengeHeader: `MPP realm="Tempo-L1", asset="pathUSD", minPrice="${amountUsd}", recipient="${this.receiverAddress}"`,
+              authAuthorizationHeader: `MPP-EIP712 signer="${key.sessionPublicKey}", nonce="${nonce2D}", max="${key.maxPerCallPathUsd}"`,
+              eip712Signature: '',
+              txHash,
+              executionMode: 'LIVE_TESTNET',
+              status: 'SETTLED',
+              receiptVerified: true,
+              providerDataStatus: 'EVALUATION_FIXTURE',
+              tempoTxType: '0x76',
+              nonce2D,
+              memoPayload: `CHAIN_SETTLEMENT:${key.agentName}:${endpoint}:${amountUsd}:pathUSD`,
+              routerFeePathUsd: Math.max(0.000001, Number((amountUsd * 0.001).toFixed(6))),
+              tip20Memo: memo,
+              iso20022Remittance: {
+                standard: 'ISO-20022 pacs.008.001.08',
+                costCenter: `CC-AI-${key.agentId.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(-6) || 'TREASURY'}`,
+                categoryCode: 'CHAIN SETTLEMENT',
+                invoiceDigest: `0x${sha256(`CHAIN_SETTLEMENT:${txHash}:${amountUsd}:${endpoint}`)}`,
+              },
+              merkleProof: [],
+              merkleRoot: key.merkleRoot || '',
+              domainHash: '',
+              eip712DomainSeparator: '',
+              eip712StructHash: '',
+              liveProxyPayload: {
+                endpoint,
+                status: 200,
+                amountPathUsd: amountUsd,
+                blockNumber,
+                txHash,
+                explorerUrl: tempoTransactionUrl(txHash),
+                backfilledFromChain: true,
+                upstreamVerified: false,
+                paymentConfirmed: true,
+                providerDataStatus: 'EVALUATION_FIXTURE',
+                executionMode: 'LIVE_TESTNET',
+              },
+              sanctionsCompliance: {
+                status: 'UNVERIFIED',
+                policy: 'Example compliance check — live sanctions lookup not run',
+                checkedAt: timestamp,
+              },
+              complianceVerification: {
+                status: 'UNVERIFIED',
+                policy: 'Chain receipt verified from SynapseVault.PaymentSettled',
+                checkedAt: timestamp,
+              },
+            };
+            existingHashes.add(txHash.toLowerCase());
+            added.push(trace);
+          }
+        }
+
+        if (added.length > 0 || updatedExisting > 0) {
+          this.traces = [...this.traces, ...added].sort((a, b) => {
+            if (b.blockNumber !== a.blockNumber) return b.blockNumber - a.blockNumber;
+            return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+          }).slice(0, 5000);
+
+          const confirmed = this.traces.filter((trace) =>
+            trace.executionMode === 'LIVE_TESTNET' && trace.status === 'SETTLED' && trace.receiptVerified === true && isVerifiedTxHash(trace.txHash),
+          );
+          this.totalSettlements = confirmed.length;
+          this.totalVolume = Number(confirmed.reduce((sum, trace) => sum + Number(trace.costPathUsd || 0), 0).toFixed(6));
+          this.protocolRevenue = Number(confirmed.reduce((sum, trace) => sum + Math.max(0.000001, Number(trace.costPathUsd || 0) * 0.001), 0).toFixed(6));
+          this.endpoints = this.endpoints.map((endpoint) => {
+            const matching = confirmed.filter((trace) =>
+              String(trace.targetEndpoint || '').includes(String(endpoint.endpointUrl || ''))
+              || String(endpoint.endpointUrl || '').includes(String(trace.targetEndpoint || '')),
+            );
+            return {
+              ...endpoint,
+              totalCalls: matching.length,
+              totalEarnedUsd: Number(matching.reduce((sum, trace) => sum + Number(trace.costPathUsd || 0), 0).toFixed(6)),
+            };
+          });
+          console.log(`[Synapse402 Engine] Reconciled ${added.length} new and ${updatedExisting} existing PaymentSettled receipt(s) from Tempo.`);
+        }
+
+        this.lastSettlementScanBlock = toBlock;
+        this.lastSettlementScanAt = Date.now();
+        this.persistState();
+      } catch (err: any) {
+        console.debug(`[Synapse402 Engine] PaymentSettled backfill notice: ${err?.message}`);
+      } finally {
+        this.settlementScanInFlight = null;
+      }
+    })();
+
+    return this.settlementScanInFlight;
   }
 
   private async initLiveSync() {
@@ -585,43 +1286,27 @@ class SynapseStateEngine {
       }
       const code = await this.provider.getCode(this.vaultAddress);
       this.vaultBytecodePresent = code !== '0x' && code.length > 2;
+      await this.refreshVaultAdminStatus();
 
       // Check if relayer key was explicitly provided AND bytecode is present on-chain
       const hasExplicitKey = Boolean(process.env.TEMPO_RELAYER_KEY || process.env.PRIVATE_KEY);
       if (this.vaultBytecodePresent && hasExplicitKey) {
         this.networkMode = 'LIVE_TESTNET';
+        this.networkModeReason = 'Tempo RPC is reachable; the vault contract and relayer are configured.';
+        await this.verifyPersistedLiveTraces();
       } else {
         this.networkMode = 'RESILIENT_SANDBOX';
-        // A fallback process cannot verify historic chain receipts. Clear legacy
-        // demo balances and counters so the UI starts from an honest state.
-        this.vaultTvl = 0;
-        this.protocolRevenue = 0;
-        this.totalSettlements = 0;
-        this.totalVolume = 0;
-        // No chain is available in fallback mode, so persisted spend counters
-        // cannot be treated as historical charges. Start a fresh evaluation
-        // budget and let the current process track only its planned steps.
-        this.keys.forEach((key) => {
-          key.currentSpentPathUsd = 0;
-          key.status = 'ACTIVE';
-          key.sequenceNonce = 0;
-          key.channelNonces = {};
-        });
-        this.traces = this.traces.map((trace) => ({
-          ...trace,
-          txHash: '',
-          executionMode: 'RESILIENT_SANDBOX' as const,
-          status: trace.status === 'VOIDED' ? 'VOIDED' as const : 'SIMULATED_PASS' as const,
-          tempoTxType: undefined,
-          liveProxyPayload: trace.liveProxyPayload && typeof trace.liveProxyPayload === 'object'
-            ? { ...trace.liveProxyPayload, tempoVerified: false, executionMode: 'RESILIENT_SANDBOX' }
-            : trace.liveProxyPayload,
-        }));
-        this.endpoints = this.endpoints.map((endpoint) => ({ ...endpoint, totalCalls: 0, totalEarnedUsd: 0 }));
-        this.persistState();
+        this.networkModeReason = !this.vaultBytecodePresent
+          ? 'Tempo RPC is reachable, but no SynapseVault contract was found at the configured address.'
+          : 'Tempo RPC is reachable, but no server relayer key is configured.';
+        console.log(`[Synapse402 Engine] Running in RESILIENT_SANDBOX mode (bytecode: ${this.vaultBytecodePresent}, explicitKey: ${hasExplicitKey}). Preserving historical receipts.`);
       }
 
       await this.syncOnChainState();
+
+      if (this.networkMode === 'LIVE_TESTNET' && this.vaultBytecodePresent) {
+        await this.reconcileOnChainSettlements();
+      }
 
       // Do not attach arbitrary chain logs to local traces by array position.
       // A trace is live only when its own settlement call returned a confirmed
@@ -635,30 +1320,84 @@ class SynapseStateEngine {
       }
     } catch (err: any) {
       this.networkMode = 'RESILIENT_SANDBOX';
-      // If the RPC probe itself fails, apply the same honesty reset as the
-      // explicit fallback branch above.
-      this.vaultTvl = 0;
-      this.protocolRevenue = 0;
-      this.totalSettlements = 0;
-      this.totalVolume = 0;
-      this.traces = this.traces.map((trace) => ({
-        ...trace,
-        txHash: '',
-        executionMode: 'RESILIENT_SANDBOX' as const,
-        status: trace.status === 'VOIDED' ? 'VOIDED' as const : 'SIMULATED_PASS' as const,
-        tempoTxType: undefined,
-        liveProxyPayload: trace.liveProxyPayload && typeof trace.liveProxyPayload === 'object'
-          ? { ...trace.liveProxyPayload, tempoVerified: false, executionMode: 'RESILIENT_SANDBOX' }
-          : trace.liveProxyPayload,
-      }));
-      this.endpoints = this.endpoints.map((endpoint) => ({ ...endpoint, totalCalls: 0, totalEarnedUsd: 0 }));
-      this.persistState();
-      console.warn(`[Synapse402 Engine] Live probe fallback to RESILIENT_SANDBOX: ${err?.message}`);
+      this.networkModeReason = 'Tempo RPC is unavailable from this runtime; evaluation mode is active and the probe will retry automatically.';
+      console.warn(`[Synapse402 Engine] Live probe fallback to RESILIENT_SANDBOX: ${err?.message || String(err)} (code=${err?.code || 'unknown'}). Preserving historical receipts.`);
     }
 
     setInterval(async () => {
       await this.syncOnChainState();
+      if (this.networkMode === 'LIVE_TESTNET' && this.vaultBytecodePresent && Date.now() - this.lastSettlementScanAt >= 30000) {
+        await this.reconcileOnChainSettlements();
+      }
     }, 4000).unref();
+  }
+
+  private async verifyPersistedLiveTraces(): Promise<void> {
+    const liveTraces = this.traces.filter((trace) =>
+      trace.executionMode === 'LIVE_TESTNET'
+      && (trace.status === 'SETTLED' || trace.status === 'PENDING')
+      && typeof trace.txHash === 'string'
+      && trace.txHash.startsWith('0x')
+      && trace.receiptVerified !== true
+    );
+    if (liveTraces.length === 0) return;
+
+    const verified = new Set<string>();
+    const verificationErrors = new Set<string>();
+    // Keep RPC receipt checks bounded. Sending one request per historical
+    // trace at restart makes Tempo's gateway reject the burst with HTTP 413.
+    let nextTrace = 0;
+    const verifyWorker = async () => {
+      while (nextTrace < liveTraces.length) {
+        const trace = liveTraces[nextTrace++];
+        try {
+          const expectedPayee = trace.mppCredential?.payee || this.receiverAddress;
+          const proof = await this.verifyTempoPaymentReceipt(
+            trace.txHash,
+            expectedPayee,
+            BigInt(Math.max(1, Math.round(Number(trace.costPathUsd || 0) * 1e6))),
+          );
+          if (proof.verified) verified.add(trace.id);
+          else console.warn(`[Synapse402 Engine] Payment proof rejected for ${trace.id}: ${proof.reason}`);
+        } catch (err: any) {
+          // A transient RPC error (for example 413 from a provider gateway)
+          // is not evidence that a confirmed transaction disappeared.
+          verificationErrors.add(trace.id);
+          console.debug(`[Synapse402 Engine] Receipt verification notice for ${trace.id}: ${err?.message}`);
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(4, liveTraces.length) }, () => verifyWorker()));
+
+    this.traces = this.traces.map((trace) => {
+      if (trace.executionMode !== 'LIVE_TESTNET' || (trace.status !== 'SETTLED' && trace.status !== 'PENDING') || !trace.txHash?.startsWith('0x')) {
+        return trace;
+      }
+      if (verified.has(trace.id)) return { ...trace, receiptVerified: true, status: 'SETTLED' };
+      if (verificationErrors.has(trace.id)) return trace;
+      return {
+        ...trace,
+        txHash: '',
+        executionMode: 'FAILED_REVERT' as const,
+        status: 'FAILED' as const,
+        receiptVerified: false,
+        blockNumber: 0,
+        tempoTxType: undefined,
+        liveProxyPayload: trace.liveProxyPayload && typeof trace.liveProxyPayload === 'object'
+          ? { ...trace.liveProxyPayload, paymentConfirmed: false, upstreamVerified: false, executionMode: 'FAILED_REVERT', paymentError: 'INVALID_PAYMENT_PROOF' }
+          : trace.liveProxyPayload,
+      };
+    });
+    const confirmed = this.traces.filter((trace) =>
+      trace.executionMode === 'LIVE_TESTNET'
+      && trace.status === 'SETTLED'
+      && trace.receiptVerified === true
+      && isVerifiedTxHash(trace.txHash),
+    );
+    this.totalSettlements = confirmed.length;
+    this.totalVolume = Number(confirmed.reduce((sum, trace) => sum + Number(trace.costPathUsd || 0), 0).toFixed(6));
+    this.protocolRevenue = Number(confirmed.reduce((sum, trace) => sum + Math.max(0.000001, Number(trace.costPathUsd || 0) * 0.001), 0).toFixed(6));
+    this.persistState();
   }
 
   public async syncOnChainState(): Promise<void> {
@@ -671,6 +1410,32 @@ class SynapseStateEngine {
       }
       if (bn > 0) {
         this.blockHeight = bn;
+      }
+
+      // Recover from a transient RPC outage. The old implementation switched
+      // to RESILIENT_SANDBOX on the first failed probe and never tried to
+      // promote the process back to live mode, even after the RPC and deployed
+      // vault became reachable again. That made every later payment look like
+      // a simulation and removed the transaction link permanently.
+      if (this.networkMode !== 'LIVE_TESTNET') {
+        try {
+          const code = await this.provider.getCode(this.vaultAddress);
+          const hasExplicitKey = Boolean(process.env.TEMPO_RELAYER_KEY || process.env.PRIVATE_KEY);
+          this.vaultBytecodePresent = code !== '0x' && code.length > 2;
+          if (this.vaultBytecodePresent && hasExplicitKey) {
+            this.networkMode = 'LIVE_TESTNET';
+            this.networkModeReason = 'Tempo RPC recovered; the vault contract and relayer are configured.';
+            await this.refreshVaultAdminStatus();
+            console.log('[Synapse402 Engine] RPC recovered; promoted to LIVE_TESTNET.');
+          }
+        } catch (probeErr: any) {
+          // Keep the explicit sandbox mode until a later heartbeat succeeds.
+          this.networkModeReason = 'Tempo RPC is still unavailable from this runtime; evaluation mode will retry automatically.';
+          console.debug(`[Synapse402 Engine] Live recovery probe notice: ${probeErr?.message}`);
+        }
+      }
+      if (this.networkMode === 'LIVE_TESTNET' && this.vaultBytecodePresent) {
+        await this.refreshVaultAdminStatus();
       }
       try {
         const feeData = await this.provider.getFeeData();
@@ -700,11 +1465,32 @@ class SynapseStateEngine {
           if (key.sessionPublicKey && ethers.isAddress(key.sessionPublicKey)) {
             try {
               const cfg = await this.vaultContract.sessionKeys(key.sessionPublicKey);
-              if (cfg && Number(cfg.status) > 0) {
-                key.currentSpentPathUsd = Number(ethers.formatUnits(cfg.currentSpent, 6));
-                const onChainNonce = await this.vaultContract.lastNonce(key.sessionPublicKey, key.channelId);
-                if (Number(onChainNonce) > key.sequenceNonce) {
-                  key.sequenceNonce = Number(onChainNonce);
+              if (cfg) {
+                // In live mode the contract is the source of truth for every
+                // session policy field, not just cumulative spend. This keeps
+                // the dashboard aligned after an on-chain pause, expiry,
+                // budget update, or provider-root change.
+                const onChainStatus = Number(cfg.status);
+                const statusMap: Record<number, ScopedSessionKeyRecord['status']> = {
+                  0: 'REVOKED',
+                  1: 'ACTIVE',
+                  2: 'PAUSED',
+                  3: 'DEPLETED',
+                  4: 'REVOKED',
+                };
+                if (onChainStatus > 0) {
+                  key.maxPerCallPathUsd = Number(ethers.formatUnits(cfg.maxPerCall, 6));
+                  key.totalBudgetPathUsd = Number(ethers.formatUnits(cfg.totalBudget, 6));
+                  key.currentSpentPathUsd = Number(ethers.formatUnits(cfg.currentSpent, 6));
+                  key.validBeforeTimestamp = Number(cfg.validBefore);
+                  key.merkleRoot = String(cfg.merkleRoot);
+                  key.status = statusMap[onChainStatus] || 'PAUSED';
+                }
+                if (onChainStatus > 0) {
+                  const onChainNonce = await this.vaultContract.lastNonce(key.sessionPublicKey, key.channelId);
+                  if (Number(onChainNonce) > key.sequenceNonce) {
+                    key.sequenceNonce = Number(onChainNonce);
+                  }
                 }
               }
             } catch (cfgErr: any) {
@@ -715,46 +1501,26 @@ class SynapseStateEngine {
         this.persistState();
       }
     } catch (err: any) {
-      // If the RPC probe itself fails, stay explicit about fallback mode and
-      // discard persisted values that could be mistaken for live balances or
-      // charges. The current process may still track new evaluation steps.
-      this.networkMode = 'RESILIENT_SANDBOX';
-      this.vaultBytecodePresent = false;
-      this.vaultTvl = 0;
-      this.protocolRevenue = 0;
-      this.totalSettlements = 0;
-      this.totalVolume = 0;
-      this.keys.forEach((key) => {
-        key.currentSpentPathUsd = 0;
-        key.status = 'ACTIVE';
-        key.sequenceNonce = 0;
-        key.channelNonces = {};
-      });
-      this.traces = this.traces.map((trace) => ({
-        ...trace,
-        txHash: '',
-        executionMode: 'RESILIENT_SANDBOX' as const,
-        status: trace.status === 'VOIDED' ? 'VOIDED' as const : 'SIMULATED_PASS' as const,
-        blockNumber: 0,
-        tempoTxType: undefined,
-      }));
-      this.persistState();
+      console.warn(`[Synapse402 Engine] Periodic on-chain sync notice: ${err?.message}. Preserving ledger.`);
     }
   }
 
   public getNetworkStatus() {
     const liveConfirmedTrace = this.networkMode === 'LIVE_TESTNET'
-      ? this.traces.find(t => t.executionMode === 'LIVE_TESTNET' && t.status === 'SETTLED' && t.txHash && t.txHash.startsWith('0x'))
+      ? this.traces.find(t => t.executionMode === 'LIVE_TESTNET' && t.status === 'SETTLED' && t.receiptVerified === true && t.txHash && t.txHash.startsWith('0x'))
       : undefined;
     return {
       status: 'ok',
       networkMode: this.networkMode,
+      networkModeReason: this.networkModeReason,
       networkName: 'Tempo Moderato Testnet',
       chainId: this.chainId,
       blockHeight: this.blockHeight,
       vaultAddress: this.vaultAddress,
       receiverAddress: this.receiverAddress,
       vaultBytecodePresent: this.vaultBytecodePresent,
+      canSettleLive: this.networkMode === 'LIVE_TESTNET' && this.vaultBytecodePresent && Boolean(this.relayerWallet),
+      vaultAdminReason: this.vaultAdminReason,
       relayerAddress: this.networkMode === 'LIVE_TESTNET' && this.vaultBytecodePresent
         && Boolean(process.env.PRIVATE_KEY || process.env.TEMPO_RELAYER_KEY)
         ? this.relayerWallet.address
@@ -767,6 +1533,29 @@ class SynapseStateEngine {
       hasPrivateKeyConfigured: Boolean(process.env.PRIVATE_KEY || process.env.TEMPO_RELAYER_KEY),
       resilientFallbackActive: this.networkMode === 'RESILIENT_SANDBOX',
     };
+  }
+
+  private async refreshVaultAdminStatus(): Promise<boolean> {
+    try {
+      const owner = ethers.getAddress(await this.vaultContract.owner());
+      const admin = this.vaultOwnerWallet || this.relayerWallet;
+      this.vaultAdminReady = owner.toLowerCase() === admin.address.toLowerCase();
+      this.vaultAdminReason = this.vaultAdminReady
+        ? 'Vault owner authorization is ready.'
+        : 'Live payments are disabled: configure TEMPO_VAULT_OWNER_KEY for the SynapseVault owner. No chain write will be attempted.';
+    } catch {
+      this.vaultAdminReady = false;
+      this.vaultAdminReason = 'Vault owner could not be verified; live payments are disabled until it can be checked.';
+    }
+    return this.vaultAdminReady;
+  }
+
+  private async getVaultAdminWallet(): Promise<ethers.Wallet | ethers.HDNodeWallet> {
+    const ready = await this.refreshVaultAdminStatus();
+    if (!ready) {
+      throw new Error(this.vaultAdminReason);
+    }
+    return this.vaultOwnerWallet || this.relayerWallet;
   }
 
   private sessionMasterSecret: string = (() => {
@@ -784,7 +1573,9 @@ class SynapseStateEngine {
   public getWalletForKey(keyId: string): ethers.Wallet {
     let w = this.walletCache.get(keyId);
     if (!w) {
-      // High-entropy derivation using the server-only master secret for every key.
+      // Match the established baseline derivation: the explicit session secret
+      // is preferred, with the configured server-only relayer key as fallback.
+      // This keeps existing runtime setups working without requiring a new env var.
       const pk = '0x' + crypto.createHmac('sha256', this.sessionMasterSecret)
         .update(`synapse402:session-wallet:${keyId}`)
         .digest('hex');
@@ -811,6 +1602,14 @@ class SynapseStateEngine {
         'https://api.deribit.com/api/v2/public/get_order_book',
         'https://api.tempo.xyz/v1/router/quote',
         'https://api.fin-depth.io/v2/aapl/orderbook',
+        'https://api.market-depth-mesh.io/v3/depth/l2',
+        'https://api.fin-depth.io/v2/sol/orderbook',
+        '/api/v1/market/sol-depth',
+        '/api/v1/market/sol-orderbook',
+        '/api/v1/test-provider-data',
+        '/api/v1/mock-500',
+        '/api/v1/surge-demo',
+        '/api/stream/inference',
         'https://data.sec.gov/api/xbrl/companyfacts',
         'https://api.crypto-skew.network/v1/macro/btc-eth',
       ],
@@ -835,6 +1634,8 @@ class SynapseStateEngine {
       whitelistedDomains: [
         'https://api.semanticscholar.org/graph/v1/paper/batch',
         'https://data.sec.gov/api/xbrl/companyfacts',
+        '/api/v1/data/unlocked-article',
+        '/api/v1/data/ai-market-analysis',
       ],
       status: 'ACTIVE',
       validBeforeTimestamp: Math.floor(Date.now() / 1000) + 86400 * 20,
@@ -858,6 +1659,10 @@ class SynapseStateEngine {
         'https://api.certik.com/v1/fuzz/opcodes',
         'https://api.tempo.xyz/v1/router/quote',
         'https://api.fin-depth.io/v2/aapl/orderbook',
+        'https://api.fin-depth.io/v2/sol/orderbook',
+        '/api/v1/market/sol-depth',
+        '/api/v1/market/sol-orderbook',
+        '/api/v1/data/python-sandbox',
         'https://data.sec.gov/api/xbrl/companyfacts',
         'https://api.crypto-skew.network/v1/macro/btc-eth',
       ],
@@ -926,6 +1731,7 @@ class SynapseStateEngine {
       whitelistedDomains: [
         'https://api.translate-mesh.io/v2/document/instant',
         'https://api.deepl.com',
+        '/api/v1/data/unlocked-article',
       ],
       status: 'ACTIVE',
       validBeforeTimestamp: Math.floor(Date.now() / 1000) + 86400 * 30,
@@ -1018,55 +1824,55 @@ class SynapseStateEngine {
       eip712DomainSeparator: sha256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)'),
       eip712StructHash: sha256('MPPAuthorization(address sessionKey,uint64 channelId,uint64 nonce,address payee,uint256 amount,bytes32 endpointHash,bytes32 memo,uint256 validBefore)'),
       sanctionsCompliance: {
-        status: 'CLEARED',
-        policy: 'OFAC/AML Sanctions Screening (Cleared)',
+        status: 'UNVERIFIED',
+        policy: 'Example compliance check — live sanctions lookup not run',
         checkedAt: new Date().toISOString(),
       },
       complianceVerification: {
-        status: 'CLEARED',
-        policy: 'OFAC/AML Sanctions Screening (Cleared)',
+        status: 'UNVERIFIED',
+        policy: 'Example compliance check — live sanctions lookup not run',
         checkedAt: new Date().toISOString(),
       },
     });
   }
 
-  public getTraces(): (MPPTraceRecord & { serviceName?: string })[] {
-    const visibleTraces = this.networkMode === 'LIVE_TESTNET'
-      ? this.traces
-      : this.traces.map((t) => t.executionMode === 'LIVE_TESTNET'
-        ? {
-            ...t,
-            executionMode: 'RESILIENT_SANDBOX' as const,
-            status: 'SIMULATED_PASS' as const,
-            txHash: '',
-            blockNumber: 0,
-            tempoTxType: undefined,
-          }
-        : t);
+  public getReceiptsLedger() {
+    // The seeded trace is an implementation seed for the demo engine, not a
+    // receipt created by a user job. Keep it available internally for the
+    // provider verifier, but never expose it as a payment-history row or count.
+    const normalizedTraces = this.traces
+      .filter((trace) => trace.id !== 'trace_init_001')
+      .map((trace) => this.normalizePersistedTrace(trace));
 
-    return visibleTraces.map((t) => {
+    // Canonical calculations
+    const confirmedReceipts = normalizedTraces.filter((t) =>
+      t.executionMode === 'LIVE_TESTNET'
+      && t.status === 'SETTLED'
+      && t.receiptVerified === true
+      && isVerifiedTxHash(t.txHash)
+    );
+
+    const evaluationReceipts = normalizedTraces.filter((t) =>
+      (t.executionMode !== 'LIVE_TESTNET' || t.status === 'SIMULATED_PASS' || !isVerifiedTxHash(t.txHash))
+      && t.status !== 'VOIDED'
+      && t.status !== 'REFUNDED'
+      && t.status !== 'FAILED'
+    );
+
+    const voidedReceipts = normalizedTraces.filter((t) =>
+      t.status === 'VOIDED' || t.status === 'REFUNDED' || t.status === 'FAILED'
+    );
+
+    const totalVolumeSettled = confirmedReceipts.reduce((sum, t) => sum + Number(t.costPathUsd || 0), 0);
+    const totalProtocolFee = confirmedReceipts.reduce((sum, t) => sum + Math.max(0.000001, Number(t.costPathUsd || 0) * 0.001), 0);
+
+    const enrichedTraces = normalizedTraces.map((t) => {
       const ep = (t.targetEndpoint || '').toLowerCase();
-      const isVoided = t.status === 'VOIDED' || t.status === 'REFUNDED' || t.costPathUsd === 0;
-      let serviceName = '';
-      if (ep.includes('binance') || ep.includes('depth') || ep.includes('orderbook') || ep.includes('fin-depth') || ep.includes('stock-orderbook')) {
-        serviceName = isVoided ? 'Market Depth (Orderbook Data) — Voided' : 'Market Depth (Orderbook Data)';
-      } else if (ep.includes('academic') || ep.includes('licensed') || ep.includes('paper') || ep.includes('semanticscholar')) {
-        serviceName = isVoided ? 'Licensed Research Paper — Voided' : 'Licensed Research Paper (Nature Physics)';
-      } else if (ep.includes('sec') || ep.includes('10k') || ep.includes('filing')) {
-        serviceName = isVoided ? 'Audited Financial Statements — Voided' : 'Audited Financial Statements (10-K)';
-      } else if (ep.includes('deepseek')) {
-        serviceName = isVoided ? 'DeepSeek R1 Reasoning — Voided' : 'DeepSeek R1 Reasoning Inference';
-      } else if (ep.includes('sandbox') || ep.includes('containers') || ep.includes('python-sandbox')) {
-        serviceName = isVoided ? 'Isolated Python Cloud Sandbox — Voided' : 'Isolated Python Cloud Sandbox';
-      } else if (ep.includes('vision') || ep.includes('remove-bg') || ep.includes('upscale')) {
-        serviceName = isVoided ? '4K Image Super-Resolution — Voided' : '4K Image Super-Resolution & Matte';
-      } else if (ep.includes('voice') || ep.includes('synthesize')) {
-        serviceName = isVoided ? 'Studio Neural Voiceover — Voided' : 'Studio Neural Voiceover Engine';
-      } else if (ep.includes('compliance') || ep.includes('identity') || ep.includes('sanctions')) {
-        serviceName = isVoided ? 'Global Sanctions & KYC — Voided' : 'Global Sanctions & KYC Registry';
-      } else {
-        serviceName = isVoided ? 'HTTP 402 Resource — Voided' : 'HTTP 402 Monetized Resource';
-      }
+      const providerRecord = this.endpoints.find((endpoint) =>
+        String(endpoint.endpointUrl || '').toLowerCase().includes(ep)
+        || ep.includes(String(endpoint.endpointUrl || '').toLowerCase()),
+      );
+      const serviceName = t.providerName || providerRecord?.title || 'Demo provider';
 
       let agentName = t.agentName;
       if (!agentName || agentName === 'Crypto Market Bot' || agentName === 'AI Agent') {
@@ -1084,8 +1890,28 @@ class SynapseStateEngine {
         ...t,
         agentName,
         serviceName,
+        txHash: isVerifiedTxHash(t.txHash) ? t.txHash : null,
       };
     });
+
+    return {
+      summary: {
+        confirmedPaymentsCount: confirmedReceipts.length,
+        evaluationEventsCount: evaluationReceipts.length,
+        voidedEventsCount: voidedReceipts.length,
+        totalReceiptsCount: normalizedTraces.length,
+        totalTransactionsCount: confirmedReceipts.length,
+        totalVolumeSettledPathUsd: Number(totalVolumeSettled.toFixed(4)),
+        protocolFeeRevenuePathUsd: Number(totalProtocolFee.toFixed(5)),
+        blockHeight: this.blockHeight,
+        networkMode: this.networkMode,
+      },
+      receipts: enrichedTraces,
+    };
+  }
+
+  public getTraces(): (MPPTraceRecord & { serviceName?: string })[] {
+    return this.getReceiptsLedger().receipts as any;
   }
 
   /** Verify that a first-party provider request came from a trace issued by this gateway. */
@@ -1094,7 +1920,7 @@ class SynapseStateEngine {
     const trace = this.traces.find((candidate) => candidate.id === traceId);
     if (!trace || trace.eip712Signature !== signature || trace.nonce2D !== nonce2D) return false;
     const statusAllowed = trace.executionMode === 'LIVE_TESTNET'
-      ? trace.status === 'SETTLED' && Boolean(trace.txHash?.startsWith('0x'))
+      ? trace.status === 'SETTLED' && trace.receiptVerified === true && isVerifiedTxHash(trace.txHash)
       : trace.executionMode === 'RESILIENT_SANDBOX' && trace.status === 'SIMULATED_PASS';
     if (!statusAllowed || Math.abs(Number(trace.costPathUsd) - effectivePrice) > 0.000001) return false;
     try {
@@ -1114,18 +1940,26 @@ class SynapseStateEngine {
       throw new Error('Deposit amount exceeds maximum demo limit ($1,000 pathUSD).');
     }
 
+    let depositTxHash: string | undefined;
     if (this.networkMode === 'LIVE_TESTNET' && this.vaultBytecodePresent && this.relayerWallet) {
       try {
         await this.dispatchRelayerTx(async () => {
           const parsedAmount = BigInt(Math.round(depositNum * 1e6));
-          const tip20 = new ethers.Contract(this.pathUsdAddress, TIP20_ABI, this.relayerWallet);
-          const currentAllowance = await tip20.allowance(this.relayerWallet.address, this.vaultAddress);
+          const fundingWallet = this.vaultOwnerWallet || this.relayerWallet;
+          const tip20 = new ethers.Contract(this.pathUsdAddress, TIP20_ABI, fundingWallet);
+          const fundingBalance = await tip20.balanceOf(fundingWallet.address);
+          if (fundingBalance < parsedAmount) {
+            throw new Error('The configured project funding wallet has insufficient pathUSD.');
+          }
+          const currentAllowance = await tip20.allowance(fundingWallet.address, this.vaultAddress);
           if (currentAllowance < parsedAmount) {
             const approveTx = await (tip20 as any).approve(this.vaultAddress, ethers.MaxUint256, { gasLimit: 300000 });
             await approveTx.wait(1);
           }
-          const depTx = await (this.vaultContract.connect(this.relayerWallet) as any).deposit(parsedAmount, { gasLimit: 500000 });
-          await depTx.wait(1);
+          const depTx = await (this.vaultContract.connect(fundingWallet) as any).deposit(parsedAmount, { gasLimit: 500000 });
+          const receipt = await depTx.wait(1);
+          if (!receipt || receipt.status !== 1) throw new Error('Deposit transaction was not confirmed.');
+          depositTxHash = depTx.hash;
           console.log(`[Synapse402 Engine] ✓ Confirmed On-Chain Deposit: ${depTx.hash} (+${depositNum} pathUSD)`);
           const onChainBal = await this.vaultContract.totalVaultBalance();
           this.vaultTvl = Number(ethers.formatUnits(onChainBal, 6));
@@ -1141,7 +1975,7 @@ class SynapseStateEngine {
     }
 
     this.persistState();
-    return this.getMetrics();
+    return { ...this.getMetrics(), depositTxHash };
   }
 
   public getMetrics() {
@@ -1152,15 +1986,24 @@ class SynapseStateEngine {
       }
     });
 
-    const settledTraces = this.networkMode === 'LIVE_TESTNET'
-      ? this.traces.filter((t) => t.status === 'SETTLED' && t.executionMode === 'LIVE_TESTNET' && t.txHash?.startsWith('0x'))
-      : [];
-    const visibleTraceCount = this.networkMode === 'LIVE_TESTNET' ? this.traces.length : 0;
-    const avgLatency = visibleTraceCount > 0
-      ? Math.round(this.traces.reduce((acc, t) => acc + (t.latencyMs || 135), 0) / this.traces.length)
+    const ledger = this.getReceiptsLedger();
+    const visibleReceipts = ledger.receipts as Array<{ latencyMs?: number; executionMode?: string; status?: string }>;
+    const totalVisible = visibleReceipts.length;
+    const measuredResponseLatencies = visibleReceipts
+      .map((trace) => Number(trace.latencyMs))
+      .filter((latency) => Number.isFinite(latency) && latency >= 0);
+    const avgResponseLatency = measuredResponseLatencies.length > 0
+      ? Math.round(measuredResponseLatencies.reduce((acc, latency) => acc + latency, 0) / measuredResponseLatencies.length)
       : 0;
-    const successRate = visibleTraceCount > 0
-      ? Number(((settledTraces.length / visibleTraceCount) * 100).toFixed(2))
+    const confirmedReceipts = visibleReceipts.filter((t) => t.executionMode === 'LIVE_TESTNET' && t.status === 'SETTLED' && (t as any).receiptVerified === true);
+    const measuredConfirmedLatencies = confirmedReceipts
+      .map((trace) => Number(trace.latencyMs))
+      .filter((latency) => Number.isFinite(latency) && latency >= 0);
+    const avgConfirmedLatency = measuredConfirmedLatencies.length > 0
+      ? Math.round(measuredConfirmedLatencies.reduce((acc, latency) => acc + latency, 0) / measuredConfirmedLatencies.length)
+      : 0;
+    const successRate = totalVisible > 0
+      ? Number(((ledger.summary.confirmedPaymentsCount / totalVisible) * 100).toFixed(2))
       : 0;
 
     const reportedReserved = this.networkMode === 'LIVE_TESTNET' ? reserved : 0;
@@ -1168,10 +2011,18 @@ class SynapseStateEngine {
       totalVaultLiquidity: Number(this.vaultTvl.toFixed(4)),
       availableUnreservedLiquidity: Math.max(0, Number((this.vaultTvl - reportedReserved).toFixed(4))),
       reservedAgentBudgets: Number(reportedReserved.toFixed(4)),
-      totalVolumeSettledPathUsd: this.networkMode === 'LIVE_TESTNET' ? Number(this.totalVolume.toFixed(4)) : 0,
-      totalTransactionsCount: this.networkMode === 'LIVE_TESTNET' ? this.totalSettlements : 0,
-      protocolFeeRevenuePathUsd: this.networkMode === 'LIVE_TESTNET' ? Number(this.protocolRevenue.toFixed(5)) : 0,
-      averageFinalityMs: avgLatency,
+      totalVolumeSettledPathUsd: ledger.summary.totalVolumeSettledPathUsd,
+      totalTransactionsCount: ledger.summary.confirmedPaymentsCount,
+      confirmedPaymentsCount: ledger.summary.confirmedPaymentsCount,
+      evaluationEventsCount: ledger.summary.evaluationEventsCount,
+      voidedEventsCount: ledger.summary.voidedEventsCount,
+      totalReceiptsCount: ledger.summary.totalReceiptsCount,
+      protocolFeeRevenuePathUsd: ledger.summary.protocolFeeRevenuePathUsd,
+      // Response latency is an engine measurement. Finality is reported only
+      // for confirmed Tempo receipts; never present sandbox latency as chain
+      // finality.
+      averageResponseLatencyMs: avgResponseLatency,
+      averageFinalityMs: avgConfirmedLatency,
       settlementSuccessRate: successRate,
       blockHeight: this.blockHeight,
       tempoChainId: this.chainId,
@@ -1185,7 +2036,9 @@ class SynapseStateEngine {
       return {
         address: address || '',
         pathUsd: 0,
-        tempo: 0,
+        feeTokenBalance: 0,
+        feeTokenAddress: this.pathUsdAddress,
+        feeTokenSymbol: 'pathUSD',
         vaultTvl: this.vaultTvl,
         isSessionKeyRegistered: false,
         sessionStatus: 'INACTIVE',
@@ -1196,24 +2049,12 @@ class SynapseStateEngine {
     const cleanAddr = ethers.getAddress(address);
     const cached = this.walletBalancesCache.get(cleanAddr);
 
-    let pathUsdBal = cached?.data?.pathUsd ?? 0;
-    let tempoBal = cached?.data?.tempo ?? 0;
+    let pathUsdBal = cached?.data?.pathUsd ?? cached?.data?.feeTokenBalance ?? 0;
     let vaultBal = this.vaultTvl;
     let isRegistered = cached?.data?.isSessionKeyRegistered ?? false;
     let sessionStatus = cached?.data?.sessionStatus ?? 'INACTIVE';
     let sessionBudget = cached?.data?.sessionBudget ?? 0;
     let sessionSpent = cached?.data?.sessionSpent ?? 0;
-
-    try {
-      const nativeBig = await retryRpc(() => this.provider.getBalance(cleanAddr), 3, 200, 3500) as bigint;
-      const parsed = Number(ethers.formatEther(nativeBig));
-      if (Number.isFinite(parsed)) {
-        // Sanitize saturated testnet faucet balances (> 10,000) to 1,000.00 to avoid scientific notation
-        tempoBal = parsed > 10000 ? 1000.00 : Number(parsed.toFixed(4));
-      }
-    } catch {
-      if (cached) tempoBal = cached.data.tempo;
-    }
 
     try {
       const tip20 = new ethers.Contract(this.pathUsdAddress, TIP20_ABI, this.provider);
@@ -1258,7 +2099,11 @@ class SynapseStateEngine {
     const result = {
       address: cleanAddr,
       pathUsd: pathUsdBal,
-      tempo: tempoBal,
+      // Tempo has no native gas coin. Fees use a selectable USD-denominated
+      // TIP-20 token; pathUSD is the configured payment and fee-token view.
+      feeTokenBalance: pathUsdBal,
+      feeTokenAddress: this.pathUsdAddress,
+      feeTokenSymbol: 'pathUSD',
       vaultTvl: vaultBal,
       isSessionKeyRegistered: isRegistered,
       sessionStatus,
@@ -1281,6 +2126,15 @@ class SynapseStateEngine {
     totalBudgetPathUsd: number;
     whitelistedDomains: string[];
   }): ScopedSessionKeyRecord {
+    if (this.keys.size >= 256) throw new Error('Session-key registry is full; revoke an unused key before adding another.');
+    const agentName = String(params.agentName || '').trim();
+    const role = String(params.role || 'Autonomous Execution Agent').trim() || 'Autonomous Execution Agent';
+    if (!agentName || agentName.length > 160) {
+      throw new Error('agentName must be 1–160 characters.');
+    }
+    if (role.length > 200) {
+      throw new Error('role must be no more than 200 characters.');
+    }
     const maxCall = Number(params.maxPerCallPathUsd);
     const totalBudget = Number(params.totalBudgetPathUsd);
     if (!Number.isFinite(maxCall) || maxCall <= 0) {
@@ -1293,20 +2147,30 @@ class SynapseStateEngine {
       throw new Error('maxPerCallPathUsd cannot exceed totalBudgetPathUsd.');
     }
 
-    const keyId = `key_${Date.now().toString().slice(-6)}`;
-    const mt = new MerkleTree(params.whitelistedDomains);
+    const safeDomains = normalizeAllowlistEntries(params.whitelistedDomains);
+    if (safeDomains.length === 0) {
+      throw new Error('At least one public http/https provider URL is required; localhost and private-network targets are blocked.');
+    }
+    if (safeDomains.length > 256) {
+      throw new Error('At most 256 approved provider routes can be attached to one session key.');
+    }
+    let keyId = '';
+    do {
+      keyId = `key_${Date.now().toString(36)}_${crypto.randomBytes(4).toString('hex')}`;
+    } while (this.keys.has(keyId));
+    const mt = new MerkleTree(safeDomains);
     const wallet = this.getWalletForKey(keyId);
     const newKey: ScopedSessionKeyRecord = {
       id: keyId,
-      agentId: `agent_${params.agentName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
-      agentName: params.agentName,
-      role: params.role || 'Autonomous Execution Agent',
+      agentId: `agent_${agentName.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+      agentName,
+      role,
       sessionPublicKey: wallet.address,
       delegatedBy: 'Treasury Multisig (Sandbox)',
       maxPerCallPathUsd: maxCall,
       totalBudgetPathUsd: totalBudget,
       currentSpentPathUsd: 0,
-      whitelistedDomains: params.whitelistedDomains,
+      whitelistedDomains: safeDomains,
       status: 'ACTIVE',
       validBeforeTimestamp: Math.floor(Date.now() / 1000) + 86400 * 30,
       channelId: this.keys.size + 1,
@@ -1320,46 +2184,107 @@ class SynapseStateEngine {
     return newKey;
   }
 
-  public toggleKeyStatus(keyId: string): ScopedSessionKeyRecord | null {
+  public async toggleKeyStatus(keyId: string): Promise<ScopedSessionKeyRecord | null> {
     const key = this.keys.get(keyId);
     if (!key) return null;
-    if (key.status === 'ACTIVE') {
-      key.status = 'PAUSED';
-    } else {
-      key.status = key.currentSpentPathUsd >= key.totalBudgetPathUsd ? 'DEPLETED' : 'ACTIVE';
+
+    const nextStatus: ScopedSessionKeyRecord['status'] = key.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+    if (this.networkMode === 'LIVE_TESTNET' && this.vaultBytecodePresent && this.relayerWallet && key.sessionPublicKey) {
+      try {
+        const adminWallet = await this.getVaultAdminWallet();
+        const cfg = await this.vaultContract.sessionKeys(key.sessionPublicKey);
+        let onChainStatus = Number(cfg.status);
+        if (onChainStatus === 0) {
+          const root = key.merkleRoot && key.merkleRoot.length === 66 ? key.merkleRoot : new MerkleTree(key.whitelistedDomains).getRoot();
+          const regTx = await (this.vaultContract.connect(adminWallet) as any).registerSessionKey(
+            key.sessionPublicKey,
+            BigInt(Math.round(Math.min(key.maxPerCallPathUsd, key.totalBudgetPathUsd) * 1e6)),
+            BigInt(Math.round(key.totalBudgetPathUsd * 1e6)),
+            BigInt(key.validBeforeTimestamp),
+            root,
+            { gasLimit: 1600000 },
+          );
+          await regTx.wait(1);
+          onChainStatus = 1;
+        }
+        const desiredOnChainStatus = nextStatus === 'ACTIVE' ? 1 : 2;
+        if (onChainStatus !== desiredOnChainStatus) {
+          const statusTx = await (this.vaultContract.connect(adminWallet) as any).setSessionStatus(
+            key.sessionPublicKey,
+            desiredOnChainStatus,
+            { gasLimit: 300000 },
+          );
+          await statusTx.wait(1);
+        }
+      } catch (err: any) {
+        throw new Error(`On-chain agent status could not be updated: ${err?.message || 'unknown error'}`);
+      }
     }
+
+    key.status = nextStatus;
     this.persistState();
     return key;
   }
 
-  public removeKey(keyId: string): boolean {
-    const existed = this.keys.delete(keyId);
-    if (existed) {
-      this.persistState();
+  public async removeKey(keyId: string): Promise<boolean> {
+    const key = this.keys.get(keyId);
+    if (!key) return false;
+
+    // Deleting a local record must not leave an active on-chain signer behind.
+    // Revoke first and only remove the local policy after the chain confirms it.
+    if (this.networkMode === 'LIVE_TESTNET' && this.vaultBytecodePresent && this.relayerWallet && key.sessionPublicKey) {
+      try {
+        const adminWallet = await this.getVaultAdminWallet();
+        const config = await this.vaultContract.sessionKeys(key.sessionPublicKey);
+        const onChainStatus = Number(config.status);
+        if (onChainStatus !== 0 && onChainStatus !== 4) {
+          const revokeTx = await (this.vaultContract.connect(adminWallet) as any).setSessionStatus(
+            key.sessionPublicKey,
+            4,
+            { gasLimit: 300000 },
+          );
+          await revokeTx.wait(1);
+        }
+      } catch (err: any) {
+        throw new Error(`On-chain session key revoke failed; local key was kept: ${err?.message || 'unknown error'}`);
+      }
     }
-    return existed;
+
+    this.keys.delete(keyId);
+    this.persistState();
+    return true;
   }
 
   public async prepareAuthorization(params: {
-    keyId?: string;
+    keyId: string;
     signerAddress?: string;
     targetUrl: string;
     pricePathUsd: number;
     channelId?: number;
+    payee?: string;
   }) {
-    const key = (params.keyId 
-      ? (this.keys.get(params.keyId) || Array.from(this.keys.values()).find(k => k.id === params.keyId || k.agentId === params.keyId || k.agentName.toLowerCase() === params.keyId!.toLowerCase()))
-      : null)
-      || Array.from(this.keys.values()).find(k => k.status === 'ACTIVE')
-      || Array.from(this.keys.values())[0];
+    const cleanKeyId = String(params.keyId || '').trim();
+    if (!cleanKeyId) {
+      throw new Error('keyId is required so authorization is bound to one spending policy.');
+    }
+    let key = this.keys.get(cleanKeyId)
+      || Array.from(this.keys.values()).find(k => k.id === cleanKeyId || k.agentId === cleanKeyId || k.agentName.toLowerCase() === cleanKeyId.toLowerCase());
 
     if (!key) {
-      throw new Error('No active session key available in SynapseVault.');
+      throw new Error(`404 Not Found: Session key "${cleanKeyId}" does not exist in SynapseVault.`);
     }
 
     const price = Number(params.pricePathUsd);
     if (!Number.isFinite(price) || price <= 0) {
       throw new Error('pricePathUsd must be a positive number.');
+    }
+    let settlementPayee = this.receiverAddress;
+    if (params.payee !== undefined && String(params.payee).trim()) {
+      try {
+        settlementPayee = ethers.getAddress(String(params.payee).trim());
+      } catch {
+        throw new Error('recipient must be a valid EVM address.');
+      }
     }
     let parsedTarget: URL;
     try {
@@ -1377,9 +2302,20 @@ class SynapseStateEngine {
       throw new Error(`pricePathUsd exceeds this agent's remaining budget of $${Math.max(0, key.totalBudgetPathUsd - key.currentSpentPathUsd).toFixed(4)}.`);
     }
 
-    const effectiveSigner = params.signerAddress 
-      ? ethers.getAddress(params.signerAddress) 
+    const matchedDomain = findMatchingAllowlistEntry(parsedTarget.toString(), key.whitelistedDomains);
+    if (!matchedDomain) {
+      throw new Error(`403 Forbidden: Target endpoint is not whitelisted for session key "${key.id}".`);
+    }
+
+    const effectiveSigner = params.signerAddress
+      ? ethers.getAddress(params.signerAddress)
       : this.getWalletForKey(key.id).address;
+    // Preparation is part of the selected spending policy. Do not let a
+    // caller make the relayer pre-register an unrelated signer or produce a
+    // credential that the subsequent settlement route will reject.
+    if (effectiveSigner.toLowerCase() !== key.sessionPublicKey.toLowerCase()) {
+      throw new Error('signerAddress must match the selected session key.');
+    }
 
     const channelId = params.channelId !== undefined ? Number(params.channelId) : key.channelId;
     if (!Number.isSafeInteger(channelId) || channelId < 0) {
@@ -1387,32 +2323,15 @@ class SynapseStateEngine {
     }
     let nextNonce = key.sequenceNonce + 1;
 
-    // In LIVE_TESTNET, get real on-chain nonce and ensure session key registered
+    // Preparation is read-only. A live session is registered only inside the
+    // authenticated settlement path, immediately before the payment attempt.
     if (this.networkMode === 'LIVE_TESTNET' && this.vaultBytecodePresent && this.relayerWallet) {
       try {
         const sessionConfig = await this.vaultContract.sessionKeys(effectiveSigner);
-        if (Number(sessionConfig.status) !== 1) {
-          console.log(`[Synapse402 Engine] Pre-registering session key ${effectiveSigner} on-chain...`);
-          const regBudget = BigInt(Math.round((key.totalBudgetPathUsd || 10) * 1e6));
-          const regMaxPerCall = BigInt(Math.round(Math.min(key.maxPerCallPathUsd || 10, key.totalBudgetPathUsd || 10) * 1e6));
-          const regMerkleRoot = (key.merkleRoot && key.merkleRoot !== '0x0' && key.merkleRoot.length === 66)
-            ? key.merkleRoot
-            : ethers.ZeroHash;
-          const regTx = await (this.vaultContract.connect(this.relayerWallet) as any).registerSessionKey(
-            effectiveSigner,
-            regMaxPerCall,
-            regBudget,
-            BigInt(Math.floor(Date.now() / 1000) + 86400 * 30),
-            regMerkleRoot,
-            { gasLimit: 1600000 }
-          );
-          await regTx.wait(1);
-          console.log(`[Synapse402 Engine] Pre-registered ${effectiveSigner}: ${regTx.hash}`);
-        }
         const onChainNonce = await this.vaultContract.lastNonce(effectiveSigner, channelId);
         nextNonce = Number(onChainNonce) + 1;
       } catch (err: any) {
-        console.warn(`[Synapse402 Engine] Pre-register probe warning: ${err?.message}`);
+        console.warn(`[Synapse402 Engine] On-chain session check notice: ${err?.message || err}`);
       }
     }
 
@@ -1421,9 +2340,12 @@ class SynapseStateEngine {
     const memoPrefix = `pacs.008|${key.agentName.slice(0, 8)}|${nonce2D}`;
     const memoBytes32 = ethers.encodeBytes32String(memoPrefix.slice(0, 31));
 
-    // Compute exact leaf hash matching SynapseVault.sol
-    const inner = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(['string'], [parsedTarget.toString()]));
-    const endpointLeaf = ethers.keccak256(inner);
+    // Use the same canonical StandardMerkleTree leaf as settlement and the
+    // provider SDK. This lowercases/trims the endpoint before the contract's
+    // double-keccak leaf calculation, so prepare and settle cannot disagree.
+    // Settlement signs the Merkle leaf for the approved route prefix. Keep
+    // prepare and settle bound to the same canonical endpoint hash.
+    const endpointLeaf = canonicalEndpointHash(matchedDomain);
 
     const validBefore = Math.floor(Date.now() / 1000) + 86400 * 30;
 
@@ -1457,7 +2379,7 @@ class SynapseStateEngine {
       sessionKey: effectiveSigner,
       channelId,
       nonce: nextNonce,
-      payee: this.receiverAddress,
+      payee: settlementPayee,
       amount: parsedAmount.toString(),
       endpointHash: endpointLeaf,
       memo: memoBytes32,
@@ -1480,6 +2402,7 @@ class SynapseStateEngine {
       targetUrl: parsedTarget.toString(),
       pricePathUsd: price,
       keyId: key.id,
+      payee: settlementPayee,
     };
   }
 
@@ -1500,21 +2423,61 @@ class SynapseStateEngine {
       validBefore?: number;
       asyncRelay?: boolean;
       evaluationOnly?: boolean;
+      /** One mission's maximum, layered over the reusable safety rule. */
+      jobBudgetPathUsd?: number;
+      /** Optional persistent job identifier used by streaming and mission ledgers. */
+      jobId?: string;
+      /** Recipient from the provider's 402 challenge; defaults to the first-party receiver. */
+      payee?: string;
+      asset?: string;
+      realm?: string;
+      /** Called when an async live relay fails after the HTTP response is sent. */
+      onAsyncFailure?: () => void;
     }
   ) {
     const requestStartT = performance.now();
-    let key: ScopedSessionKeyRecord | undefined;
-    if (keyId && keyId.trim()) {
-      const cleanKeyId = keyId.trim();
-      key = this.keys.get(cleanKeyId) || Array.from(this.keys.values()).find(k => k.id === cleanKeyId || k.agentId === cleanKeyId || k.agentName.toLowerCase() === cleanKeyId.toLowerCase());
-      if (!key) {
-        throw new Error(`404 Not Found: Session key "${cleanKeyId}" does not exist in SynapseVault.`);
+    let settlementPayee = this.receiverAddress;
+    if (options?.payee !== undefined && String(options.payee).trim()) {
+      try {
+        settlementPayee = ethers.getAddress(String(options.payee).trim());
+      } catch {
+        throw new Error('400 Bad Request: payment recipient must be a valid EVM address.');
       }
-    } else {
-      key = Array.from(this.keys.values()).find(k => k.status === 'ACTIVE') || Array.from(this.keys.values())[0];
+    }
+    if (options?.asset !== undefined && options.asset !== 'pathUSD') {
+      throw new Error('400 Bad Request: unsupported payment asset.');
+    }
+    if (options?.realm !== undefined && options.realm !== 'Tempo-L1') {
+      throw new Error('400 Bad Request: payment realm does not match Tempo-L1.');
+    }
+    const cleanKeyId = String(keyId || '').trim();
+    if (!cleanKeyId) {
+      throw new Error('400 Bad Request: keyId is required; settlement cannot silently choose another spending policy.');
+    }
+    let key = this.keys.get(cleanKeyId)
+      || Array.from(this.keys.values()).find(k => k.id === cleanKeyId || k.agentId === cleanKeyId || k.agentName.toLowerCase() === cleanKeyId.toLowerCase());
+    if (!key) {
+      throw new Error(`404 Not Found: Session key "${cleanKeyId}" does not exist in SynapseVault.`);
     }
     if (!key) {
       throw new Error('No active session key available in SynapseVault.');
+    }
+
+    // A mission must not spend from, or rewrite, the reusable safety rule.
+    // Work against an in-memory job policy instead. The persisted key and its
+    // cumulative usage remain the source of truth for recurring controls.
+    const requestedJobBudget = Number(options?.jobBudgetPathUsd);
+    if (Number.isFinite(requestedJobBudget) && requestedJobBudget > 0) {
+      const jobBudget = Math.min(requestedJobBudget, key.totalBudgetPathUsd);
+      key = {
+        ...key,
+        totalBudgetPathUsd: jobBudget,
+        maxPerCallPathUsd: Math.min(key.maxPerCallPathUsd, jobBudget),
+        currentSpentPathUsd: 0,
+        status: 'ACTIVE',
+        channelNonces: { ...(key.channelNonces || {}) },
+        whitelistedDomains: [...key.whitelistedDomains],
+      };
     }
 
     // Evaluation mode builds a complete trace without consuming the configured
@@ -1544,11 +2507,14 @@ class SynapseStateEngine {
 
     // 0. Idempotency Key Replay Guard
     const effectiveIdempotencyKey = options?.idempotencyKey ? String(options.idempotencyKey).trim() : undefined;
-    const cacheKey = effectiveIdempotencyKey ? `${key.id}:${effectiveIdempotencyKey}` : undefined;
+    // Evaluation and live calls must never share an idempotency cache entry.
+    // Otherwise a live receipt could be replayed by a later evaluation request.
+    const executionScope = options?.evaluationOnly === true ? 'evaluation' : 'live';
+    const cacheKey = effectiveIdempotencyKey ? `${key.id}:${executionScope}:${effectiveIdempotencyKey}` : undefined;
 
     if (cacheKey) {
       const cached = this.idempotencyCache.get(cacheKey);
-      if (cached && Date.now() - cached.timestamp < 120000) {
+      if (cached && Date.now() - cached.timestamp < IDEMPOTENCY_TTL_MS) {
         return {
           trace: { ...cached.trace, isIdempotentCacheHit: true },
           updatedKey: key,
@@ -1561,13 +2527,26 @@ class SynapseStateEngine {
 
       const inFlight = this.inFlightIdempotency.get(cacheKey);
       if (inFlight) {
-        return await inFlight;
+        const result = await inFlight;
+        return {
+          ...result,
+          trace: { ...result.trace, isIdempotentCacheHit: true },
+        };
       }
     }
 
-    const executeSettlement = async (): Promise<{ trace: MPPTraceRecord; updatedKey: ScopedSessionKeyRecord; blockHeight: number; status: 'SETTLED' | 'SIMULATED_PASS' | 'PENDING' | 'REJECTED' | 'VOIDED' }> => {
+    const executeSettlement = async (): Promise<{ trace: MPPTraceRecord; updatedKey: ScopedSessionKeyRecord; blockHeight: number; status: 'SETTLED' | 'FAILED' | 'SIMULATED_PASS' | 'PENDING' | 'REJECTED' | 'VOIDED' }> => {
     if (key.status !== 'ACTIVE') {
       throw new Error(`Key is in status ${key.status}. Payment authorization denied.`);
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (Number.isFinite(key.validBeforeTimestamp) && key.validBeforeTimestamp <= nowSec) {
+      if (!evaluationState) {
+        key.status = 'PAUSED';
+        this.persistState();
+      }
+      throw new Error(`403 Forbidden: Agent spending key expired at ${key.validBeforeTimestamp}. Payment blocked before debit.`);
     }
 
     const price = Number(pricePathUsd);
@@ -1592,13 +2571,14 @@ class SynapseStateEngine {
     }
 
     if (options?.validBefore !== undefined) {
-      const nowSec = Math.floor(Date.now() / 1000);
       if (Number(options.validBefore) <= nowSec) {
         throw new Error(`403 Forbidden: Agent spending key authorization has expired. Payment blocked before debit.`);
       }
     }
 
-    // Strict Whitelist Matching with exact hostname and subdomain boundary verification
+    // Strict allowlist matching. Providers can explicitly whitelist an apex
+    // domain when they want subdomains; a host-specific route must not silently
+    // authorize an attacker-controlled subdomain.
     const extractHostAndPath = (urlStr: string) => {
       try {
         const fullUrl = urlStr.startsWith('/')
@@ -1607,41 +2587,54 @@ class SynapseStateEngine {
         const u = new URL(fullUrl);
         return {
           hostname: u.hostname.toLowerCase(),
+          port: u.port || (u.protocol === 'https:' ? '443' : '80'),
           pathname: u.pathname.replace(/\/+$/, '') || '/',
+          search: u.search,
         };
       } catch {
         const clean = urlStr.replace(/^https?:\/\//i, '');
         const parts = clean.split('/');
-        const host = parts[0].split(':')[0].toLowerCase();
+        const hostParts = parts[0].split(':');
+        const host = hostParts[0].toLowerCase();
+        const port = hostParts[1] || '443';
         const path = '/' + parts.slice(1).join('/').replace(/\/+$/, '');
-        return { hostname: host, pathname: path };
+        return { hostname: host, port, pathname: path, search: '' };
       }
     };
 
     const targetInfo = extractHostAndPath(targetEndpoint);
+    const localGatewayPort = String(process.env.PORT || 3001);
+    // Local provider fixtures are served by this gateway only. Never treat an
+    // arbitrary localhost port (for example 8080 or the cloud metadata port)
+    // as an approved provider; that would turn the local exception into SSRF.
+    // Local demo providers are internal fixtures, but they are still a
+    // finite allowlist. Do not let an arbitrary localhost URL widen scope.
+    const localGatewayPrefixes = [
+      '/api/v1/data/',
+      '/api/v1/market/',
+      '/api/v1/due-diligence/',
+      '/api/v1/media/',
+      '/api/v1/test-provider-data',
+      '/api/v1/mock-500',
+      '/api/v1/surge-demo',
+      '/api/stream/inference',
+    ];
+    const isLocalGatewayTarget =
+      (targetInfo.hostname === '127.0.0.1' || targetInfo.hostname === 'localhost')
+      && targetInfo.port === localGatewayPort
+      && localGatewayPrefixes.some((prefix) => targetInfo.pathname === prefix.replace(/\/$/, '') || targetInfo.pathname.startsWith(prefix));
 
-    let matchedDomain = key.whitelistedDomains.find((d) => {
-      const whitelistInfo = extractHostAndPath(d);
-      const hostMatches =
-        targetInfo.hostname === whitelistInfo.hostname ||
-        targetInfo.hostname.endsWith('.' + whitelistInfo.hostname);
+    if (isBlockedOutboundUrl(targetEndpoint) && !isLocalGatewayTarget) {
+      throw new Error('403 Forbidden: private, localhost, link-local, or metadata provider targets are blocked.');
+    }
 
-      if (!hostMatches) return false;
+    let matchedDomain = findMatchingAllowlistEntry(targetEndpoint, key.whitelistedDomains);
 
-      if (whitelistInfo.pathname && whitelistInfo.pathname !== '/') {
-        return (
-          targetInfo.pathname === whitelistInfo.pathname ||
-          targetInfo.pathname.startsWith(whitelistInfo.pathname + '/')
-        );
-      }
-
-      return true;
-    });
-
-    if (!matchedDomain && (options?.allowDynamicWhitelist === true || options?.simulateFailure === true || targetInfo.hostname === '127.0.0.1' || targetInfo.hostname === 'localhost')) {
+    // Dynamic registration is an explicit evaluation/test escape hatch only.
+    // A local hostname or a Synapse402-owned hostname must never bypass the
+    // session Merkle allowlist by itself.
+    if (!matchedDomain && options?.allowDynamicWhitelist === true && (evaluationState || options?.simulateFailure === true)) {
       if (price <= key.maxPerCallPathUsd || options?.simulateFailure === true) {
-        key.whitelistedDomains.push(targetEndpoint);
-        key.merkleRoot = new MerkleTree(key.whitelistedDomains).getRoot();
         matchedDomain = targetEndpoint;
       }
     }
@@ -1682,7 +2675,6 @@ class SynapseStateEngine {
     const totalBudgetMicro = Math.round(key.totalBudgetPathUsd * 1e6);
 
     if (currentSpentMicro + priceMicro > totalBudgetMicro) {
-      if (!evaluationState) key.status = 'DEPLETED';
       throw new Error(`402 Payment Required: Session budget exceeded. Requested $${price.toFixed(4)}, available budget $${((totalBudgetMicro - currentSpentMicro) / 1e6).toFixed(4)}.`);
     }
 
@@ -1702,7 +2694,7 @@ class SynapseStateEngine {
     const merkleProof = mt.getProof(matchedDomain);
     const domainHash = mt.getLeafHash(matchedDomain);
 
-    // Advance Nonce & Fetch Live Block (Cached from initLiveSync to guarantee <15ms execution)
+    // Advance nonce and fetch the latest live block from the sync cache.
     if (this.blockHeight === 0) {
       try {
         const liveBlock = await this.provider.getBlockNumber();
@@ -1734,7 +2726,18 @@ class SynapseStateEngine {
       }
     }
 
-    const currentNonce = options?.nonce !== undefined ? Number(options.nonce) : (key.channelNonces[effectiveChannel] + 1);
+    // Evaluation traces must still carry a unique credential nonce when they
+    // are immediately replayed against a provider middleware. Evaluation
+    // state is restored after the run, so the reusable key's nonce cannot be
+    // advanced; derive a transient 48-bit nonce from the stable job request
+    // instead. Idempotent retries return the cached trace before this point.
+    const evaluationNonceSeed = effectiveIdempotencyKey || options?.jobId || `${Date.now()}:${requestStartT}`;
+    const transientEvaluationNonce = evaluationState
+      ? Math.max(1, Number(BigInt(ethers.keccak256(ethers.toUtf8Bytes(`${key.id}:${evaluationNonceSeed}`))) & 0x0000ffffffffffffn))
+      : undefined;
+    const currentNonce = options?.nonce !== undefined
+      ? Number(options.nonce)
+      : (transientEvaluationNonce ?? (key.channelNonces[effectiveChannel] + 1));
     key.channelNonces[effectiveChannel] = currentNonce;
     if (effectiveChannel === key.channelId) {
       key.sequenceNonce = currentNonce;
@@ -1768,7 +2771,7 @@ class SynapseStateEngine {
       sessionKey: effectiveSigner,
       channelId: effectiveChannel,
       nonce: currentNonce,
-      payee: this.receiverAddress,
+      payee: settlementPayee,
       amount: parsedAmount,
       endpointHash: domainHash,
       memo: memoBytes32,
@@ -1827,7 +2830,9 @@ class SynapseStateEngine {
       eip712StructHash = sha256('MPPAuthorization(address sessionKey,uint64 channelId,uint64 nonce,address payee,uint256 amount,bytes32 endpointHash,bytes32 memo,uint256 validBefore)');
     }
 
-    // SLA Void & Refund Handler: Zero Net Loss Guarantee for simulated failures OR real upstream failures
+    // Pre-settlement void handler for explicit gateway/provider failure
+    // simulations. The engine does not fetch an upstream resource before
+    // payment, so it must never claim a refund for an unobserved 5xx response.
     const executePreSettlementVoidRefund = (reason: string, details?: any) => {
       // 1. Rollback atomic reservation on key
       if (evaluationState) {
@@ -1851,7 +2856,7 @@ class SynapseStateEngine {
         latencyMs: Math.max(1, Math.round(performance.now() - requestStartT)),
         httpStatusBefore: 402,
         httpStatusAfter: 200,
-        challengeHeader: `MPP realm="Tempo-L1", asset="pathUSD", minPrice="${price}", recipient="${this.receiverAddress}"`,
+        challengeHeader: `MPP realm="Tempo-L1", asset="pathUSD", minPrice="${price}", recipient="${settlementPayee}"`,
         authAuthorizationHeader: `MPP-EIP712 signer="${wallet.address}", nonce="${nonce2D}", max="${key.maxPerCallPathUsd}"`,
         eip712Signature: sigHex,
         // A pre-settlement void never submits an on-chain transaction.
@@ -1859,6 +2864,7 @@ class SynapseStateEngine {
         txHash: '',
         executionMode: 'RESILIENT_SANDBOX',
         status: 'VOIDED',
+        providerDataStatus: 'EVALUATION_FIXTURE',
         tempoTxType: undefined,
         nonce2D,
         memoPayload: `SLA_REFUND:${reason.slice(0, 30)}:${cleanTargetDomain}:REFUND_${price}_pathUSD`,
@@ -1884,13 +2890,13 @@ class SynapseStateEngine {
           details: details || null,
         },
         sanctionsCompliance: {
-          status: 'CLEARED',
-          policy: 'OFAC/AML Sanctions Screening (Cleared)',
+          status: 'UNVERIFIED',
+          policy: 'Example compliance check — live sanctions lookup not run',
           checkedAt: new Date().toISOString(),
         },
         complianceVerification: {
-          status: 'CLEARED',
-          policy: 'OFAC/AML Sanctions Screening (Cleared)',
+          status: 'UNVERIFIED',
+          policy: 'Example compliance check — live sanctions lookup not run',
           checkedAt: new Date().toISOString(),
         },
       };
@@ -1907,86 +2913,19 @@ class SynapseStateEngine {
 
     // 1. Explicit Simulated Failure check (for UI Fault Injection & Tests)
     if (options?.simulateFailure) {
-      return executePreSettlementVoidRefund('500 Internal Server Error (Simulated Upstream Failure)');
+      return executePreSettlementVoidRefund('Explicit provider-failure signal (pre-settlement simulation)');
     }
 
-    // 2. Real HTTP Reverse Proxy Execution: Attempt live network fetch if external URL
+    // 2. Payment-first semantics: this gateway issues the signed payment
+    // credential and the agent performs the provider request once afterward.
+    // The gateway deliberately does not fetch targetEndpoint itself; doing so
+    // before settlement could leak a paid resource, and doing it again after
+    // settlement would execute POST/action providers twice.
     let liveProxyPayload: any = null;
-    const isSyntheticHost = cleanTargetDomain.endsWith('.feed') || 
-                            cleanTargetDomain.endsWith('.dex') || 
-                            cleanTargetDomain.endsWith('.options') || 
-                            cleanTargetDomain.endsWith('.network') || 
-                            cleanTargetDomain.endsWith('.quant') || 
-                            cleanTargetDomain.endsWith('.formal') || 
-                            cleanTargetDomain.endsWith('.tempo') ||
-                            cleanTargetDomain.includes('deepseek') ||
-                            cleanTargetDomain.includes('fin-depth') ||
-                            cleanTargetDomain.includes('binance') ||
-                            cleanTargetDomain.includes('academic') ||
-                            cleanTargetDomain.includes('licensing') ||
-                            cleanTargetDomain.includes('sandbox') ||
-                            cleanTargetDomain.includes('stealth') ||
-                            cleanTargetDomain.includes('voice') ||
-                            cleanTargetDomain.includes('flights') ||
-                            cleanTargetDomain.includes('identity') ||
-                            cleanTargetDomain.includes('sec.gov') ||
-                            cleanTargetDomain.includes('sec-edgar') ||
-                            cleanTargetDomain.includes('sec-data-mirror') ||
-                            cleanTargetDomain.includes('vector-index') ||
-                            cleanTargetDomain.includes('scrape-proxy') ||
-                            cleanTargetDomain.includes('deguard-audit') ||
-                            cleanTargetDomain.includes('secaudit') ||
-                            cleanTargetDomain.includes('crypto-skew');
-
-    const fullTargetUrl = targetEndpoint.startsWith('/')
-      ? `http://127.0.0.1:${process.env.PORT || 3001}${targetEndpoint}`
-      : targetEndpoint;
-
-    if (!isSyntheticHost && !options?.asyncRelay && (fullTargetUrl.startsWith('http://') || fullTargetUrl.startsWith('https://'))) {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      let upstreamFailed = false;
-      let upstreamFailureReason = '';
-
-      try {
-        const resp = await fetch(fullTargetUrl, {
-          method: endpointCategory === 'Academic Graph' || endpointCategory === 'Bytecode Audit' ? 'POST' : 'GET',
-          signal: controller.signal,
-          headers: {
-            'Accept': 'application/json, text/plain, */*',
-            'User-Agent': 'Synapse402-Gateway/1.0 (Tempo-MPP)',
-            'X-Tempo-MPP-Signature': sigHex,
-            'X-Tempo-Nonce-2D': nonce2D,
-            'X-Tempo-Cost-PathUSD': String(price),
-          },
-        });
-        clearTimeout(timeoutId);
-
-        if (resp.status >= 400) {
-          upstreamFailed = true;
-          upstreamFailureReason = `Upstream HTTP ${resp.status} Error (${targetEndpoint})`;
-        } else {
-          const rawText = await resp.text();
-          try {
-            liveProxyPayload = JSON.parse(rawText);
-          } catch {
-            liveProxyPayload = { status: resp.status, body: rawText.slice(0, 400) };
-          }
-        }
-      } catch (fetchErr: any) {
-        clearTimeout(timeoutId);
-        upstreamFailed = true;
-        upstreamFailureReason = fetchErr?.name === 'AbortError'
-          ? `Upstream Request Timeout (>5000ms: ${targetEndpoint})`
-          : `Upstream Network Failure: ${fetchErr?.message || 'Connection refused'} (${targetEndpoint})`;
-      }
-
-      if (upstreamFailed) {
-        // Zero Net Loss SLA Protection: Real upstream failed to fulfill -> instant pre-settlement void and 100% refund
-        return executePreSettlementVoidRefund(upstreamFailureReason);
-      }
-    }
-
+    // Payment confirmation and provider-data provenance are independent facts.
+    // A Tempo receipt can be real even when this hackathon uses a fixture for
+    // the provider payload; callers must be able to tell those cases apart.
+    let providerDataStatus: 'EVALUATION_FIXTURE' | 'UPSTREAM_RESPONSE' = 'EVALUATION_FIXTURE';
     key.lastActive = 'Just now';
 
     // A showcase request may inspect the full payment plan without spending the
@@ -1997,15 +2936,9 @@ class SynapseStateEngine {
       && Boolean(this.relayerWallet)
       && options?.evaluationOnly !== true;
 
-    // Commit state using exact integer micro-units ONLY AFTER upstream deliverable verified
-    // Protocol fee: 0.1% routing fee with 1 micro-unit ($0.000001) minimum floor for any non-zero billable micro-transaction
+    // Metrics are committed only after a confirmed live receipt. A pending
+    // relay is not revenue and must not inflate provider counters.
     const routerFeeMicro = priceMicro > 0 ? Math.max(1, Math.round(priceMicro * 0.001)) : 0;
-    if (liveSettlementEnabled) {
-      this.protocolRevenue = Math.round((this.protocolRevenue * 1e6) + routerFeeMicro) / 1e6;
-      this.totalVolume = Math.round((this.totalVolume * 1e6) + priceMicro) / 1e6;
-      this.vaultTvl = Math.max(0, Math.round((this.vaultTvl * 1e6) - priceMicro)) / 1e6;
-      this.totalSettlements += 1;
-    }
 
     // High-Fidelity Data Provider Fallback for Financial AI Agents
     if (!liveProxyPayload) {
@@ -2027,7 +2960,8 @@ class SynapseStateEngine {
           savingsVsSubscription: 'Replaced $20/mo OpenAI/DeepSeek plan with a $0.0008 on-demand call',
           checksum: sha256(`${targetEndpoint}:${this.blockHeight}`),
           timestamp: Date.now(),
-          tempoVerified: true,
+          upstreamVerified: false,
+          paymentConfirmed: false,
         };
       } else if (cleanTargetDomain.includes('vision') || cleanTargetDomain.includes('remove-bg')) {
         liveProxyPayload = {
@@ -2040,7 +2974,8 @@ class SynapseStateEngine {
           savingsVsSubscription: 'Replaced monthly graphic design subscription with a $0.0020 on-demand micro-call',
           checksum: sha256(`${targetEndpoint}:${this.blockHeight}`),
           timestamp: Date.now(),
-          tempoVerified: true,
+          upstreamVerified: false,
+          paymentConfirmed: false,
         };
       } else if (cleanTargetDomain.includes('news') || cleanTargetDomain.includes('article') || cleanTargetDomain.includes('dispatch')) {
         liveProxyPayload = {
@@ -2052,7 +2987,8 @@ class SynapseStateEngine {
           savingsVsSubscription: 'Bypassed $40/mo publisher paywall for single-article read',
           checksum: sha256(`${targetEndpoint}:${this.blockHeight}`),
           timestamp: Date.now(),
-          tempoVerified: true,
+          upstreamVerified: false,
+          paymentConfirmed: false,
         };
       } else if (cleanTargetDomain.includes('translate') || cleanTargetDomain.includes('polyglot')) {
         liveProxyPayload = {
@@ -2064,7 +3000,8 @@ class SynapseStateEngine {
           savingsVsSubscription: 'Zero human login. Replaced $50/mo enterprise translation plan',
           checksum: sha256(`${targetEndpoint}:${this.blockHeight}`),
           timestamp: Date.now(),
-          tempoVerified: true,
+          upstreamVerified: false,
+          paymentConfirmed: false,
         };
       } else if (cleanTargetDomain.includes('sandbox') || cleanTargetDomain.includes('containers')) {
         liveProxyPayload = {
@@ -2077,7 +3014,8 @@ class SynapseStateEngine {
           savingsVsSubscription: 'Replaced $50/mo AWS server base cost with ephemeral $0.0050 execution',
           checksum: sha256(`${targetEndpoint}:${this.blockHeight}`),
           timestamp: Date.now(),
-          tempoVerified: true,
+          upstreamVerified: false,
+          paymentConfirmed: false,
         };
       } else if (cleanTargetDomain.includes('scrape') || cleanTargetDomain.includes('crawler')) {
         liveProxyPayload = {
@@ -2089,7 +3027,8 @@ class SynapseStateEngine {
           savingsVsSubscription: 'Replaced $100/mo BrightData scraper subscription',
           checksum: sha256(`${targetEndpoint}:${this.blockHeight}`),
           timestamp: Date.now(),
-          tempoVerified: true,
+          upstreamVerified: false,
+          paymentConfirmed: false,
         };
       } else if (cleanTargetDomain.includes('voice') || cleanTargetDomain.includes('synthesize')) {
         liveProxyPayload = {
@@ -2101,7 +3040,8 @@ class SynapseStateEngine {
           savingsVsSubscription: 'Replaced fixed monthly voice tier with $0.0040 on-demand micro-call',
           checksum: sha256(`${targetEndpoint}:${this.blockHeight}`),
           timestamp: Date.now(),
-          tempoVerified: true,
+          upstreamVerified: false,
+          paymentConfirmed: false,
         };
       } else if (cleanTargetDomain.includes('flight') || cleanTargetDomain.includes('fares')) {
         liveProxyPayload = {
@@ -2114,47 +3054,57 @@ class SynapseStateEngine {
           savingsVsSubscription: 'Replaced $200/mo Amadeus GDS terminal licensing fee',
           checksum: sha256(`${targetEndpoint}:${this.blockHeight}`),
           timestamp: Date.now(),
-          tempoVerified: true,
+          upstreamVerified: false,
+          paymentConfirmed: false,
         };
       } else if (cleanTargetDomain.includes('identity') || cleanTargetDomain.includes('verify')) {
         liveProxyPayload = {
-          screeningService: 'Autonomous KYC & OFAC Sanctions Engine',
-          riskScore: 0.015,
+          screeningService: 'Example compliance response (sample provider)',
+          riskScore: 'Example score (not a live screening)',
           pepMatch: false,
-          interpolRedNotice: 'NEGATIVE',
+          interpolRedNotice: 'Example result (not a live lookup)',
           isoRemittanceAuditDigest: memoBytes32,
           verifiedFee: `$${price.toFixed(4)} USD`,
           savingsVsSubscription: 'Replaced $150/mo Persona/Trulioo base contract with $0.0050 verification',
           checksum: sha256(`${targetEndpoint}:${this.blockHeight}`),
           timestamp: Date.now(),
-          tempoVerified: true,
+          upstreamVerified: false,
+          paymentConfirmed: false,
         };
-      } else if (cleanTargetDomain.includes('binance') || cleanTargetDomain.includes('depth') || cleanTargetDomain.includes('orderbook') || targetEndpoint.includes('aapl')) {
-        const basePrice = cleanTargetDomain.includes('aapl') ? 172.50 : 64250.00;
+      } else if (cleanTargetDomain.includes('binance') || cleanTargetDomain.includes('depth') || cleanTargetDomain.includes('orderbook') || targetEndpoint.toLowerCase().includes('aapl') || targetEndpoint.toLowerCase().includes('sol')) {
+        const isSol = cleanTargetDomain.includes('sol') || targetEndpoint.toLowerCase().includes('sol');
+        const isAapl = cleanTargetDomain.includes('aapl') || targetEndpoint.toLowerCase().includes('aapl');
+        const basePrice = isSol ? 148.50 : (isAapl ? 172.50 : 64250.00);
+        const symbol = isSol ? 'SOL/USDT' : (isAapl ? 'AAPL/USD' : 'BTC/pathUSD');
         liveProxyPayload = {
-          symbol: cleanTargetDomain.includes('aapl') ? 'AAPL/USD' : 'BTC/pathUSD',
+          symbol,
+          baseAsset: isSol ? 'SOL' : (isAapl ? 'AAPL' : 'BTC'),
+          quoteAsset: isSol ? 'USDT' : (isAapl ? 'USD' : 'pathUSD'),
           sequence: key.sequenceNonce,
           bids: [
-            [(basePrice - 0.05).toFixed(2), "12.450"],
-            [(basePrice - 0.10).toFixed(2), "28.110"],
-            [(basePrice - 0.25).toFixed(2), "105.400"]
+            [(basePrice - 0.05).toFixed(2), isSol ? "124.50" : "12.450"],
+            [(basePrice - 0.10).toFixed(2), isSol ? "280.10" : "28.110"],
+            [(basePrice - 0.25).toFixed(2), isSol ? "1050.40" : "105.400"]
           ],
           asks: [
-            [(basePrice + 0.05).toFixed(2), "14.200"],
-            [(basePrice + 0.10).toFixed(2), "31.850"],
-            [(basePrice + 0.25).toFixed(2), "98.700"]
+            [(basePrice + 0.05).toFixed(2), isSol ? "142.00" : "14.200"],
+            [(basePrice + 0.10).toFixed(2), isSol ? "318.50" : "31.850"],
+            [(basePrice + 0.25).toFixed(2), isSol ? "987.00" : "98.700"]
           ],
           checksum: sha256(`${targetEndpoint}:${this.blockHeight}`),
           timestamp: Date.now(),
-          tempoVerified: true,
+          upstreamVerified: false,
+          paymentConfirmed: false,
+          providerDataStatus: 'EVALUATION_FIXTURE',
         };
       } else if (cleanTargetDomain.includes('sec') || cleanTargetDomain.includes('edgar')) {
         liveProxyPayload = {
           filingType: '10-K',
           company: 'Technology Holdings Inc.',
-          item1A_RiskSummary: 'Material risk assessment: 0 sanctions overlap under OFAC sanctions registry, supply chain variance -14%.',
+          item1A_RiskSummary: 'Example normalized filing field; no live sanctions or market verification is claimed.',
           isoDigest: memoBytes32,
-          tempoVerified: true,
+          upstreamVerified: false,
+          paymentConfirmed: false,
         };
       } else if (cleanTargetDomain.includes('academic') || cleanTargetDomain.includes('licensing') || cleanTargetDomain.includes('paper')) {
         liveProxyPayload = {
@@ -2165,7 +3115,8 @@ class SynapseStateEngine {
           licenseType: 'Single-Agent Read Micro-License',
           verifiedFee: `$${price.toFixed(4)} USD`,
           savingsVsSubscription: 'Bypassed $35/mo publisher paywall for single-agent read',
-          tempoVerified: true,
+          upstreamVerified: false,
+          paymentConfirmed: false,
         };
       } else {
         liveProxyPayload = {
@@ -2173,9 +3124,19 @@ class SynapseStateEngine {
           status: 200,
           deliveredAt: new Date().toISOString(),
           bytesDelivered: 1024,
-          tempoVerified: true,
+          upstreamVerified: false,
+          paymentConfirmed: false,
         };
       }
+    }
+
+    if (liveProxyPayload && typeof liveProxyPayload === 'object') {
+      liveProxyPayload = {
+        ...liveProxyPayload,
+        providerDataStatus,
+        upstreamVerified: false,
+        paymentConfirmed: false,
+      };
     }
 
     // Dual-Mode Execution: Attempt live on-chain settlement if in LIVE_TESTNET mode
@@ -2219,24 +3180,29 @@ class SynapseStateEngine {
       liveProxyPayload = {
         ...evaluationPayload,
         evaluationOnly: true,
-        tempoVerified: false,
+        paymentConfirmed: false,
+        upstreamVerified: false,
         executionMode: actualExecutionMode === 'LIVE_TESTNET' ? 'LIVE_TESTNET_PENDING_CONFIRMATION' : 'RESILIENT_SANDBOX',
       };
     }
 
+    const matchedProvider = this.endpoints.find(e => targetEndpoint.includes(e.endpointUrl) || e.endpointUrl.includes(targetEndpoint));
+    const providerName = matchedProvider?.title || 'Demo provider';
     const trace: MPPTraceRecord = {
       id: `trace_${Date.now()}_${key.sequenceNonce}`,
       timestamp: new Date().toISOString(),
       blockNumber: this.blockHeight,
       agentId: key.agentId,
       agentName: key.agentName,
+      jobId: options?.jobId,
+      providerName,
       targetEndpoint: sanitizedTargetEndpoint,
       method: endpointCategory === 'Academic Graph' || endpointCategory === 'Bytecode Audit' ? 'POST' : 'GET',
       costPathUsd: price,
       latencyMs: Math.max(1, Math.round(performance.now() - requestStartT)),
       httpStatusBefore: 402,
       httpStatusAfter: 200,
-      challengeHeader: `MPP realm="Tempo-L1", asset="pathUSD", minPrice="${price}", recipient="${this.receiverAddress}"`,
+      challengeHeader: `MPP realm="Tempo-L1", asset="pathUSD", minPrice="${price}", recipient="${settlementPayee}"`,
       authAuthorizationHeader: `MPP-EIP712 signer="${wallet.address}", nonce="${nonce2D}", max="${key.maxPerCallPathUsd}"`,
       eip712Signature: sigHex,
       // A sandbox evaluation has no blockchain transaction. Keep this empty so
@@ -2246,6 +3212,7 @@ class SynapseStateEngine {
       txHash: actualExecutionMode === 'LIVE_TESTNET' && !options?.asyncRelay ? actualTxHash : '',
       executionMode: actualExecutionMode,
       status: initialStatus as any,
+      providerDataStatus,
       tempoTxType: actualExecutionMode === 'LIVE_TESTNET' ? '0x76' : undefined,
       nonce2D,
       memoPayload: `MPP:${key.agentName}:${cleanTargetDomain}:${price}:pathUSD`,
@@ -2262,48 +3229,83 @@ class SynapseStateEngine {
       domainHash,
       eip712DomainSeparator,
       eip712StructHash,
+      mppCredential: {
+        signer: effectiveSigner,
+        channelId: effectiveChannel,
+        nonce: currentNonce,
+        payee: settlementPayee,
+        amountMicro: parsedAmount.toString(),
+        // Sign the canonical allowlisted route. The provider middleware accepts
+        // child paths under that route, while the endpoint hash and URL stay
+        // internally consistent for EIP-712 verification.
+        endpoint: matchedDomain || targetEndpoint,
+        endpointHash: domainHash,
+        memo: memoBytes32,
+        validBefore: options?.validBefore ? Number(options.validBefore) : key.validBeforeTimestamp,
+        chainId: this.chainId,
+        verifyingContract: this.vaultAddress,
+      },
       liveProxyPayload,
       sanctionsCompliance: {
-        status: 'CLEARED',
-        policy: 'OFAC/AML Sanctions Screening (Cleared)',
+        status: 'UNVERIFIED',
+        policy: 'Example compliance check — live sanctions lookup not run',
         checkedAt: new Date().toISOString(),
       },
       complianceVerification: {
-        status: 'CLEARED',
-        policy: 'OFAC/AML Sanctions Screening (Cleared)',
+        status: 'UNVERIFIED',
+        policy: 'Example compliance check — live sanctions lookup not run',
         checkedAt: new Date().toISOString(),
       },
     };
 
-    if (liveSettlementEnabled) {
+      if (liveSettlementEnabled) {
       const executeRelayerSettlement = async () => {
-        // Auto-register sessionKey if not ACTIVE on-chain
+        // Register only a never-seen session. Existing sessions must use the
+        // spend-preserving root update path below, even when paused/depleted.
+        let settlementMerkleProof = merkleProof;
+        let settlementDomainHash = domainHash;
+        let settlementEndpoint = matchedDomain || targetEndpoint;
         try {
           const sessionConfig = await this.vaultContract.sessionKeys(effectiveSigner);
           const regBudget = BigInt(Math.round((key.totalBudgetPathUsd || 10) * 1e6));
           const regMaxPerCall = BigInt(Math.round(Math.min(key.maxPerCallPathUsd || 10, key.totalBudgetPathUsd || 10) * 1e6));
           const trueMerkleRoot = new MerkleTree(key.whitelistedDomains).getRoot();
           key.merkleRoot = trueMerkleRoot;
-          const regMerkleRoot = (trueMerkleRoot && trueMerkleRoot !== '0x0' && trueMerkleRoot.length === 66)
-            ? trueMerkleRoot
-            : ethers.ZeroHash;
-          const needsSync = Number(sessionConfig.status) !== 1 || sessionConfig.merkleRoot !== regMerkleRoot;
+          const regMerkleRoot = trueMerkleRoot;
+          let sessionStatus = Number(sessionConfig.status);
 
-          if (needsSync) {
-            console.log(`[Synapse402 Engine] Syncing session key ${effectiveSigner} on-chain in SynapseVault (Root: ${regMerkleRoot})...`);
-            const regTx = await (this.vaultContract.connect(this.relayerWallet) as any).registerSessionKey(
+          if (sessionStatus === 0) {
+            console.log(`[Synapse402 Engine] Registering new session key ${effectiveSigner} on-chain in SynapseVault...`);
+            const adminWallet = await this.getVaultAdminWallet();
+            const regTx = await (this.vaultContract.connect(adminWallet) as any).registerSessionKey(
               effectiveSigner,
               regMaxPerCall,
               regBudget,
-              BigInt(Math.floor(Date.now() / 1000) + 86400 * 30),
+              BigInt(Math.floor(Date.now() / 1000) + 86400 * 60),
               regMerkleRoot,
               { gasLimit: 1600000 }
             );
             await regTx.wait(1);
-            console.log(`[Synapse402 Engine] Auto-synced ${effectiveSigner} in SynapseVault: ${regTx.hash}`);
+            console.log(`[Synapse402 Engine] Registered ${effectiveSigner} in SynapseVault: ${regTx.hash}`);
+            sessionStatus = 1;
+            settlementMerkleProof = merkleProof;
+          } else if (sessionStatus !== 1) {
+            throw new Error(`The deployed session is not ACTIVE (status ${sessionStatus}); settlement is blocked.`);
+          } else if (String(sessionConfig.merkleRoot).toLowerCase() !== String(regMerkleRoot).toLowerCase()) {
+            console.log(`[Synapse402 Engine] Updating session merkle root on-chain for ${effectiveSigner}...`);
+            const adminWallet = await this.getVaultAdminWallet();
+            const updateTx = await (this.vaultContract.connect(adminWallet) as any).updateSessionMerkleRoot(
+              effectiveSigner,
+              regMerkleRoot,
+              { gasLimit: 500000 }
+            );
+            await updateTx.wait(1);
+            settlementMerkleProof = merkleProof;
           }
         } catch (regErr: any) {
-          console.warn(`[Synapse402 Engine] Session key check/register notice: ${regErr?.message}`);
+          const reason = String(regErr?.message || regErr || 'unknown policy sync error');
+          console.error(`[Synapse402 Engine] Live policy sync failed; refusing settlement: ${reason}`);
+          throw new Error(`Live settlement aborted because the deployed session policy could not be synchronized: ${reason}`);
         }
 
         let executionNonce = BigInt(currentNonce);
@@ -2328,9 +3330,9 @@ class SynapseStateEngine {
             sessionKey: effectiveSigner,
             channelId: effectiveChannel,
             nonce: executionNonce,
-            payee: this.receiverAddress,
+            payee: settlementPayee,
             amount: parsedAmount,
-            endpointHash: domainHash,
+            endpointHash: settlementDomainHash,
             memo: memoBytes32,
             validBefore: options?.validBefore ? Number(options.validBefore) : key.validBeforeTimestamp,
           };
@@ -2348,10 +3350,10 @@ class SynapseStateEngine {
           sessionKey: effectiveSigner,
           channelId: BigInt(effectiveChannel),
           nonce: executionNonce,
-          payee: this.receiverAddress,
+          payee: settlementPayee,
           amount: parsedAmount,
-          endpoint: matchedDomain || targetEndpoint,
-          merkleProof: merkleProof || [],
+          endpoint: settlementEndpoint,
+          merkleProof: settlementMerkleProof || [],
           memo: memoBytes32,
           deadline: BigInt(options?.validBefore ? Number(options.validBefore) : key.validBeforeTimestamp),
           signature: liveSig,
@@ -2365,13 +3367,31 @@ class SynapseStateEngine {
         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('On-chain execution timeout on Tempo L1')), 120000));
         const res: any = await Promise.race([txPromise, timeoutPromise]);
         if (res?.tx?.hash && res?.receipt?.status === 1) {
+          const receiptProof = await this.verifyTempoPaymentReceipt(
+            res.tx.hash,
+            settlementPayee,
+            parsedAmount,
+          );
+          if (!receiptProof.verified) {
+            throw new Error(`INVALID_PAYMENT_PROOF: ${receiptProof.reason || 'TIP-20 Transfer proof did not match.'}`);
+          }
           actualTxHash = res.tx.hash;
           actualExecutionMode = 'LIVE_TESTNET';
           trace.txHash = res.tx.hash;
+          trace.explorerUrl = tempoTransactionUrl(res.tx.hash);
           trace.executionMode = 'LIVE_TESTNET';
           trace.status = 'SETTLED';
+          trace.receiptVerified = true;
           if (trace.liveProxyPayload && typeof trace.liveProxyPayload === 'object') {
-            trace.liveProxyPayload = { ...trace.liveProxyPayload, tempoVerified: true, executionMode: 'LIVE_TESTNET' };
+            trace.liveProxyPayload = {
+              ...trace.liveProxyPayload,
+              txHash: res.tx.hash,
+              explorerUrl: tempoTransactionUrl(res.tx.hash),
+              paymentConfirmed: true,
+              receiptVerified: true,
+              upstreamVerified: trace.liveProxyPayload.upstreamVerified === true,
+              executionMode: 'LIVE_TESTNET',
+            };
           }
           console.log(`[Synapse402 Engine] ✓ Confirmed On-Chain Settlement: ${actualTxHash} (Block: ${res.receipt.blockNumber}, Gas: ${res.receipt.gasUsed})`);
           try {
@@ -2388,25 +3408,47 @@ class SynapseStateEngine {
       };
 
       if (options?.asyncRelay) {
-        // High-speed async relay for 1,000+ bot bursts:
-        // Returns HTTP 200 in <15ms while dispatchRelayerTx drains sequentially on Tempo L1 in background
+        // Async relay for burst traffic. The response stays PENDING until the
+        // background queue confirms or rejects the Tempo transaction.
         this.dispatchRelayerTx(async () => {
           try {
             await executeRelayerSettlement();
+            if (trace.executionMode === 'LIVE_TESTNET' && trace.status === 'SETTLED' && trace.receiptVerified === true && isVerifiedTxHash(trace.txHash)) {
+              this.protocolRevenue = Math.round((this.protocolRevenue * 1e6) + routerFeeMicro) / 1e6;
+              this.totalVolume = Math.round((this.totalVolume * 1e6) + priceMicro) / 1e6;
+              this.vaultTvl = Math.max(0, Math.round((this.vaultTvl * 1e6) - priceMicro)) / 1e6;
+              this.totalSettlements += 1;
+              const confirmedProvider = this.endpoints.find((endpoint) =>
+                String(endpoint.endpointUrl || '').includes(String(targetEndpoint || ''))
+                || String(targetEndpoint || '').includes(String(endpoint.endpointUrl || '')),
+              );
+              if (confirmedProvider) {
+                confirmedProvider.totalCalls = (confirmedProvider.totalCalls || 0) + 1;
+                confirmedProvider.totalEarnedUsd = Number(((confirmedProvider.totalEarnedUsd || 0) + pricePathUsd).toFixed(4));
+              }
+              this.persistState();
+            }
           } catch (err: any) {
             console.error(`[Synapse402 Engine] Background async relay failed: ${err?.message}`);
-            // Resilient rollback of budget, revenue, and metrics on background failure
+            try { options?.onAsyncFailure?.(); } catch (callbackErr: any) {
+              console.warn(`[Synapse402 Engine] Async failure callback notice: ${callbackErr?.message || callbackErr}`);
+            }
+            // Release the reserved key budget when the background relay fails.
             key.currentSpentPathUsd = Math.max(0, Math.round(key.currentSpentPathUsd * 1e6 - priceMicro) / 1e6);
             if (key.currentSpentPathUsd < key.totalBudgetPathUsd) {
               key.status = 'ACTIVE';
             }
-            this.protocolRevenue = Math.max(0, Math.round((this.protocolRevenue * 1e6) - routerFeeMicro) / 1e6);
-            this.totalVolume = Math.max(0, Math.round((this.totalVolume * 1e6) - priceMicro) / 1e6);
-            this.vaultTvl = Math.round((this.vaultTvl * 1e6) + priceMicro) / 1e6;
-            this.totalSettlements = Math.max(0, this.totalSettlements - 1);
+            // These aggregate metrics are updated only after a confirmed
+            // receipt. A failed async relay therefore has nothing to roll
+            // back; subtracting here would erase an earlier real settlement.
             trace.executionMode = 'FAILED_REVERT';
-            trace.status = 'REJECTED';
+            trace.txHash = '';
+            trace.receiptVerified = false;
+            trace.status = String(err?.message || '').includes('INVALID_PAYMENT_PROOF') ? 'FAILED' : 'REJECTED';
             trace.httpStatusAfter = 500;
+            trace.liveProxyPayload = trace.liveProxyPayload && typeof trace.liveProxyPayload === 'object'
+              ? { ...trace.liveProxyPayload, paymentConfirmed: false, receiptVerified: false, ...(trace.status === 'FAILED' ? { paymentError: 'INVALID_PAYMENT_PROOF' } : {}), executionMode: 'FAILED_REVERT' }
+              : trace.liveProxyPayload;
             this.persistState();
           }
         });
@@ -2417,25 +3459,54 @@ class SynapseStateEngine {
         } catch (err: any) {
           const rawErr = String(err?.message || 'Transaction reverted');
           const cleanErr = (() => {
-            if (err?.reason) return String(err.reason);
-            if (err?.shortMessage) return String(err.shortMessage);
+            const nestedReason = err?.reason
+              || err?.shortMessage
+              || err?.info?.error?.message
+              || err?.error?.message
+              || err?.cause?.reason
+              || err?.cause?.shortMessage;
+            if (nestedReason) return String(nestedReason).slice(0, 180);
             if (rawErr.includes('INVALID_2D_NONCE')) return 'Tempo L1 2D Nonce mismatch on-chain';
             if (rawErr.includes('EndpointNotWhitelisted')) return 'Target endpoint not whitelisted in Merkle root';
             if (rawErr.includes('CALL_EXCEPTION') || rawErr.includes('reverted')) return 'Tempo L1 on-chain settlement reverted';
             return rawErr.slice(0, 100);
           })();
           console.error(`[Synapse402 Engine] On-chain settlement error: ${cleanErr}`);
+          if (rawErr.includes('INVALID_PAYMENT_PROOF')) {
+            // The transaction may be mined while the payment proof is wrong
+            // (for example a blocked or redirected transfer). Surface a
+            // durable failed result; never turn that hash into a receipt.
+            trace.txHash = '';
+            trace.explorerUrl = undefined;
+            trace.executionMode = 'FAILED_REVERT';
+            trace.status = 'FAILED';
+            trace.receiptVerified = false;
+            trace.httpStatusAfter = 500;
+            trace.liveProxyPayload = trace.liveProxyPayload && typeof trace.liveProxyPayload === 'object'
+              ? { ...trace.liveProxyPayload, paymentConfirmed: false, receiptVerified: false, paymentError: 'INVALID_PAYMENT_PROOF', executionMode: 'FAILED_REVERT' }
+              : { paymentConfirmed: false, receiptVerified: false, paymentError: 'INVALID_PAYMENT_PROOF', executionMode: 'FAILED_REVERT' };
+          } else {
+            // Do not leave the deterministic placeholder hash and initial
+            // SETTLED status on a live trace when the relay itself failed.
+            trace.txHash = '';
+            trace.explorerUrl = undefined;
+            trace.executionMode = 'FAILED_REVERT';
+            trace.status = 'FAILED';
+            trace.receiptVerified = false;
+            trace.httpStatusAfter = 500;
+            trace.liveProxyPayload = trace.liveProxyPayload && typeof trace.liveProxyPayload === 'object'
+              ? { ...trace.liveProxyPayload, paymentConfirmed: false, receiptVerified: false, executionMode: 'FAILED_REVERT' }
+              : { paymentConfirmed: false, receiptVerified: false, executionMode: 'FAILED_REVERT' };
+          }
           if (this.networkMode === 'LIVE_TESTNET') {
             key.currentSpentPathUsd = Math.max(0, Math.round(key.currentSpentPathUsd * 1e6 - priceMicro) / 1e6);
             if (key.currentSpentPathUsd < key.totalBudgetPathUsd) {
               key.status = 'ACTIVE';
             }
-            this.protocolRevenue = Math.max(0, Math.round((this.protocolRevenue * 1e6) - routerFeeMicro) / 1e6);
-            this.totalVolume = Math.max(0, Math.round((this.totalVolume * 1e6) - priceMicro) / 1e6);
-            this.vaultTvl = Math.round((this.vaultTvl * 1e6) + priceMicro) / 1e6;
-            this.totalSettlements = Math.max(0, this.totalSettlements - 1);
             this.persistState();
-            throw new Error(`Tempo L1 on-chain settlement failed: ${cleanErr}`);
+            if (!rawErr.includes('INVALID_PAYMENT_PROOF')) {
+              throw new Error(`Tempo L1 on-chain settlement failed: ${cleanErr}`);
+            }
           }
           actualExecutionMode = 'RESILIENT_SANDBOX';
         }
@@ -2444,9 +3515,21 @@ class SynapseStateEngine {
 
     restoreEvaluationState();
 
-    // Dynamically update matching seller endpoint stats
-    const matchedEp = this.endpoints.find(e => targetEndpoint.includes(e.endpointUrl) || e.endpointUrl.includes(targetEndpoint));
-    if (matchedEp && liveSettlementEnabled) {
+    const confirmedLiveSettlement = trace.executionMode === 'LIVE_TESTNET'
+      && trace.status === 'SETTLED'
+      && trace.receiptVerified === true
+      && isVerifiedTxHash(trace.txHash);
+    if (confirmedLiveSettlement && liveSettlementEnabled) {
+      this.protocolRevenue = Math.round((this.protocolRevenue * 1e6) + routerFeeMicro) / 1e6;
+      this.totalVolume = Math.round((this.totalVolume * 1e6) + priceMicro) / 1e6;
+      this.vaultTvl = Math.max(0, Math.round((this.vaultTvl * 1e6) - priceMicro)) / 1e6;
+      this.totalSettlements += 1;
+    }
+
+    // Dynamically update matching seller endpoint stats only for confirmed
+    // receipts, never for evaluation or PENDING relay traces.
+    const matchedEp = matchedProvider;
+    if (matchedEp && confirmedLiveSettlement) {
       matchedEp.totalCalls = (matchedEp.totalCalls || 0) + 1;
       matchedEp.totalEarnedUsd = Number(((matchedEp.totalEarnedUsd || 0) + pricePathUsd).toFixed(4));
     }
@@ -2458,26 +3541,44 @@ class SynapseStateEngine {
       if (this.idempotencyCache.size > 1000) {
         const now = Date.now();
         for (const [k, v] of this.idempotencyCache.entries()) {
-          if (now - v.timestamp > 120000) {
+          if (now - v.timestamp > IDEMPOTENCY_TTL_MS) {
             this.idempotencyCache.delete(k);
           }
         }
       }
       this.idempotencyCache.set(cacheKey, { trace, timestamp: Date.now() });
+      // Persist the replay record atomically with the in-memory result so a
+      // process restart cannot turn the same idempotency key into a second charge.
+      this.persistState();
     }
 
       return {
         trace,
         updatedKey: key,
         blockHeight: this.blockHeight,
-        status: trace.status === 'SETTLED' || trace.status === 'PENDING' || trace.status === 'REJECTED'
+        status: trace.status === 'SETTLED' || trace.status === 'PENDING' || trace.status === 'REJECTED' || trace.status === 'FAILED'
           ? trace.status
           : 'SIMULATED_PASS',
       };
     };
 
+    const runExclusive = async () => {
+      const previous = this.settlementLocks.get(key!.id) || Promise.resolve();
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      const queued = previous.then(() => gate);
+      this.settlementLocks.set(key!.id, queued);
+      await previous;
+      try {
+        return await executeSettlement();
+      } finally {
+        release();
+        if (this.settlementLocks.get(key!.id) === queued) this.settlementLocks.delete(key!.id);
+      }
+    };
+
     if (cacheKey) {
-      const executionPromise = executeSettlement();
+      const executionPromise = runExclusive();
       this.inFlightIdempotency.set(cacheKey, executionPromise);
       try {
         return await executionPromise;
@@ -2486,19 +3587,36 @@ class SynapseStateEngine {
       }
     }
 
-    return await executeSettlement();
+    return await runExclusive();
   }
 
   public exportIso20022Report(format: 'csv' | 'xml'): string {
+    // A financial export is a settlement ledger, not a workflow/debug dump.
+    // Evaluation, pending and failed traces must never appear as booked money.
+    const confirmedTraces = this.traces
+      .filter((trace) => trace.id !== 'trace_init_001')
+      .map((trace) => this.normalizePersistedTrace(trace))
+      .filter((trace) => trace.executionMode === 'LIVE_TESTNET'
+        && trace.status === 'SETTLED'
+        && trace.receiptVerified === true
+        && isVerifiedTxHash(trace.txHash));
+    const csvEscape = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const xmlEscape = (value: unknown) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+
     if (format === 'csv') {
       const headers = ['RecordID', 'Timestamp', 'BlockNumber', 'AgentID', 'AgentName', 'TargetEndpoint', 'CostPathUSD', 'RouterFeePathUSD', '2DNonce', 'EIP712Signature', 'TIP20Memo_Bytes32', 'ISO20022_Standard', 'CostCenter', 'CategoryCode', 'InvoiceDigest', 'Compliance_Status'];
-      const rows = this.traces.map(t => [
+      const rows = confirmedTraces.map(t => [
         t.id,
         t.timestamp,
         t.blockNumber,
         t.agentId,
-        `"${t.agentName}"`,
-        `"${t.targetEndpoint}"`,
+        t.agentName,
+        t.targetEndpoint,
         t.costPathUsd,
         t.routerFeePathUsd,
         t.nonce2D,
@@ -2506,33 +3624,33 @@ class SynapseStateEngine {
         t.tip20Memo,
         t.iso20022Remittance?.standard || 'ISO-20022 pacs.008.001.08',
         t.iso20022Remittance?.costCenter || 'TREASURY',
-        `"${t.iso20022Remittance?.categoryCode || 'Data'}"`,
+        t.iso20022Remittance?.categoryCode || 'Data',
         t.iso20022Remittance?.invoiceDigest || '',
-        t.sanctionsCompliance?.status || t.complianceVerification?.status || 'CLEARED'
-      ].join(','));
+        t.sanctionsCompliance?.status || t.complianceVerification?.status || 'UNVERIFIED'
+      ].map(csvEscape).join(','));
       return [headers.join(','), ...rows].join('\n');
     } else {
       // ISO 20022 camt.053.001.08 XML Statement
-      const entriesXml = this.traces.slice(0, 50).map(t => `
+      const entriesXml = confirmedTraces.slice(0, 50).map(t => `
       <Ntry>
-        <NtryRef>${t.id}</NtryRef>
+        <NtryRef>${xmlEscape(t.id)}</NtryRef>
         <Amt Ccy="pathUSD">${t.costPathUsd.toFixed(6)}</Amt>
         <CdtDbtInd>DBIT</CdtDbtInd>
         <Sts>BOOK</Sts>
-        <BookgDt><DtTm>${t.timestamp}</DtTm></BookgDt>
-        <AcctSvcrRef>TEMPO-L1-BLK-${t.blockNumber}</AcctSvcrRef>
+        <BookgDt><DtTm>${xmlEscape(t.timestamp)}</DtTm></BookgDt>
+        <AcctSvcrRef>TEMPO-L1-BLK-${xmlEscape(t.blockNumber)}</AcctSvcrRef>
         <NtryDtls>
           <TxDtls>
             <Refs>
-              <EndToEndId>${t.nonce2D}</EndToEndId>
-              <TxId>${t.eip712Signature.slice(0, 32)}</TxId>
+              <EndToEndId>${xmlEscape(t.nonce2D)}</EndToEndId>
+              <TxId>${xmlEscape(t.eip712Signature.slice(0, 32))}</TxId>
             </Refs>
             <RmtInf>
-              <Ustrd>${t.tip20Memo}</Ustrd>
+              <Ustrd>${xmlEscape(t.tip20Memo)}</Ustrd>
             </RmtInf>
             <RltdPties>
-              <Dbtr><Nm>${t.agentName}</Nm></Dbtr>
-              <Cdtr><Nm>${t.targetEndpoint}</Nm></Cdtr>
+              <Dbtr><Nm>${xmlEscape(t.agentName)}</Nm></Dbtr>
+              <Cdtr><Nm>${xmlEscape(t.targetEndpoint)}</Nm></Cdtr>
             </RltdPties>
           </TxDtls>
         </NtryDtls>

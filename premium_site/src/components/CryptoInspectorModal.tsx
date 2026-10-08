@@ -1,7 +1,10 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { X, ShieldCheck, Check, Copy, ExternalLink, Cpu, Database, ArrowRight, Package, Zap } from 'lucide-react';
 import { soundEngine } from '../utils/audioEffects';
 import { InfoBadge } from './InfoBadge';
+import { TEMPO_CHAIN_ID, TEMPO_RECEIVER_ADDRESS, TEMPO_VAULT_ADDRESS } from '../config/network';
+
+const DEMO_PAYMENT_RECEIVER = TEMPO_RECEIVER_ADDRESS;
 
 interface CryptoInspectorModalProps {
   isOpen: boolean;
@@ -30,19 +33,28 @@ interface CryptoInspectorModalProps {
     eip712StructHash?: string;
     liveProxyPayload?: any;
     status?: string;
+    receiptVerified?: boolean;
+    providerDataStatus?: 'EVALUATION_FIXTURE' | 'UPSTREAM_RESPONSE';
   } | null;
 }
 
 function getDeliveredPayload(traceData: any) {
   const isLiveConfirmed = traceData?.executionMode === 'LIVE_TESTNET'
     && traceData?.status === 'SETTLED'
+    && traceData?.receiptVerified === true
     && typeof traceData?.txHash === 'string'
-    && traceData.txHash.startsWith('0x');
+    && /^0x[a-fA-F0-9]{64}$/.test(traceData.txHash);
+  const isSampleProvider = traceData?.providerDataStatus !== 'UPSTREAM_RESPONSE';
+  const amountSettledUsd = isLiveConfirmed && Number.isFinite(Number(traceData?.amountUsd))
+    ? Number(traceData?.amountUsd)
+    : 0;
   if (traceData?.liveProxyPayload) {
     return {
-      title: isLiveConfirmed ? 'Delivered Response Body' : 'Evaluation Response Preview',
-      type: isLiveConfirmed ? 'Live Upstream API Response' : 'Sample Provider Response',
-      alternative: 'Shows the result returned for this paid request',
+      title: isSampleProvider ? 'Demo Provider Response' : (isLiveConfirmed ? 'Delivered Response Body' : 'Evaluation Response Preview'),
+      type: isSampleProvider ? 'Demo Provider Response' : 'Upstream Provider Response',
+      alternative: isLiveConfirmed
+        ? (isSampleProvider ? 'Tempo confirms payment only. This result is a demo fixture, not a live external-provider response.' : 'Tempo confirms payment and this response came from the upstream provider.')
+        : 'Shows an evaluation preview; no confirmed chain receipt is claimed.',
       content: typeof traceData.liveProxyPayload === 'object' 
         ? JSON.stringify(traceData.liveProxyPayload, null, 2) 
         : String(traceData.liveProxyPayload),
@@ -63,6 +75,31 @@ function getDeliveredPayload(traceData: any) {
         fundsDebited: '$0.0000',
         action: 'Request dropped before on-chain debit',
         reason: 'Host not present in Merkle whitelist root'
+      }, null, 2),
+    };
+  }
+
+  if (url.includes('sol') || agent.includes('sol')) {
+    return {
+      title: isLiveConfirmed ? 'Delivered SOL/USDT Level 2 Orderbook' : 'Evaluation SOL/USDT Orderbook Preview',
+      type: 'Market Data Snapshot (Amberdata Demo)',
+      alternative: 'Example L2 depth snapshot for one machine request',
+      content: JSON.stringify({
+        ticker: 'SOL/USDT',
+        status: isLiveConfirmed ? 'DELIVERED' : 'EVALUATION',
+        bids: [
+          { price: 148.45, size: 124.5, exchange: 'Amberdata-Demo' },
+          { price: 148.40, size: 280.1, exchange: 'Amberdata-Demo' },
+          { price: 148.25, size: 1050.4, exchange: 'Amberdata-Demo' }
+        ],
+        asks: [
+          { price: 148.55, size: 142.0, exchange: 'Amberdata-Demo' },
+          { price: 148.60, size: 318.5, exchange: 'Amberdata-Demo' },
+          { price: 148.75, size: 987.0, exchange: 'Amberdata-Demo' }
+        ],
+        spreadUsd: 0.10,
+        liquidityDepthUsd: 428900,
+        paymentStatus: isLiveConfirmed ? 'CONFIRMED' : 'NOT_SUBMITTED'
       }, null, 2),
     };
   }
@@ -95,7 +132,7 @@ function getDeliveredPayload(traceData: any) {
   if (url.includes('scrape') || url.includes('news') || agent.includes('scraper') || agent.includes('research')) {
     return {
       title: isLiveConfirmed ? 'Clean Extracted Full-Text Article' : 'Evaluation Article Preview',
-      type: isLiveConfirmed ? 'Scraped Web Article (Markdown)' : 'Sample Provider Response (Markdown)',
+      type: isLiveConfirmed ? 'Scraped Web Article (Markdown)' : 'Demo Provider Response (Markdown)',
       alternative: 'Example provider response for one request',
       content: JSON.stringify({
         status: isLiveConfirmed ? 'EXTRACTED_CLEAN_MARKDOWN' : 'EVALUATION_PREVIEW',
@@ -148,13 +185,13 @@ function getDeliveredPayload(traceData: any) {
 
   return {
     title: isLiveConfirmed ? 'Delivered Upstream Machine Payload' : 'Evaluation Response Preview',
-    type: isLiveConfirmed ? 'Authenticated Micro-Service Data' : 'Sample Provider Response',
+    type: isLiveConfirmed ? 'Authenticated Micro-Service Data' : 'Demo Provider Response',
     alternative: isLiveConfirmed ? 'Shows the result returned for this paid request' : 'Shows the response shape without claiming a live provider result',
     content: JSON.stringify({
       service: traceData?.serviceUrl || '/api/v1/data/stock-orderbook',
       agent: traceData?.agentName || 'Synapse402 Agent',
       deliveredAt: new Date().toISOString(),
-      amountSettledUsd: isLiveConfirmed ? Number(traceData?.amountUsd || 0.001) : 0,
+      amountSettledUsd,
       status: isLiveConfirmed ? 'DELIVERY_CONFIRMED' : 'EVALUATION_ONLY'
     }, null, 2),
   };
@@ -182,7 +219,18 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
   const rawDomainHash = traceData?.domainHash || '';
   const liveConfirmed = traceData?.executionMode === 'LIVE_TESTNET'
     && traceData?.status === 'SETTLED'
-    && Boolean(traceData?.txHash?.startsWith('0x'));
+    && traceData?.receiptVerified === true
+    && typeof traceData?.txHash === 'string'
+    && /^0x[a-fA-F0-9]{64}$/.test(traceData.txHash);
+  const evaluationOnly = !liveConfirmed && traceData?.executionMode !== 'LIVE_TESTNET_PENDING_CONFIRMATION';
+  const explicitlyRejected = traceData?.status === 'REJECTED'
+    || traceData?.status === 'FAILED_REVERT'
+    || traceData?.serviceUrl?.toLowerCase().includes('rogue')
+    || traceData?.serviceUrl?.toLowerCase().includes('drainer');
+  const isSampleProvider = traceData?.providerDataStatus !== 'UPSTREAM_RESPONSE';
+  const displayedAmountUsd = Number.isFinite(Number(traceData?.amountUsd))
+    ? Number(traceData?.amountUsd)
+    : 0;
   const domainHash = rawDomainHash.startsWith('0x') ? rawDomainHash.slice(2) : rawDomainHash;
   const rawMerkleRoot = traceData?.merkleRoot || '';
   const displayMerkleRoot = rawMerkleRoot ? (rawMerkleRoot.startsWith('0x') ? rawMerkleRoot : `0x${rawMerkleRoot}`) : 'N/A';
@@ -201,8 +249,8 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
   const eip712Domain = {
     name: 'SynapseVault',
     version: '1.0.0',
-    chainId: 42431,
-    verifyingContract: '0x3c42E274FAdd8e371fB84f97203CC2F2125c8775',
+    chainId: TEMPO_CHAIN_ID,
+    verifyingContract: TEMPO_VAULT_ADDRESS,
   };
 
   const channelId = traceData?.nonce2D?.startsWith('0x') ? parseInt(traceData.nonce2D.split(':')[0].slice(2), 16) : 1;
@@ -217,18 +265,18 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
     sessionKey: effectiveSessionKey,
     channelId,
     nonce: sequenceNonce,
-    payee: '0xfCEb1a2633881c19283836a2E17Ba25E612724A0',
-    amount: Math.round((traceData?.amountUsd || 0.001) * 1e6),
+    payee: DEMO_PAYMENT_RECEIVER,
+    amount: Math.round(displayedAmountUsd * 1e6),
     endpointHash: domainHash ? (domainHash.startsWith('0x') ? domainHash : `0x${domainHash}`) : '0x00',
     memo: traceData?.tip20Memo || '0x00',
     validBefore: Math.floor(Date.now() / 1000) + 86400 * 30,
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white/[.03] backdrop-blur-md border border-white/[.08] w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-[#1a2027] backdrop-blur-md border border-white/[.15] w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="p-4 border-b border-white/[.08] flex items-center justify-between bg-white/[.04]">
+        <div className="p-4 border-b border-white/[.12] flex items-center justify-between bg-white/[.07]">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-[#d7ff4f]/[.08] border border-[#d7ff4f]/30 flex items-center justify-center text-[#d7ff4f]">
               <ShieldCheck className="w-4 h-4" />
@@ -240,7 +288,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
                   title="Cryptographic Audit Bundle"
                   text={liveConfirmed
                     ? 'A confirmed receipt binds the Merkle whitelist proof, EIP-712 signature, 2D nonce channel, and ISO 20022 memo into one chain record.'
-                    : 'This evaluation shows the planned proof fields. They become verifiable only after a live wallet returns a confirmed receipt.'}
+                    : 'This evaluation shows the planned proof fields. They become verifiable after a live run returns a confirmed Tempo receipt.'}
                 />
               </h3>
               <p className="text-[11px] text-white/50 font-mono">
@@ -257,8 +305,8 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
         </div>
 
         {/* Quick Receipt Summary Card */}
-        <div className="p-4 bg-black/60 border-b border-white/[.08] grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
-          <div className="p-2.5 rounded-lg bg-white/[.02] border border-white/[.06]">
+        <div className="p-4 bg-[#151b22] border-b border-white/[.12] grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+          <div className="p-2.5 rounded-lg bg-white/[.055] border border-white/[.10]">
             <span className="text-[10px] text-zinc-400 block font-sans">AGENT & SERVICE</span>
             <span className="font-bold text-[#f5f5f2] text-xs truncate block">{traceData?.agentName || 'AI Research Agent'}</span>
             <span className="text-[10px] text-zinc-400 truncate block">
@@ -270,24 +318,30 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
             </span>
           </div>
 
-          <div className="p-2.5 rounded-lg bg-white/[.02] border border-white/[.06]">
+          <div className="p-2.5 rounded-lg bg-white/[.055] border border-white/[.10]">
             <span className="text-[10px] text-zinc-400 block font-sans">{liveConfirmed ? 'SETTLED AMOUNT' : 'PLANNED AMOUNT'}</span>
             <span className="font-mono font-black text-[#d7ff4f] text-sm">
-              ${Number(traceData?.amountUsd || 0.001).toFixed(4)} USD
+              ${displayedAmountUsd.toFixed(4)} USD
             </span>
-            <span className="text-[10px] text-emerald-400 block font-mono">0.1¢ per request</span>
+            <span className="text-[10px] text-emerald-400 block font-mono">
+              {displayedAmountUsd > 0 ? `${(displayedAmountUsd * 100).toFixed(2)}¢ per request` : 'Amount unavailable'}
+            </span>
           </div>
 
-          <div className="p-2.5 rounded-lg bg-white/[.02] border border-white/[.06]">
+          <div className="p-2.5 rounded-lg bg-white/[.055] border border-white/[.10]">
             <span className="text-[10px] text-zinc-400 block font-sans">GATEWAY & L1 FINALITY</span>
-            <span className="font-mono font-bold text-zinc-200 text-xs flex items-center gap-1">
+              <span className="font-mono font-bold text-zinc-200 text-xs flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>
-              &lt;15ms Auth
+              Gateway authorization
             </span>
-            <span className="text-[10px] text-zinc-400 block font-mono">{liveConfirmed ? 'L1 Block ~0.5s' : 'No chain finality in evaluation'}</span>
+            <span className="text-[10px] text-zinc-400 block font-mono">
+              {liveConfirmed
+                ? (Number(traceData?.blockNumber) > 0 ? `Tempo L1 block #${Number(traceData?.blockNumber)}` : 'Tempo L1 receipt confirmed')
+                : 'No chain finality in evaluation'}
+            </span>
           </div>
 
-          <div className="p-2.5 rounded-lg bg-white/[.02] border border-white/[.06]">
+          <div className="p-2.5 rounded-lg bg-white/[.055] border border-white/[.10]">
             <span className="text-[10px] text-zinc-400 block font-sans">RECEIPT STATUS</span>
             <span className={`font-mono font-bold text-xs ${liveConfirmed ? 'text-emerald-300' : 'text-amber-300'}`}>{liveConfirmed ? 'CONFIRMED (200 OK)' : 'EVALUATION RESPONSE'}</span>
             <span className="text-[10px] text-zinc-400 block font-mono">{liveConfirmed ? 'Non-repudiable' : 'Not a chain receipt'}</span>
@@ -295,15 +349,15 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
         </div>
 
         {/* Verification scope disclaimer */}
-        <div className="mx-4 my-2.5 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.08] text-[11px] text-zinc-400 flex items-start gap-2">
+        <div className="mx-4 my-2.5 p-2.5 rounded-lg bg-white/[.055] border border-white/[.12] text-[11px] text-zinc-300 flex items-start gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-[#d7ff4f] mt-1 shrink-0"></span>
           <span>
-            <strong className="text-zinc-200">What this proves:</strong> {liveConfirmed ? 'Verifies that the micropayment was signed and recorded on Tempo L1.' : 'Shows the signed payment plan and provider response; no chain receipt exists yet.'} It does not independently verify external provider data accuracy.
+            <strong className="text-zinc-200">What this proves:</strong> {liveConfirmed ? 'Verifies that the micropayment was signed and recorded on Tempo L1.' : 'Shows the signed payment plan and provider response; no chain receipt exists yet.'} In this demo, the recorded payee is the shared SynapseMPPReceiver gateway ({DEMO_PAYMENT_RECEIVER.slice(0, 6)}…{DEMO_PAYMENT_RECEIVER.slice(-4)}), not an external provider wallet. It does not independently verify external provider data accuracy.
           </span>
         </div>
 
         {/* Tab switcher */}
-        <div className="flex border-b border-white/[.08] bg-black/40 text-xs font-mono px-4 pt-2 gap-2 overflow-x-auto">
+        <div className="flex border-b border-white/[.12] bg-[#151b22] text-xs font-mono px-4 pt-2 gap-2 overflow-x-auto">
           <button
             onClick={() => setActiveTab('deliverable')}
             className={`pb-2.5 px-3 border-b-2 font-medium transition-all flex items-center gap-1.5 whitespace-nowrap ${
@@ -315,7 +369,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
             <Package className="w-3.5 h-3.5" />
             <span>Unlocked Data Payload</span>
             <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-              {liveConfirmed ? 'REAL DELIVERABLE' : 'RESPONSE PREVIEW'}
+              {isSampleProvider ? 'DEMO PROVIDER RESPONSE' : liveConfirmed ? 'UPSTREAM RESPONSE' : 'RESPONSE PREVIEW'}
             </span>
           </button>
           <button
@@ -329,7 +383,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
             <span>Vendor Whitelist Proof</span>
             <InfoBadge
               title="Merkle Tree Membership"
-              text="OpenZeppelin MerkleProof.verify(): Compares the SHA-256 hash of the target endpoint against the on-chain Merkle root stored in SynapseVault.sol."
+              text="OpenZeppelin StandardMerkleTree proof: compares the canonical double-keccak endpoint leaf against the on-chain Merkle root stored in SynapseVault.sol."
             />
           </button>
           <button
@@ -372,7 +426,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
             <span className="text-[9px] px-1 py-0.2 rounded bg-[#d7ff4f]/10 text-[#d7ff4f] border border-[#d7ff4f]/30">ISO 20022</span>
             <InfoBadge
               title="ISO 20022 Remittance Matching"
-              text="TIP-20 transferWithMemo attaches a 32-byte hash containing pacs.008 payment data, enabling instant automated GAAP/IFRS bookkeeping."
+              text="TIP-20 transferWithMemo attaches a 32-byte structured remittance reference based on pacs.008 data for reconciliation and export. It does not replace an accounting integration."
             />
           </button>
           <button
@@ -388,7 +442,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
         </div>
 
         {/* Content Body */}
-        <div className="p-5 overflow-y-auto space-y-4 text-xs font-mono text-white/50">
+        <div className="p-5 overflow-y-auto space-y-4 text-xs font-mono text-zinc-300">
           {activeTab === 'deliverable' && (() => {
             const delivered = getDeliveredPayload(traceData);
             return (
@@ -406,7 +460,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
                     </div>
                     <p className="text-[11px] text-zinc-300 mt-1 flex items-center gap-1">
                       <Zap className="w-3 h-3 text-emerald-400 shrink-0 inline-block" />
-                      <span><strong>Execution Outcome:</strong> Agent dispatched an HTTP 402 request and {liveConfirmed ? 'settled on Tempo L1 with cryptographic nonces and delivery verification.' : 'completed the evaluation flow; a live wallet is required for a chain receipt.'}</span>
+                      <span><strong>Execution Outcome:</strong> Agent dispatched an HTTP 402 request and {liveConfirmed ? 'settled on Tempo L1 with cryptographic proof.' : 'completed the evaluation flow; no chain transaction was sent in this preview.'} {isSampleProvider ? 'The displayed result is a demo fixture, not a live external-provider response.' : ''}</span>
                     </p>
                   </div>
                   <div className="text-right">
@@ -418,7 +472,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
                 </div>
 
                 {/* Delivered Payload Data View */}
-                <div className="p-3 bg-black/60 rounded-lg border border-white/[.08] space-y-2">
+                <div className="p-3 bg-[#20262e] rounded-lg border border-white/[.12] space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-zinc-200 font-mono">
                       Returned Payload Body (JSON/Content):
@@ -431,23 +485,28 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
                       <span>{copied ? 'Copied to Clipboard!' : 'Copy Payload'}</span>
                     </button>
                   </div>
-                  <pre className="p-3 bg-black/80 rounded border border-white/10 text-[11px] text-[#d7ff4f] font-mono leading-relaxed overflow-x-auto max-h-[220px]">
+                  <pre className="p-3 bg-[#11161c] rounded border border-white/15 text-[11px] text-[#d7ff4f] font-mono leading-relaxed overflow-x-auto max-h-[220px]">
 {delivered.content}
                   </pre>
                 </div>
 
                 {/* Economic Value Comparison */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs font-sans">
-                  <div className="p-2.5 rounded-lg bg-white/[.03] border border-white/[.08]">
+                  <div className="p-2.5 rounded-lg bg-white/[.055] border border-white/[.10]">
                     <span className="text-[10px] text-zinc-400 uppercase font-bold block">Actual Cost Paid</span>
-                    <span className="text-sm font-black text-emerald-400 font-mono">
-                      ${Number(traceData?.amountUsd || 0.001).toFixed(4)} USD
+                    <span className={`text-sm font-black font-mono ${liveConfirmed ? 'text-emerald-400' : 'text-zinc-200'}`}>
+                      ${(liveConfirmed ? displayedAmountUsd : 0).toFixed(4)} USD
                     </span>
+                    {!liveConfirmed && (
+                      <span className="text-[10px] text-zinc-400 block mt-0.5 font-mono">
+                        Planned request: ${displayedAmountUsd.toFixed(4)} · no transaction sent
+                      </span>
+                    )}
                     <span className="text-[10px] text-zinc-400 block mt-0.5 font-mono">
-                      Tempo Gas: &lt;$0.00002
+                      {liveConfirmed ? 'Tempo network fee recorded with the confirmed settlement' : 'No Tempo network fee was incurred in evaluation'}
                     </span>
                   </div>
-                  <div className="p-2.5 rounded-lg bg-white/[.03] border border-white/[.08]">
+                  <div className="p-2.5 rounded-lg bg-white/[.055] border border-white/[.10]">
                     <span className="text-[10px] text-zinc-400 uppercase font-bold block">Cost When Idle</span>
                     <span className="text-sm font-black text-[#d7ff4f] font-mono">
                       $0.00 / month
@@ -456,7 +515,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
                       Zero idle subscription waste
                     </span>
                   </div>
-                  <div className="p-2.5 rounded-lg bg-white/[.03] border border-white/[.08]">
+                  <div className="p-2.5 rounded-lg bg-white/[.055] border border-white/[.10]">
                     <span className="text-[10px] text-zinc-400 uppercase font-bold block">Card Fee Problem</span>
                     <span className="text-xs font-bold text-zinc-200">
                       Eliminates 30¢ Swipe Fee
@@ -472,13 +531,22 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
 
           {activeTab === 'merkle' && (
             <div className="space-y-4">
-              <div className="p-3 bg-black/40 rounded-lg border border-white/[.08] space-y-2">
+              {evaluationOnly && !explicitlyRejected && (
+                <div className="rounded-lg border border-white/10 bg-white/[.04] px-3 py-2 text-[11px] text-zinc-300">
+                  Evaluation preview: the request was not verified against an on-chain Merkle root. This is not a whitelist rejection.
+                </div>
+              )}
+              <div className="p-3 bg-[#1f262e] rounded-lg border border-white/[.12] space-y-2">
                 <div className="flex items-center justify-between text-[#f5f5f2]">
                   <span className="font-semibold text-xs">Target Domain Leaf Hashing</span>
                   {isWhitelisted ? (
                     <span className="px-2 py-0.5 rounded bg-[#d7ff4f]/[.08] text-[#d7ff4f] text-[10px] border border-[#d7ff4f]/20 flex items-center gap-1">
                       <Check className="w-3 h-3" />
                       Verified in Whitelist
+                    </span>
+                  ) : evaluationOnly && !explicitlyRejected ? (
+                    <span className="px-2 py-0.5 rounded bg-white/[.04] text-zinc-300 text-[10px] border border-white/10 flex items-center gap-1">
+                      Evaluation · not verified on-chain
                     </span>
                   ) : (
                     <span className="px-2 py-0.5 rounded bg-red-500/10 text-red-400 text-[10px] border border-red-500/30 flex items-center gap-1">
@@ -491,8 +559,8 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
                   <span className="text-white/30">Target URL: </span>
                   <span className="text-[#f5f5f2]">{traceData?.serviceUrl || '/api/v1/data/stock-orderbook'}</span>
                 </div>
-                <div className={`text-[10px] p-2 rounded border break-all ${isWhitelisted ? 'bg-white/[.04] border-white/15 text-[#d7ff4f]' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
-                  SHA-256(URL) = {domainHash ? `0x${domainHash}` : 'N/A'}
+                <div className={`text-[10px] p-2 rounded border break-all ${isWhitelisted ? 'bg-white/[.04] border-white/15 text-[#d7ff4f]' : evaluationOnly && !explicitlyRejected ? 'bg-white/[.04] border-white/10 text-zinc-300' : 'bg-red-500/10 border-red-500/30 text-red-400'}`}>
+                  Standard leaf (double-keccak) = {domainHash ? `0x${domainHash}` : 'N/A'}
                 </div>
               </div>
 
@@ -503,7 +571,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
                   <span className="text-[10px] text-white/50">Root Height: 3 Levels</span>
                 </div>
 
-                <div className="space-y-2 bg-black/40 p-3.5 rounded-lg border border-white/[.08]">
+                <div className="space-y-2 bg-[#1f262e] p-3.5 rounded-lg border border-white/[.12]">
                   {/* Step 1 */}
                   <div className="flex items-center gap-3">
                     <span className="w-6 h-6 rounded bg-white/[.04] text-[#f5f5f2] flex items-center justify-center font-bold text-[10px]">
@@ -515,6 +583,8 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
                     </div>
                     {isWhitelisted ? (
                       <span className="text-[#d7ff4f] text-[10px]">MATCH</span>
+                    ) : evaluationOnly && !explicitlyRejected ? (
+                      <span className="text-zinc-400 text-[10px]">Not checked in evaluation</span>
                     ) : (
                       <span className="text-red-400 text-[10px] font-bold">NO MATCH (403)</span>
                     )}
@@ -545,11 +615,11 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
 
                   {/* Root */}
                   <div className="mt-2 pt-2 border-t border-white/[.08] flex items-center justify-between text-[#f5f5f2]">
-                    <span className={isWhitelisted ? 'text-[#d7ff4f] font-bold' : 'text-red-400 font-bold'}>
+                    <span className={isWhitelisted ? 'text-[#d7ff4f] font-bold' : evaluationOnly && !explicitlyRejected ? 'text-zinc-400 font-bold' : 'text-red-400 font-bold'}>
                       Merkle Root Hash:
                     </span>
-                    <span className={`text-xs font-semibold truncate max-w-[280px] ${isWhitelisted ? 'text-[#d7ff4f]' : 'text-red-400'}`} title={displayMerkleRoot}>
-                      {displayMerkleRoot.slice(0, 18)}... {isWhitelisted ? 'VALID MERKLE PROOF' : 'PROOF REJECTED (403)'}
+                    <span className={`text-xs font-semibold truncate max-w-[280px] ${isWhitelisted ? 'text-[#d7ff4f]' : evaluationOnly && !explicitlyRejected ? 'text-zinc-400' : 'text-red-400'}`} title={displayMerkleRoot}>
+                      {displayMerkleRoot.slice(0, 18)}... {isWhitelisted ? 'VALID MERKLE PROOF' : evaluationOnly && !explicitlyRejected ? 'NOT VERIFIED IN EVALUATION' : 'PROOF REJECTED (403)'}
                     </span>
                   </div>
                 </div>
@@ -570,7 +640,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
                 </button>
               </div>
 
-              <pre className="p-3 bg-black/40 rounded-lg border border-white/[.08] text-[11px] text-[#f5f5f2] leading-relaxed overflow-x-auto">
+              <pre className="p-3 bg-[#1f262e] rounded-lg border border-white/[.12] text-[11px] text-[#f5f5f2] leading-relaxed overflow-x-auto">
 {JSON.stringify(
   {
     types: {
@@ -603,7 +673,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
 
           {activeTab === 'nonce2d' && (
             <div className="space-y-3 text-xs font-sans">
-              <div className="p-4 bg-black/40 rounded-lg border border-white/[.08] space-y-2">
+              <div className="p-4 bg-[#1f262e] rounded-lg border border-white/[.12] space-y-2">
                 <h4 className="text-sm font-semibold text-zinc-100">How 2D Nonces Prevent Collisions</h4>
                 <p className="text-xs text-zinc-300 leading-relaxed font-sans">
                   Traditional EVM transactions use a single linear nonce <code className="text-[#d7ff4f] font-mono">(0, 1, 2...)</code>, which causes bots to block one another if executed in parallel.
@@ -626,7 +696,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
 
           {activeTab === 'tip20' && (
             <div className="space-y-4 text-xs font-mono">
-              <div className="p-3.5 bg-black/40 rounded-lg border border-white/[.08] space-y-2.5">
+              <div className="p-3.5 bg-[#1f262e] rounded-lg border border-white/[.12] space-y-2.5">
                 <div className="flex items-center justify-between text-[#f5f5f2]">
                   <span className="font-semibold text-xs flex items-center gap-1.5">
                     <span className="text-[#d7ff4f]">Tempo L1 TIP-20 Transfer Memo</span>
@@ -658,7 +728,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
                 </div>
               </div>
 
-              <div className="p-3.5 bg-black/40 rounded-lg border border-white/[.08] space-y-2.5">
+              <div className="p-3.5 bg-[#1f262e] rounded-lg border border-white/[.12] space-y-2.5">
                 <div className="flex items-center justify-between text-[#f5f5f2]">
                   <span className="font-semibold text-xs text-[#f5f5f2]">ISO 20022 Financial Remittance Structure</span>
                   <span className="text-[10px] text-[#d7ff4f] bg-[#d7ff4f]/10 px-2 py-0.5 rounded border border-[#d7ff4f]/30">
@@ -705,7 +775,7 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
                   <span>{copied ? 'Copied!' : 'Copy JSON'}</span>
                 </button>
               </div>
-              <pre className="p-3 bg-black/40 rounded-lg border border-white/[.08] text-[10px] text-[#d7ff4f] leading-relaxed overflow-x-auto">
+              <pre className="p-3 bg-[#11161c] rounded-lg border border-white/[.12] text-[10px] text-[#d7ff4f] leading-relaxed overflow-x-auto">
 {JSON.stringify(traceData || { status: 'No active trace payload selected' }, null, 2)}
               </pre>
             </div>
@@ -713,10 +783,10 @@ export const CryptoInspectorModal: React.FC<CryptoInspectorModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-white/[.08] bg-white/[.04] flex items-center justify-between text-xs font-mono">
+        <div className="p-4 border-t border-white/[.12] bg-white/[.07] flex items-center justify-between text-xs font-mono">
           <div className="flex items-center gap-1.5 text-white/50">
-            <span className={`w-2 h-2 rounded-full ${isWhitelisted ? 'bg-[#d7ff4f]' : 'bg-red-400 animate-pulse'}`}></span>
-            <span>EVM Cryptographic Compatibility: {isWhitelisted ? 'Verified' : 'Access Denied (403)'}</span>
+            <span className={`w-2 h-2 rounded-full ${isWhitelisted ? 'bg-[#d7ff4f]' : evaluationOnly && !explicitlyRejected ? 'bg-zinc-400' : 'bg-red-400 animate-pulse'}`}></span>
+            <span>EVM Cryptographic Compatibility: {isWhitelisted ? 'Verified on Tempo L1' : evaluationOnly && !explicitlyRejected ? 'Evaluation only · not checked on-chain' : 'Rejected before settlement'}</span>
           </div>
           <button
             onClick={onClose}

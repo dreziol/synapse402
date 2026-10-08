@@ -32,7 +32,7 @@ contract SynapseVault is Ownable, ReentrancyGuard, EIP712 {
         uint256 totalBudget;      // Total cumulative budget allocated
         uint256 currentSpent;     // Cumulative tokens spent so far
         uint256 validBefore;      // Expiry timestamp (UNIX)
-        bytes32 merkleRoot;       // Merkle root of whitelisted API endpoints (bytes32(0) = wildcard)
+        bytes32 merkleRoot;       // Merkle root of whitelisted API endpoints (never a wildcard)
         SessionStatus status;     // Lifecycle status
     }
 
@@ -86,6 +86,7 @@ contract SynapseVault is Ownable, ReentrancyGuard, EIP712 {
     );
     event SessionKeyStatusUpdated(address indexed sessionKey, SessionStatus status);
     event SessionBudgetUpdated(address indexed sessionKey, uint256 newTotalBudget, uint256 newMaxPerCall);
+    event SessionMerkleRootUpdated(address indexed sessionKey, bytes32 oldMerkleRoot, bytes32 newMerkleRoot);
     event PaymentSettled(
         address indexed sessionKey,
         address indexed payee,
@@ -100,6 +101,8 @@ contract SynapseVault is Ownable, ReentrancyGuard, EIP712 {
     error InvalidTokenAddress();
     error ZeroAmount();
     error InsufficientVaultBalance();
+    error SessionAlreadyActive(address sessionKey);
+    error SessionAlreadyRegistered(address sessionKey, SessionStatus currentStatus);
     error SessionNotActive(SessionStatus currentStatus);
     error SessionExpired(uint256 validBefore, uint256 currentTimestamp);
     error AuthorizationExpired(uint256 validBefore, uint256 currentTimestamp);
@@ -158,9 +161,46 @@ contract SynapseVault is Ownable, ReentrancyGuard, EIP712 {
     }
 
     /**
-     * @notice Register or reconfigure an AI agent session key.
+     * @notice Register an AI agent session key. Only works on new or inactive sessions.
+     * @dev To modify an existing active session, use updateSessionBudget or updateSessionMerkleRoot.
      */
     function registerSessionKey(
+        address sessionKey,
+        uint256 maxPerCall,
+        uint256 totalBudget,
+        uint256 validBefore,
+        bytes32 merkleRoot
+    ) external onlyOwner {
+        if (sessionKey == address(0)) revert InvalidTokenAddress();
+        SessionStatus currentStatus = sessionKeys[sessionKey].status;
+        if (currentStatus == SessionStatus.ACTIVE) {
+            revert SessionAlreadyActive(sessionKey);
+        }
+        if (currentStatus != SessionStatus.INACTIVE) {
+            revert SessionAlreadyRegistered(sessionKey, currentStatus);
+        }
+        if (validBefore <= block.timestamp) revert SessionExpired(validBefore, block.timestamp);
+        if (maxPerCall == 0 || totalBudget == 0 || maxPerCall > totalBudget) {
+            revert ExceedsMaxPerCall(maxPerCall, totalBudget);
+        }
+        if (merkleRoot == bytes32(0)) revert EndpointNotWhitelisted(bytes32(0), bytes32(0));
+
+        sessionKeys[sessionKey] = SessionKeyConfig({
+            maxPerCall: maxPerCall,
+            totalBudget: totalBudget,
+            currentSpent: 0,
+            validBefore: validBefore,
+            merkleRoot: merkleRoot,
+            status: SessionStatus.ACTIVE
+        });
+
+        emit SessionKeyRegistered(sessionKey, maxPerCall, totalBudget, validBefore, merkleRoot);
+    }
+
+    /**
+     * @notice Explicitly reset an active session key's spend and budget for testing/demo resets.
+     */
+    function resetDemoSession(
         address sessionKey,
         uint256 maxPerCall,
         uint256 totalBudget,
@@ -172,6 +212,7 @@ contract SynapseVault is Ownable, ReentrancyGuard, EIP712 {
         if (maxPerCall == 0 || totalBudget == 0 || maxPerCall > totalBudget) {
             revert ExceedsMaxPerCall(maxPerCall, totalBudget);
         }
+        if (merkleRoot == bytes32(0)) revert EndpointNotWhitelisted(bytes32(0), bytes32(0));
 
         sessionKeys[sessionKey] = SessionKeyConfig({
             maxPerCall: maxPerCall,
@@ -195,6 +236,22 @@ contract SynapseVault is Ownable, ReentrancyGuard, EIP712 {
         }
         config.status = newStatus;
         emit SessionKeyStatusUpdated(sessionKey, newStatus);
+    }
+
+    /**
+     * @notice Update only the Merkle provider policy without resetting spend.
+     * @dev Keeping this separate from registerSessionKey preserves currentSpent,
+     *      nonce state, expiry, and lifecycle status when an owner changes routes.
+     */
+    function updateSessionMerkleRoot(address sessionKey, bytes32 newMerkleRoot) external onlyOwner {
+        SessionKeyConfig storage config = sessionKeys[sessionKey];
+        if (config.status == SessionStatus.INACTIVE) {
+            revert SessionNotActive(config.status);
+        }
+        if (newMerkleRoot == bytes32(0)) revert EndpointNotWhitelisted(bytes32(0), bytes32(0));
+        bytes32 oldMerkleRoot = config.merkleRoot;
+        config.merkleRoot = newMerkleRoot;
+        emit SessionMerkleRootUpdated(sessionKey, oldMerkleRoot, newMerkleRoot);
     }
 
     /**
@@ -232,7 +289,9 @@ contract SynapseVault is Ownable, ReentrancyGuard, EIP712 {
             revert SessionNotActive(config.status);
         }
         if (block.timestamp > config.validBefore) {
-            config.status = SessionStatus.PAUSED;
+            // Reverts roll back storage writes. Keep expiry as a derived
+            // condition and let the owner choose an explicit lifecycle
+            // transition with setSessionStatus/resetDemoSession.
             revert SessionExpired(config.validBefore, block.timestamp);
         }
         if (block.timestamp > p.deadline) {
@@ -246,7 +305,6 @@ contract SynapseVault is Ownable, ReentrancyGuard, EIP712 {
         }
         uint256 newSpent = config.currentSpent + p.amount;
         if (newSpent > config.totalBudget) {
-            config.status = SessionStatus.DEPLETED;
             revert ExceedsTotalBudget(newSpent, config.totalBudget);
         }
         if (p.amount > totalVaultBalance) {
@@ -261,10 +319,8 @@ contract SynapseVault is Ownable, ReentrancyGuard, EIP712 {
 
         // 4. Merkle Whitelist Verification (OpenZeppelin StandardMerkleTree double-hashing)
         bytes32 endpointLeaf = keccak256(bytes.concat(keccak256(abi.encode(p.endpoint))));
-        if (config.merkleRoot != bytes32(0)) {
-            if (!MerkleProof.verify(p.merkleProof, config.merkleRoot, endpointLeaf)) {
-                revert EndpointNotWhitelisted(endpointLeaf, config.merkleRoot);
-            }
+        if (config.merkleRoot == bytes32(0) || !MerkleProof.verify(p.merkleProof, config.merkleRoot, endpointLeaf)) {
+            revert EndpointNotWhitelisted(endpointLeaf, config.merkleRoot);
         }
 
         // 5. Signature verification (if caller is not the session key itself)

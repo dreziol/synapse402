@@ -1,8 +1,9 @@
-﻿import React, { useState } from 'react';
+import { TEMPO_CHAIN_ID, TEMPO_EXPLORER_URL, TEMPO_RECEIVER_ADDRESS, TEMPO_RPC_URL, TEMPO_VAULT_ADDRESS, tempoTransactionUrl, tempoAddressUrl } from '../config/network';
+import React, { useState } from 'react';
 import { 
   ShieldCheck, Zap, Lock, Database, Code, Cpu, 
   Terminal, Globe, CheckCircle, Award, Play, Check, ExternalLink,
-  ArrowRight, DollarSign, Sparkles, CheckCircle2, Calculator, Loader2,
+  ArrowRight, DollarSign, Sparkles, CheckCircle2, Calculator, FileCheck, Loader2,
   Layers, Bot, XCircle, ShieldAlert, CreditCard, Coins
 } from 'lucide-react';
 import { soundEngine } from '../utils/audioEffects';
@@ -34,7 +35,7 @@ export const ProtocolArchitecture: React.FC = () => {
     setIsSimulatingRoute(true);
     setTimeout(() => {
       const gross = calcCalls * calcPriceUsd;
-      const protocol = gross * 0.001; // 0.1%
+      const protocol = calcCalls * Math.max(0.000001, calcPriceUsd * 0.001); // 0.1%, one micro-unit minimum per call
       const seller = gross - protocol; // 99.9%
       const tempoGas = 0.000018 * (calcCalls > 1000 ? 5 : 1);
       const stripeFee = calcCalls * 0.30 + gross * 0.029;
@@ -76,21 +77,23 @@ export const ProtocolArchitecture: React.FC = () => {
       const netRes = await fetch('/api/network/status');
       const netStatus = await netRes.json().catch(() => null);
       const dynamicTx = netStatus?.latestTxHash;
-      const isLive = netStatus?.networkMode === 'LIVE_TESTNET';
+      const isLive = netStatus?.networkMode === 'LIVE_TESTNET' && Number(netStatus?.blockHeight) > 0;
       const logs = [
-        `[RPC] Connected to RPC: https://rpc.moderato.tempo.xyz (Chain ID: 42431)`,
+        isLive
+          ? `[RPC] Tempo L1 connection verified (Chain ID: ${TEMPO_CHAIN_ID})`
+          : `[RPC] Configured endpoint: ${TEMPO_RPC_URL} (Chain ID: ${TEMPO_CHAIN_ID}); live connection is unverified`,
         `[BLOCK] Current Tempo L1 Block Height: #${netStatus?.blockHeight || 'Syncing...'}`,
         isLive && dynamicTx ? `[TX] Latest confirmed L1 settlement: ${dynamicTx}` : `[STATUS] Connected in ${netStatus?.networkMode || 'fallback'} mode; no new chain write was made`,
         isLive ? `[BYTECODE] Contract record available on Tempo L1 Explorer` : `[BYTECODE] Live bytecode check unavailable in fallback mode`,
         `[CHECK] Addresses and network configuration loaded`,
-        `[ADDRESS] SynapseVault: ${netStatus?.vaultAddress || '0x3c42E274FAdd8e371fB84f97203CC2F2125c8775'}`,
-        `[ADDRESS] SynapseMPPReceiver: ${netStatus?.receiverAddress || '0xfCEb1a2633881c19283836a2E17Ba25E612724A0'}`,
+        `[ADDRESS] SynapseVault: ${netStatus?.vaultAddress || TEMPO_VAULT_ADDRESS}`,
+        `[ADDRESS] SynapseMPPReceiver: ${netStatus?.receiverAddress || TEMPO_RECEIVER_ADDRESS}`,
         isLive ? `[STATUS] Live testnet connection confirmed. TVL: $${Number(netStatus?.vaultTvl ?? 0).toFixed(2)} USD` : `[STATUS] Sandbox response only. TVL and receipts are not presented as live settlement.`
       ];
       setDeploymentLog(logs);
       setDeployedAddresses({
-        vault: netStatus?.vaultAddress || '0x3c42E274FAdd8e371fB84f97203CC2F2125c8775',
-        gateway: netStatus?.receiverAddress || '0xfCEb1a2633881c19283836a2E17Ba25E612724A0',
+        vault: netStatus?.vaultAddress || TEMPO_VAULT_ADDRESS,
+        gateway: netStatus?.receiverAddress || TEMPO_RECEIVER_ADDRESS,
         txHash: dynamicTx || ''
       });
       soundEngine.playClick();
@@ -102,6 +105,7 @@ export const ProtocolArchitecture: React.FC = () => {
   };
 
   const synapseVaultSol = `// SPDX-License-Identifier: MIT
+// Simplified architecture excerpt (for production implementation see contracts/src/SynapseVault.sol)
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -114,10 +118,11 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/ITIP20.sol";
 
 /**
- * @title SynapseVault
- * @notice Production-grade Escrow & Policy Engine for Autonomous AI Agent payments on Tempo L1.
+ * @title SynapseVault (Simplified Architecture Excerpt)
+ * @notice Testnet Escrow & Policy Engine for Autonomous AI Agent payments on Tempo L1.
  *         Supports EIP-712 scoped session delegations, Merkle whitelist verification,
  *         2D-nonce concurrency channels, and TIP-20 ISO 20022 payment memos.
+ *         For full production implementation, see contracts/src/SynapseVault.sol
  */
 contract SynapseVault is Ownable, ReentrancyGuard, EIP712 {
     using SafeERC20 for IERC20;
@@ -129,7 +134,7 @@ contract SynapseVault is Ownable, ReentrancyGuard, EIP712 {
         uint256 totalBudget;      // Total cumulative budget allocated
         uint256 currentSpent;     // Cumulative tokens spent so far
         uint256 validBefore;      // Expiry timestamp (UNIX)
-        bytes32 merkleRoot;       // Merkle root of whitelisted API endpoints (bytes32(0) = wildcard)
+        bytes32 merkleRoot;       // Merkle root of approved provider endpoints (zero root rejected on registration)
         SessionStatus status;     // Lifecycle status
     }
 
@@ -150,6 +155,8 @@ contract SynapseVault is Ownable, ReentrancyGuard, EIP712 {
         "MPPAuthorization(address sessionKey,uint64 channelId,uint64 nonce,address payee,uint256 amount,bytes32 endpointHash,bytes32 memo,uint256 validBefore)"
     );
 
+    uint256 public constant PROTOCOL_FEE_BPS = 10; // 0.1% protocol route fee
+    address public treasury;
     IERC20 public immutable paymentToken;
     uint256 public totalVaultBalance;
     mapping(address => SessionKeyConfig) public sessionKeys;
@@ -160,6 +167,7 @@ contract SynapseVault is Ownable, ReentrancyGuard, EIP712 {
         EIP712("SynapseVault", "1.0.0")
     {
         paymentToken = IERC20(_token);
+        treasury = _initialOwner;
     }
 
     function deposit(uint256 amount) external nonReentrant {
@@ -198,14 +206,19 @@ contract SynapseVault is Ownable, ReentrancyGuard, EIP712 {
         }
 
         config.currentSpent += p.amount;
+        if (config.currentSpent == config.totalBudget) {
+            config.status = SessionStatus.DEPLETED;
+        }
         totalVaultBalance -= p.amount;
 
-        // Native Tempo TIP-20 Settlement with 32-byte Memo
-        try ITIP20(address(paymentToken)).transferWithMemo(p.payee, p.amount, p.memo) returns (bool ok) {
-            require(ok, "TIP20_MEMO_FAILED");
-        } catch {
-            paymentToken.safeTransfer(p.payee, p.amount);
+        // Dispatch Payment with 0.1% Protocol Route Fee to Treasury
+        uint256 protocolFee = (p.amount * PROTOCOL_FEE_BPS) / 10000;
+        uint256 payeeAmount = p.amount - protocolFee;
+
+        if (protocolFee > 0 && treasury != address(0)) {
+            _dispatchPayment(treasury, protocolFee, bytes32("SYNAPSE_0.1%_PROTOCOL_FEE"));
         }
+        _dispatchPayment(p.payee, payeeAmount, p.memo);
     }
 }`;
 
@@ -278,24 +291,28 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
     <section id="architecture-specs-section" className="space-y-6 font-sans">
       
       {/* Tab Selector */}
-      <div className="flex border-b border-white/[.08] bg-white/[.03] backdrop-blur-md text-xs font-mono p-1 rounded-lg border border-white/[.08] w-fit">
+      <div className="ui-selector flex border-b border-white/[.08] bg-white/[.03] backdrop-blur-md text-xs font-mono p-1 rounded-lg border border-white/[.08] w-fit">
         <button
           onClick={() => setActiveSubTab('blueprint')}
-          className={`px-4 py-2 font-semibold rounded-md transition-all ${
+          className={`ui-interactive px-4 py-2 font-semibold rounded-md transition-all ${
             activeSubTab === 'blueprint'
               ? 'bg-[#d7ff4f]/[.08] text-[#d7ff4f] border border-[#d7ff4f]/20'
               : 'text-white/50 hover:text-[#f5f5f2]'
           }`}
+          aria-pressed={activeSubTab === 'blueprint'}
+          data-selected={activeSubTab === 'blueprint'}
         >
           System Blueprint
         </button>
         <button
           onClick={() => setActiveSubTab('solidity')}
-          className={`px-4 py-2 font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+          className={`ui-interactive px-4 py-2 font-semibold rounded-md transition-all flex items-center gap-1.5 ${
             activeSubTab === 'solidity'
               ? 'bg-[#d7ff4f]/[.08] text-[#d7ff4f] border border-[#d7ff4f]/20'
               : 'text-white/50 hover:text-[#f5f5f2]'
           }`}
+          aria-pressed={activeSubTab === 'solidity'}
+          data-selected={activeSubTab === 'solidity'}
         >
           <Code className="w-3.5 h-3.5" />
           <span>Solidity Contracts (EVM)</span>
@@ -305,69 +322,69 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
       {activeSubTab === 'blueprint' ? (
         <>
           {/* Executive Value Framework: Old Way vs Synapse402 & 4-Step Process */}
-          <div className="p-5 sm:p-7 rounded-2xl bg-white/[.03] backdrop-blur-md border border-[#d7ff4f]/20 space-y-6 font-sans shadow-[0_0_35px_rgba(215,255,79,0.06)]">
+            <div className="ui-section p-5 sm:p-7 rounded-2xl bg-white/[.03] backdrop-blur-md border border-[#d7ff4f]/20 space-y-6 font-sans shadow-[0_0_35px_rgba(215,255,79,0.06)]">
             {/* Header Row: Narrative Title & Live Network Badges */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[.08] pb-3">
               <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-md bg-[#d7ff4f] text-[#08090c] font-black text-[10px] font-mono tracking-wider uppercase">
-                  START HERE
-                </span>
                 <span className="text-sm sm:text-base font-bold text-white tracking-tight">
                   Controlled payments for AI agents and the services they use
                 </span>
               </div>
-              <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-400">
-                <span className="px-2 py-0.5 rounded bg-[#d7ff4f]/10 text-[#d7ff4f] border border-[#d7ff4f]/20 font-semibold">
-                  Fast rules check · optional on-chain proof
-                </span>
-                <span className="px-2 py-0.5 rounded bg-white/[0.04] text-zinc-300 border border-white/10 font-semibold">
-                  Pay only for work used
-                </span>
-              </div>
+              <span className="text-[10px] text-zinc-400">
+                One job maximum · approved provider checks · receipt after settlement
+              </span>
             </div>
 
-            <p className="max-w-4xl text-base leading-relaxed text-zinc-100">
-              One person gives an AI worker a job, a spending limit, and a short list of allowed services. The worker buys only the steps it needs, pays each provider, and returns the finished result. The SDK adds the same machine payment path to any API or website, while a swarm lets several specialists share one controlled budget.
+            <p className="max-w-5xl rounded-xl bg-[#d7ff4f]/[.035] px-4 py-3 text-sm sm:text-base leading-relaxed text-zinc-200">
+              One person gives an AI worker a job and one spending limit. The system applies the approved service rules automatically, buys only the steps the job needs, settles each approved step through the configured payment receiver, and returns the result. The SDK lets a production provider set its own payee address; this hackathon demo uses one shared receiver gateway.
             </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-              <div className="rounded-xl border border-white/[.12] bg-black/[.14] p-4 space-y-1.5">
-                <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Person</div>
-                <div className="font-semibold text-white">Sets the job and the limit</div>
-                <p className="text-zinc-300 leading-relaxed">The agent never receives an unrestricted wallet. Every call has a clear cap and approved destination.</p>
+            <div className="relative isolate min-h-[350px] overflow-hidden px-4 py-6 sm:px-8" aria-label="Controlled payment gate: agent request, rules check, payment gate, and receipt issued">
+              <div className="pointer-events-none absolute left-1/2 top-1/2 h-[280px] w-[280px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#d7ff4f]/25" />
+              <div className="pointer-events-none absolute left-1/2 top-1/2 h-[205px] w-[205px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/[0.12]" />
+              <div className="pointer-events-none absolute left-1/2 top-1/2 h-[150px] w-[150px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#d7ff4f]/[0.08] blur-2xl" />
+              <div className="absolute left-[16%] top-[49%] hidden h-px w-[35%] bg-gradient-to-r from-[#d7ff4f]/50 via-[#d7ff4f] to-[#d7ff4f]/80 sm:block" />
+              <div className="absolute left-[50%] top-[53%] hidden h-px w-[35%] bg-gradient-to-r from-[#d7ff4f] via-[#d7ff4f]/80 to-[#d7ff4f]/50 sm:block" />
+              <div className="absolute left-[20%] top-[65%] hidden h-px w-[28%] -rotate-[17deg] bg-[#d7ff4f]/80 sm:block" />
+
+              <div className="relative z-10 mb-2 flex items-center justify-between gap-3 text-[10px] font-mono font-black uppercase tracking-[0.18em]">
+                <span className="text-[#d7ff4f]">Agent spend control</span>
+                <span className="text-zinc-500">Intent → validation → settlement</span>
               </div>
-              <div className="rounded-xl border border-[#d7ff4f]/25 bg-[#d7ff4f]/[.035] p-4 space-y-1.5">
-                <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#d7ff4f]">Agent</div>
-                <div className="font-semibold text-white">Buys the missing steps</div>
-                <p className="text-zinc-300 leading-relaxed">It can call an API, an SDK-enabled site, or another specialist only when that step helps finish the job.</p>
+
+              <div className="absolute left-1/2 top-1/2 z-20 flex h-[148px] w-[148px] -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border border-[#d7ff4f] bg-[#182316]/95 text-center shadow-[0_0_45px_rgba(215,255,79,0.18)]">
+                <div className="mb-2 grid h-12 w-12 place-items-center rounded-full bg-[#d7ff4f] text-[#0b100d]"><Lock className="h-6 w-6" /></div>
+                <div className="text-sm font-black leading-tight text-white">PAYMENT<br />GATE</div>
+                <div className="mt-1 text-[9px] font-mono font-bold uppercase tracking-wider text-[#d7ff4f]">Policy active</div>
               </div>
-              <div className="rounded-xl border border-white/[.12] bg-black/[.14] p-4 space-y-1.5">
-                <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Provider</div>
-                <div className="font-semibold text-white">Earns per approved result</div>
-                <p className="text-zinc-300 leading-relaxed">A service owner keeps the normal human site and adds a paid machine route beside it.</p>
+
+              <div className="absolute left-[7%] top-[31%] z-20 flex h-[112px] w-[112px] flex-col items-center justify-center rounded-full border border-slate-500/50 bg-[#1b2630] text-center shadow-[0_8px_25px_rgba(0,0,0,0.22)] sm:left-[10%] sm:h-[124px] sm:w-[124px]">
+                <Bot className="mb-2 h-6 w-6 text-zinc-200" /><div className="text-[11px] font-black leading-tight text-zinc-100">AGENT<br />REQUEST</div>
+              </div>
+              <div className="absolute bottom-[8%] left-[14%] z-20 flex h-[104px] w-[104px] flex-col items-center justify-center rounded-full border border-[#d7ff4f]/75 bg-[#1d2c17] text-center shadow-[0_8px_25px_rgba(0,0,0,0.22)] sm:left-[17%] sm:h-[112px] sm:w-[112px]">
+                <ShieldCheck className="mb-2 h-6 w-6 text-[#d7ff4f]" /><div className="text-[11px] font-black leading-tight text-[#d7ff4f]">RULES<br />CHECK</div>
+              </div>
+              <div className="absolute right-[7%] top-[43%] z-20 flex h-[112px] w-[112px] flex-col items-center justify-center rounded-full border border-slate-500/50 bg-[#1b2630] text-center shadow-[0_8px_25px_rgba(0,0,0,0.22)] sm:right-[10%] sm:h-[124px] sm:w-[124px]">
+                <FileCheck className="mb-2 h-6 w-6 text-zinc-200" /><div className="text-[11px] font-black leading-tight text-zinc-100">RECEIPT<br />ISSUED</div>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-stretch gap-2.5 pt-1" aria-label="Work flow overview">
-              {[
-                { icon: Sparkles, label: 'Give a goal', detail: 'What should be done?' },
-                { icon: Lock, label: 'Set the rules', detail: 'Budget and access' },
-                { icon: Layers, label: 'Get the work done', detail: 'Services and agents' },
-                { icon: CheckCircle2, label: 'Receive the result', detail: 'Work and receipt' },
-              ].map(({ icon: Icon, label, detail }, index) => (
-                <React.Fragment key={label}>
-                  <div className={`relative flex flex-1 items-center gap-2.5 rounded-xl border px-3 py-3 ${index === 2 ? 'border-[#d7ff4f]/40 bg-[#d7ff4f]/[.05]' : 'border-white/[.1] bg-black/[.14]'}`}>
-                    <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${index === 2 ? 'bg-[#d7ff4f] text-[#08090c]' : 'bg-white/[.08] text-zinc-200'}`}>
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-white"><span className="text-[9px] font-mono text-zinc-500">0{index + 1}</span>{label}</div>
-                      <div className="text-[10px] text-zinc-400">{detail}</div>
-                    </div>
-                  </div>
-                  {index < 3 && <ArrowRight className="hidden self-center justify-self-center text-zinc-600 sm:block" size={15} />}
-                </React.Fragment>
-              ))}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              <div className="ui-meta rounded-xl border border-white/[.12] bg-black/[.14] p-4 space-y-1.5">
+                <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Person</div>
+                <div className="font-semibold text-white">Sets the job and one limit</div>
+                <p className="text-zinc-300 leading-relaxed">The agent never receives an unrestricted wallet. The job maximum and approved destinations are applied before each paid step, so the owner keeps control of spend.</p>
+              </div>
+              <div className="ui-meta rounded-xl border border-[#d7ff4f]/25 bg-[#d7ff4f]/[.035] p-4 space-y-1.5">
+                <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#d7ff4f]">Agent</div>
+                <div className="font-semibold text-white">Buys the missing steps</div>
+                <p className="text-zinc-300 leading-relaxed">It can call an API, an SDK-enabled site, or another specialist only when that step helps finish the job, without a human checkout.</p>
+              </div>
+              <div className="ui-meta rounded-xl border border-white/[.12] bg-black/[.14] p-4 space-y-1.5">
+                <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">Provider</div>
+                <div className="font-semibold text-white">Defines a paid machine route</div>
+                <p className="text-zinc-300 leading-relaxed">In a production integration, the provider sets its own payee address in the SDK. This demo settles to the shared SynapseMPPReceiver gateway so the payment path can be inspected.</p>
+              </div>
             </div>
 
             {/* Side-by-Side Contrast: Old Way vs Synapse402 Way */}
@@ -392,7 +409,7 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                   </li>
                   <li className="flex items-center gap-2">
                     <XCircle className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-                    <span><strong className="text-zinc-300">Scrapers:</strong> Burn <strong className="text-white">$5–$10/GB</strong> on residential proxies and CAPTCHAs.</span>
+                    <span><strong className="text-zinc-300">Scrapers:</strong> absorb proxy and CAPTCHA costs before a useful response can be delivered.</span>
                   </li>
                 </ul>
               </div>
@@ -404,20 +421,19 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                     <CheckCircle2 className="w-3.5 h-3.5 text-[#d7ff4f] shrink-0" />
                     <span>What gets connected</span>
                   </span>
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#d7ff4f]/20 text-[#d7ff4f] font-bold border border-[#d7ff4f]/30">Example: 0.1¢ / request</span>
                 </div>
                 <ul className="space-y-1.5 text-[11px] text-zinc-200">
                   <li className="flex items-center gap-2">
                     <Coins className="w-3.5 h-3.5 text-[#d7ff4f] shrink-0" />
-                    <span><strong className="text-white">Service owners:</strong> a small SDK lets agents pay for the exact API call, tool, or access they use.</span>
+                    <span><strong className="text-white">Providers:</strong> a small SDK lets agents pay for the exact API call, tool, or access they use — a fair pay-per-use model that makes joining worthwhile and grows partner participation.</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <Zap className="w-3.5 h-3.5 text-[#d7ff4f] shrink-0" />
-                    <span><strong className="text-white">Tempo L1:</strong> Micro-gas (&lt;$0.00002) enables true <strong className="text-[#d7ff4f]">0.1¢ machine micropayments</strong>.</span>
+                    <span><strong className="text-white">Tempo L1:</strong> A selectable TIP-20 fee token supports <strong className="text-[#d7ff4f]">0.1¢ machine micropayments</strong>; the live fee is shown on the confirmed receipt.</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle2 className="w-3.5 h-3.5 text-[#d7ff4f] shrink-0" />
-                    <span><strong className="text-white">AI Agents:</strong> Complete jobs by buying data, API access, software actions, or help from other agents.</span>
+                    <span><strong className="text-white">AI Agents:</strong> buy only the data, API access, or software step they need, so they can finish jobs without subscriptions or manual checkout.</span>
                   </li>
                 </ul>
               </div>
@@ -452,9 +468,9 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                   <span className="text-[10px] font-mono font-bold text-[#d7ff4f] uppercase">Step 03</span>
                   <span className="text-[9px] font-mono text-[#d7ff4f]/80 font-bold">Within rules</span>
                 </div>
-                <div className="text-xs font-bold text-[#d7ff4f]">Pay each provider</div>
+                <div className="text-xs font-bold text-[#d7ff4f]">Settle each approved route</div>
                 <p className="text-[11px] text-zinc-400 leading-snug">
-                  Each approved step is paid within its limit; live payments can be checked on-chain.
+                  Each approved step is checked against the job limit and settled through the configured receiver; a live receipt can be checked on-chain.
                 </p>
               </div>
 
@@ -474,7 +490,7 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
             <div className="p-3 rounded-xl bg-white/[.02] border border-white/[.06] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
               <div className="flex items-center gap-2 text-zinc-300">
                 <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span><strong className="text-white font-semibold">One shared loop:</strong> people assign work, agents buy what they need, and service owners get paid for each completed step.</span>
+                <span><strong className="text-white font-semibold">One shared loop:</strong> people assign work, agents buy only what they need, and providers earn for each completed step — so every side has a reason to participate.</span>
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 <div className="text-[10.5px] text-zinc-200 space-y-0.5">
@@ -483,8 +499,8 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                     <span className="text-white font-bold">Pay-per-use</span>
                   </div>
                   <div className="flex items-center justify-between font-mono">
-                    <span className="text-zinc-400 flex items-center gap-1"><Globe className="w-3 h-3 text-zinc-300" /> Seller:</span>
-                    <span className="text-[#d7ff4f] font-bold">Example payout: 99.9%</span>
+                    <span className="text-zinc-400 flex items-center gap-1"><Globe className="w-3 h-3 text-zinc-300" /> Provider:</span>
+                    <span className="text-[#d7ff4f] font-bold">Illustrative split: 99.9%</span>
                   </div>
                 </div>
               </div>
@@ -494,15 +510,6 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
           {/* Intro Header: Two-Sided Market Flywheel */}
           <div className="bg-white/[.025] backdrop-blur-md border border-white/[.08] rounded-2xl p-6 sm:p-7 shadow-sm relative overflow-hidden mt-8">
             <div className="absolute right-0 top-0 w-80 h-80 bg-[#d7ff4f]/5 rounded-full blur-3xl pointer-events-none"></div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="px-2.5 py-0.5 rounded-full bg-[#d7ff4f]/[.08] text-[#d7ff4f] border border-[#d7ff4f]/30 font-mono text-xs font-semibold flex items-center">
-                <span>THE AGENT WORK ECONOMY</span>
-                <InfoBadge
-                  title="How the work network connects"
-                  text="The same payment rules connect the person who assigns the job, the agent doing it, the services it uses, and any specialist agents it hires."
-                />
-              </span>
-            </div>
             <h2 className="text-xl font-bold text-[#f5f5f2] tracking-tight">
               One payment flow, three roles
             </h2>
@@ -515,7 +522,7 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                   <span>Person who assigns the job</span>
                 </div>
                 <p className="text-zinc-300 leading-relaxed text-[11px]">
-                  Sets the goal, budget, and approved providers. The agent can work without an unrestricted wallet.
+                  Sets the goal, budget, and approved providers. This keeps the work predictable while the agent works without an unrestricted wallet.
                 </p>
               </div>
 
@@ -525,7 +532,7 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                   <span>Provider who supplies a step</span>
                 </div>
                 <p className="text-zinc-300 leading-relaxed text-[11px]">
-                  Adds the SDK and charges only when an agent uses the service. A specialist agent can also be paid when it completes one part of a larger job.
+                  Adds the SDK and chooses the payee address for its paid route. This demo uses one shared receiver gateway; a production provider can route an approved request to its own wallet.
                 </p>
               </div>
             </div>
@@ -535,9 +542,7 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
           <div className="space-y-4 mt-8">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
               <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded-md bg-[#d7ff4f] text-[#08090c] font-black text-[10px] tracking-wider uppercase">
-                  02 · SEE THE MONEY FLOW
-                </span>
+                <span className="text-xs font-bold text-white tracking-wide">Payment example</span>
                 <span className="text-xs font-bold text-white tracking-wide flex items-center">
                   <span>Example: how one job's payment is split</span>
                   <InfoBadge
@@ -556,7 +561,7 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <span className="text-[11px] font-semibold text-zinc-300 block mb-1.5">
-                    Select Bot Batch Volume:
+                    Select Work Batch Volume:
                   </span>
                   <div className="flex flex-wrap items-center gap-2">
                     {[
@@ -619,7 +624,7 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                   <div className="space-y-1.5 font-mono text-[11px] text-zinc-300">
                     <div className="flex justify-between py-1 border-b border-white/[.04]">
                       <span className="text-zinc-400">Fixed Fee Per Swipe:</span>
-                      <span className="text-zinc-300 font-bold">$0.30 fixed + 2.9%</span>
+                      <span className="text-zinc-300 font-bold">Illustrative: $0.30 fixed + 2.9%</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-white/[.04]">
                       <span className="text-zinc-400">Total Swipe Fee on {calcCalls.toLocaleString()} calls:</span>
@@ -635,16 +640,16 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                           0,
                           calcCalls * 0.30 + calcCalls * calcPriceUsd * 0.029 - calcCalls * calcPriceUsd
                         ).toFixed(2)}{' '}
-                        USD (Negative Margin due to $0.30 fixed fee)
+                        USD (Illustrative fixed-fee comparison)
                       </span>
                     </div>
                     <div className="flex justify-between py-1">
                       <span className="text-zinc-400">Payout Finality:</span>
-                      <span className="text-zinc-400">2-3 Business Days</span>
+                      <span className="text-zinc-400">Illustrative processor window</span>
                     </div>
                   </div>
                   <p className="text-[11px] text-zinc-400 leading-relaxed">
-                    Credit cards charge a minimum $0.30 fee per swipe, making 0.1¢ agent micropayments mathematically impossible.
+                    This comparison assumes a $0.30 fixed card fee and 2.9% rate; actual processor terms vary. Under that assumption, a 0.1¢ request loses its margin before delivery.
                   </p>
                 </div>
 
@@ -656,7 +661,7 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                       <span>Synapse402 on Tempo L1</span>
                     </span>
                     <span className="px-2 py-0.5 rounded bg-[#d7ff4f]/20 text-[#d7ff4f] font-mono text-[10px] font-bold border border-[#d7ff4f]/30">
-                      99.9% SELLER PAYOUT (0.1% FEE)
+                      ILLUSTRATIVE PAYOUT MODEL (0.1% FEE)
                     </span>
                   </div>
                   <div className="space-y-1.5 font-mono text-[11px] text-zinc-200">
@@ -665,15 +670,15 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                       <span className="text-white font-bold">${(calcCalls * calcPriceUsd).toFixed(4)} USD</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-white/[.06]">
-                      <span className="text-zinc-400">Service payout (99.9%):</span>
+                      <span className="text-zinc-400">Illustrative provider payout (99.9%):</span>
                       <span className="text-[#d7ff4f] font-bold">
-                        +${(calcCalls * calcPriceUsd * 0.999).toFixed(4)} USD
+                        +${(calcCalls * calcPriceUsd - calcCalls * Math.max(0.000001, calcPriceUsd * 0.001)).toFixed(4)} USD
                       </span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-white/[.06]">
                       <span className="text-zinc-400">Synapse Protocol Fee (0.1%):</span>
                       <span className="text-[#d7ff4f] font-bold">
-                        ${(calcCalls * calcPriceUsd * 0.001).toFixed(6)} USD
+                        ${(calcCalls * Math.max(0.000001, calcPriceUsd * 0.001)).toFixed(6)} USD
                       </span>
                     </div>
                     <div className="flex justify-between py-1">
@@ -682,7 +687,7 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                     </div>
                   </div>
                   <p className="text-[11px] text-zinc-300 leading-relaxed">
-                    The service receives its share directly, with a payment record that can be checked later.
+                    This illustrative payout model shows what a provider could receive after configuring its own payee. In this hackathon demo, confirmed payments go to the shared SynapseMPPReceiver gateway; the receipt shows that receiver explicitly.
                   </p>
                 </div>
               </div>
@@ -692,14 +697,14 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                 <div className="p-4 rounded-xl bg-[#d7ff4f]/[.08] border border-[#d7ff4f]/30 space-y-2 animate-fadeIn font-mono text-xs">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-center gap-2 text-[#d7ff4f] font-bold">
-                      <CheckCircle2 className="w-4 h-4" />
+                      <Calculator className="w-4 h-4" />
                       <span>Example route calculated — no live payment was sent.</span>
                     </div>
                     <span className="text-[11px] text-zinc-400">Calculated at {routeResult.calculatedAt} · no transaction submitted</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
                     <div className="p-2 rounded bg-white/[.025] border border-white/10">
-                      <span className="text-zinc-400 block text-[10px]">Seller Deposit (99.9%):</span>
+                      <span className="text-zinc-400 block text-[10px]">Illustrative provider payout (99.9%):</span>
                       <span className="text-white font-bold text-xs">
                         +${routeResult.sellerNet.toFixed(4)} USD
                       </span>
@@ -711,7 +716,7 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                       </span>
                     </div>
                     <div className="p-2 rounded bg-white/[.025] border border-white/10">
-                      <span className="text-zinc-400 block text-[10px]">Tempo L1 Gas Cost:</span>
+                      <span className="text-zinc-400 block text-[10px]">Tempo L1 Fee Token Cost:</span>
                       <span className="text-zinc-300 font-bold text-xs">
                         ${routeResult.tempoGasUsd.toFixed(6)} USD
                       </span>
@@ -739,7 +744,7 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                         )}
                       </button>
                       <a
-                        href="https://explore.tempo.xyz"
+                        href={TEMPO_EXPLORER_URL}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-zinc-400 hover:text-white flex items-center gap-1 hover:underline text-[10px]"
@@ -755,20 +760,16 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
           </div>
 
           {/* 3 Core Architecture Pillars */}
-          <details className="group rounded-2xl border border-white/[.08] bg-white/[.015]">
+          <details open className="group rounded-2xl border border-white/[.08] bg-white/[.015]">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-xs font-bold text-white marker:hidden">
               <span className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded-md bg-[#d7ff4f] text-[#08090c] font-black text-[10px] tracking-wider uppercase">TECHNICAL SAFEGUARDS</span>
                 <span>What keeps each payment controlled</span>
               </span>
               <span className="text-[10px] font-mono text-zinc-500 transition group-open:rotate-180">▼</span>
             </summary>
           <div className="space-y-2">
             <div className="flex items-center gap-2 px-1">
-              <span className="px-2 py-0.5 rounded-md bg-[#d7ff4f] text-[#08090c] font-black text-[10px] tracking-wider uppercase">
-                CORE PILLARS
-              </span>
-              <span className="text-xs font-bold text-white tracking-wide">3 Foundational Architectural Primitives</span>
+              <span className="text-xs font-bold text-white tracking-wide">Three rules that control each payment</span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Pillar 1 */}
@@ -777,14 +778,14 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                 <Lock className="w-4 h-4" />
               </div>
               <h3 className="font-semibold text-sm text-[#f5f5f2] flex items-center">
-                <span>1. Limited-Use Cards (with spending limits)</span>
+                <span>1. Spending permissions</span>
                 <InfoBadge
                   title="EIP-712 Scoped Delegation"
-                  text="Secp256k1 cryptographic session keys with strict parameters: maximum spend per call ($0.0050), total daily allowance, and validBefore expiration on SynapseVault.sol."
+                  text="Secp256k1 cryptographic session keys with strict parameters: maximum spend per call ($0.0050), reusable total cap, and validBefore expiration on SynapseVault.sol."
                 />
               </h3>
               <p className="text-xs text-zinc-300 leading-relaxed font-sans">
-                Agent owners issue restricted session keys with hard daily caps, per-call limits, and approved provider lists.
+                A normal mission creates a restricted session scope from the job maximum automatically. Repeated or background runs can reuse a stricter key with a reusable total cap, a per-call ceiling, and approved-provider limits, so one bad request cannot drain the shared treasury.
               </p>
               <div className="text-[11px] font-mono text-[#d7ff4f] bg-white/[.025] p-2.5 rounded-lg border border-white/[.08]">
                 Enforced by SynapseVault.sol on-chain
@@ -797,17 +798,17 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                 <Zap className="w-4 h-4" />
               </div>
               <h3 className="font-semibold text-sm text-[#f5f5f2] flex items-center">
-                <span>2. Parallel Payment Lanes</span>
+                <span>2. Payment lanes and sequencing</span>
                 <InfoBadge
                   title="Tempo L1 2D Nonces"
                   text="Independent 2D nonce counters per bot session key so multiple bots can pay at once without waiting in line."
                 />
               </h3>
               <p className="text-xs text-zinc-300 leading-relaxed font-sans">
-                Tempo L1's 2-dimensional nonce structure gives each bot an independent lane, so multiple bots can pay at once without waiting in line.
+                Tempo L1's 2-dimensional nonce structure gives each bot an independent lane, so multiple bots can pay at once without waiting in line or blocking one another.
               </p>
               <div className="text-[11px] font-mono text-[#d7ff4f] bg-white/[.025] p-2.5 rounded-lg border border-white/[.08]">
-                Simultaneous Multi-Agent Concurrency
+                Separate payment lanes per agent
               </div>
             </div>
 
@@ -820,14 +821,14 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                 <span>3. Batch settlement</span>
                 <InfoBadge
                   title="Tempo Native TIP-20 Settlement"
-                  text="Sub-150ms on-chain finality on Tempo L1 with payment references that make every agent job easy to match."
+                  text="The protocol supports independent nonce lanes. This walkthrough confirms work steps in sequence and shows a receipt after confirmation."
                 />
               </h3>
               <p className="text-xs text-zinc-300 leading-relaxed font-sans">
-                A live Tempo run can settle sub-cent transactions in about 135ms with low gas; each payment can carry a reference for later accounting export.
+                The protocol supports independent nonce lanes; this walkthrough confirms work steps in sequence. Each confirmed payment carries a reference so the spend can be matched to the work later. Testnet latency varies by RPC and confirmation time.
               </p>
               <div className="text-[11px] font-mono text-[#d7ff4f] bg-white/[.025] p-2.5 rounded-lg border border-white/[.08]">
-                0.1% Route Fee + Direct Settlement
+                Route fee + direct settlement
               </div>
             </div>
           </div>
@@ -835,10 +836,9 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
           </details>
 
           {/* Fee Comparison & Unit Economics */}
-          <details className="group rounded-2xl border border-white/[.08] bg-white/[.015]">
+          <details open className="group rounded-2xl border border-white/[.08] bg-white/[.015]">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-xs font-bold text-white marker:hidden">
               <span className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded-md bg-[#d7ff4f] text-[#08090c] font-black text-[10px] tracking-wider uppercase">COSTS &amp; BUSINESS MODEL</span>
                 <span>Why pay per request instead of a subscription</span>
               </span>
               <span className="text-[10px] font-mono text-zinc-500 transition group-open:rotate-180">▼</span>
@@ -846,14 +846,12 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
           <div className="space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
               <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded-md bg-[#d7ff4f] text-[#08090c] font-black text-[10px] tracking-wider uppercase font-mono">
-                  03 · COMPARE THE COST
-                </span>
+                <span className="text-xs font-bold text-white tracking-wide">Cost example</span>
                 <span className="text-xs font-bold text-white tracking-wide flex items-center">
                   <span>Economic Architecture & Compliance</span>
                   <InfoBadge
                     title="Machine-to-Machine Unit Economics"
-                    text="Traditional banking rails (Visa/Stripe) have fixed minimum swipe fees that make sub-cent machine calls impossible. Tempo L1 provides native sub-cent settlements."
+                    text="Traditional banking rails can impose fixed fees that are poorly suited to tiny machine calls. Tempo L1 supports sub-cent settlement through a selectable TIP-20 fee token."
                   />
                 </span>
               </div>
@@ -867,20 +865,18 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
               <div className="bg-white/[.03] backdrop-blur-md border border-white/[.08] rounded-xl p-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-mono font-bold text-white">Card Fees vs Micropayments</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.05] text-zinc-300 border border-white/10">CARD RAILS VS L1</span>
                 </div>
                 <p className="text-xs text-zinc-300 leading-relaxed">
-                  Traditional credit card minimum fees ($0.30) make 0.1¢ calls unviable; Tempo L1 enables sub-cent settlement with micro-gas (&lt;$0.00002) per call.
+                  Traditional credit card fees are shown here as an illustrative comparison; Tempo L1 supports sub-cent settlement with a selectable TIP-20 fee token, while the live value is read from the receipt.
                 </p>
                 <div className="text-[11px] font-mono text-[#d7ff4f] bg-white/[.025] p-2 rounded-lg border border-white/[.06]">
-                  Tempo L1 Gas: &lt;$0.00002 per micro-settlement
+                  Tempo L1 fee token: estimate only · live value on receipt
                 </div>
               </div>
 
               <div className="bg-white/[.03] backdrop-blur-md border border-white/[.08] rounded-xl p-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-mono font-bold text-white">Blocked requests can become paid access</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.05] text-zinc-300 border border-white/10">MONETIZATION MODEL</span>
                 </div>
                 <p className="text-xs text-zinc-300 leading-relaxed">
                   Websites spend resources on WAF firewalls to return HTTP 403 blocks and earn <strong className="text-white">$0</strong>. With Synapse 402 SDK, bot traffic converts into <strong className="text-[#d7ff4f]">paid API revenue (0.1% protocol fee)</strong> on Tempo L1.
@@ -896,7 +892,7 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                   <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#d7ff4f]/10 text-[#d7ff4f] border border-[#d7ff4f]/20">DIRECT MACHINE ACCESS</span>
                 </div>
                 <p className="text-xs text-zinc-300 leading-relaxed">
-                  Instead of brittle scrapers, residential proxies (<strong className="text-white">$5–$10/GB</strong>), and CAPTCHA solving, AI agents pay <strong className="text-[#d7ff4f]">0.1¢</strong> directly for clean, structured JSON.
+                  Instead of brittle scrapers, proxy layers, and CAPTCHA solving, AI agents pay <strong className="text-[#d7ff4f]">0.1¢</strong> directly for clean, structured JSON.
                 </p>
                 <div className="text-[11px] font-mono text-[#d7ff4f] bg-white/[.025] p-2 rounded-lg border border-white/[.06]">
                   Built for high uptime + minimal LLM token waste
@@ -954,19 +950,15 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
           </details>
 
           {/* Real-time Interactive Deployer Widget */}
-          <details className="group rounded-2xl border border-white/[.08] bg-white/[.015]">
+          <details open className="group rounded-2xl border border-white/[.08] bg-white/[.015]">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-xs font-bold text-white marker:hidden">
               <span className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded-md bg-[#d7ff4f] text-[#08090c] font-black text-[10px] tracking-wider uppercase">TECHNICAL PROOF</span>
                 <span>Contracts, addresses and network checks</span>
               </span>
               <span className="text-[10px] font-mono text-zinc-500 transition group-open:rotate-180">▼</span>
             </summary>
           <div className="space-y-2">
             <div className="flex items-center gap-2 px-1">
-              <span className="px-2 py-0.5 rounded-md bg-[#d7ff4f] text-[#08090c] font-black text-[10px] tracking-wider uppercase">
-                04 · TECHNICAL PROOF
-              </span>
               <span className="text-xs font-bold text-white tracking-wide flex items-center">
                 <span>Contract configuration and verification</span>
                 <InfoBadge
@@ -983,19 +975,11 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                   Smart Contract Verification & Deployment Status
                 </h3>
               </div>
-              <div className="flex items-center gap-2 font-mono text-[10px]">
-                <span className="px-2.5 py-0.5 rounded-full bg-[#d7ff4f]/15 text-[#d7ff4f] border border-[#d7ff4f]/30 font-bold">
-                  ✓ CONFIGURED CONTRACTS
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-semibold">
-                  TEMPO MODERATO · 42431
-                </span>
-              </div>
             </div>
             <p className="text-xs text-zinc-300 leading-relaxed font-sans">
-              The project is configured for Tempo Moderato Testnet (Chain ID 42431). Open the addresses below to inspect the network record; a sandbox connection does not claim a new on-chain deployment.{' '}
+              The project is configured for Tempo Moderato Testnet (Chain ID {TEMPO_CHAIN_ID}). Open the addresses below to verify the contracts and network record; a sandbox connection does not claim a new on-chain deployment.{' '}
               <a
-                href="https://explore.tempo.xyz/address/0x3c42E274FAdd8e371fB84f97203CC2F2125c8775"
+                href={`${TEMPO_EXPLORER_URL}/address/${TEMPO_VAULT_ADDRESS}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[#d7ff4f] hover:underline font-mono"
@@ -1004,14 +988,14 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
               </a>{' '}
               (SynapseVault) and{' '}
               <a
-                href="https://explore.tempo.xyz/address/0xfCEb1a2633881c19283836a2E17Ba25E612724A0"
+                href={`${TEMPO_EXPLORER_URL}/address/${TEMPO_RECEIVER_ADDRESS}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[#d7ff4f] hover:underline font-mono"
               >
                 0xfCEb1a2...
               </a>{' '}
-              (SynapseMPPReceiver) active and verified on-chain:
+              (SynapseMPPReceiver) are the configured contract addresses. Use “Check network status” below to verify live bytecode and the latest confirmed receipt:
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -1025,7 +1009,7 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                 <span>{isDeploying ? 'Checking network status...' : 'Check network status'}</span>
               </button>
               <a
-                href="https://explore.tempo.xyz/address/0x3c42E274FAdd8e371fB84f97203CC2F2125c8775"
+                href={`${TEMPO_EXPLORER_URL}/address/${TEMPO_VAULT_ADDRESS}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-4 py-2.5 bg-[#d7ff4f] hover:bg-[#cbf540] text-[#08090c] font-black rounded-xl text-xs font-mono transition-all flex items-center gap-2 cursor-pointer"
@@ -1058,7 +1042,7 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                   <div>
                     <span className="text-slate-400">SynapseVault Contract:</span>
                     <a
-                      href={`https://explore.tempo.xyz/address/${deployedAddresses.vault}`}
+                      href={`${TEMPO_EXPLORER_URL}/address/${deployedAddresses.vault}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-0.5 bg-white/[.03] p-1.5 rounded text-[#d7ff4f] hover:underline font-mono truncate flex items-center justify-between group border border-white/10"
@@ -1070,7 +1054,7 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                   <div>
                     <span className="text-slate-400">SynapseMPPReceiver Contract:</span>
                     <a
-                      href={`https://explore.tempo.xyz/address/${deployedAddresses.gateway}`}
+                      href={`${TEMPO_EXPLORER_URL}/address/${deployedAddresses.gateway}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-0.5 bg-white/[.03] p-1.5 rounded text-[#d7ff4f] hover:underline font-mono truncate flex items-center justify-between group border border-white/10"
@@ -1087,12 +1071,14 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
                       : 'Verified Smart Contract on Tempo Moderato Explorer:'}
                   </span>
                   <a
-                    href={`https://explore.tempo.xyz/address/${deployedAddresses.vault}`}
+                    href={deployedAddresses.txHash.length === 66 && deployedAddresses.txHash.startsWith('0x')
+                      ? tempoTransactionUrl(deployedAddresses.txHash)
+                      : tempoAddressUrl(deployedAddresses.vault)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-0.5 bg-white/[.03] p-1.5 rounded text-[#d7ff4f] hover:underline font-mono truncate flex items-center justify-between group border border-white/10"
                   >
-                    <span className="truncate">{deployedAddresses.txHash}</span>
+                    <span className="truncate">{deployedAddresses.txHash || deployedAddresses.vault}</span>
                     <ExternalLink className="w-3 h-3 text-[#d7ff4f] shrink-0 ml-1" />
                   </a>
                 </div>
@@ -1101,6 +1087,64 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
           </div>
           </div>
           </details>
+
+          {/* Small, realistic roadmap for the jury. Keep it at the end of How It Works. */}
+          <div className="mt-8 rounded-2xl border border-white/10 bg-[#0c0e14] p-5 sm:p-6 space-y-4">
+            <div className="border-b border-white/10 pb-3">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-[#d7ff4f] font-bold">
+                Where this goes next
+              </span>
+              <h4 className="text-base font-bold text-white tracking-tight mt-0.5">
+                Start narrow. Prove the loop. Expand from there.
+              </h4>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+              <div className="rounded-xl border border-[#d7ff4f]/30 bg-[#d7ff4f]/[0.04] p-4 space-y-2">
+                <span className="inline-flex text-[10px] font-mono font-black uppercase text-[#d7ff4f] px-2 py-0.5 rounded bg-[#d7ff4f]/15 border border-[#d7ff4f]/30">
+                  Today
+                </span>
+                <div className="text-xs font-bold text-white tracking-tight">Working payment-and-work loop</div>
+                <p className="text-[11px] text-zinc-300 leading-relaxed font-sans">
+                  Tempo payments, spending limits, one real AI mission, a provider SDK route, and receipts that show what happened.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4 space-y-2">
+                <span className="inline-flex text-[10px] font-mono font-bold uppercase text-sky-400 px-2 py-0.5 rounded bg-sky-500/10 border border-sky-500/20">
+                  Next
+                </span>
+                <div className="text-xs font-bold text-white tracking-tight">Real provider network</div>
+                <p className="text-[11px] text-zinc-400 leading-relaxed font-sans">
+                  Bring in the first real data providers so an AI can buy the exact resource it needs, request by request, through the SDK.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4 space-y-2">
+                <span className="inline-flex text-[10px] font-mono font-bold uppercase text-violet-400 px-2 py-0.5 rounded bg-violet-500/10 border border-violet-500/20">
+                  Then
+                </span>
+                <div className="text-xs font-bold text-white tracking-tight">Autonomous work economy</div>
+                <p className="text-[11px] text-zinc-400 leading-relaxed font-sans">
+                  Let longer-running workers combine several providers and specialist agents while one job budget keeps the work bounded.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4 space-y-2">
+                <span className="inline-flex text-[10px] font-mono font-bold uppercase text-emerald-400 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+                  Future
+                </span>
+                <div className="text-xs font-bold text-white tracking-tight">Paid machine resources</div>
+                <p className="text-[11px] text-zinc-400 leading-relaxed font-sans">
+                  Extend the same pattern to GPU compute, IoT devices, robotics, and other machine-to-machine services.
+                </p>
+              </div>
+            </div>
+
+            <p className="border-t border-white/10 pt-3 text-xs leading-relaxed text-zinc-300">
+              The hackathon demo proves the payment-and-work loop; the roadmap is turning that loop into an open network of AI workers and paid machine resources.
+            </p>
+          </div>
         </>
       ) : (
         /* Solidity Contracts Tab (Full annotated production contracts) */
@@ -1142,7 +1186,7 @@ contract SynapseMPPReceiver is Ownable, ReentrancyGuard {
           <div className="lg:col-span-9 bg-white/[.03] backdrop-blur-md border border-white/[.08] rounded-xl p-5 space-y-3 font-mono text-xs">
             <div className="flex items-center justify-between border-b border-white/[.08] pb-2 text-[11px] text-white/50">
               <span className="font-bold text-[#f5f5f2]">
-                {activeContract === 'vault' ? 'SynapseVault.sol' : 'SynapseMPPReceiver.sol'} — Production Interface
+                {activeContract === 'vault' ? 'SynapseVault.sol (Simplified architecture excerpt — see contracts/src/SynapseVault.sol)' : 'SynapseMPPReceiver.sol'}
               </span>
               <span>Solidity ^0.8.24 (Tempo EVM Cancun)</span>
             </div>

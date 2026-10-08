@@ -9,7 +9,13 @@ async function main() {
   console.log(`👤 Deployer/Owner Address: ${deployer.address}`);
   console.log("==================================================");
 
-  const tokenAddress = process.env.TEMPO_PATHUSD_ADDRESS || "0x9aa3ef4B60B6e3c440711658ee05780e236ac714";
+  const tokenAddress = process.env.TEMPO_PATHUSD_ADDRESS;
+  if (network.chainId !== 31337n && !tokenAddress) {
+    throw new Error(`TEMPO_PATHUSD_ADDRESS is required on chain ${network.chainId}; refusing to attach to an assumed token address.`);
+  }
+  if (!tokenAddress || !ethers.isAddress(tokenAddress)) {
+    throw new Error(`TEMPO_PATHUSD_ADDRESS is not a valid EVM address: ${tokenAddress || '<missing>'}`);
+  }
   const vaultAddress = process.env.TEMPO_VAULT_ADDRESS || "0x3c42E274FAdd8e371fB84f97203CC2F2125c8775";
 
   const MockTIP20 = await ethers.getContractFactory("MockTIP20");
@@ -76,16 +82,26 @@ async function main() {
   const keys = [key1, key2, key3];
 
   for (const k of keys) {
-    console.log(`\n🔑 Registering Session Key for ${k.name} (${k.address})...`);
-    const regTx = await vault.registerSessionKey(
-      k.address,
-      k.maxPerCall,
-      k.totalBudget,
-      validBefore,
-      k.merkleRoot
-    );
-    await regTx.wait();
-    console.log(`✅ Registered ${k.name} (Tx: ${regTx.hash})`);
+    console.log(`\n🔑 Synchronizing Session Key for ${k.name} (${k.address})...`);
+    const current = await vault.sessionKeys(k.address);
+    const status = Number(current.status);
+    if (status === 0) {
+      const regTx = await vault.registerSessionKey(
+        k.address,
+        k.maxPerCall,
+        k.totalBudget,
+        validBefore,
+        k.merkleRoot
+      );
+      await regTx.wait();
+      console.log(`✅ Registered ${k.name} (Tx: ${regTx.hash})`);
+    } else if (String(current.merkleRoot).toLowerCase() !== k.merkleRoot.toLowerCase()) {
+      const rootTx = await vault.updateSessionMerkleRoot(k.address, k.merkleRoot);
+      await rootTx.wait();
+      console.log(`✅ Updated ${k.name} Merkle root without resetting spend (Tx: ${rootTx.hash})`);
+    } else {
+      console.log(`✅ ${k.name} already exists; no registration or spend reset needed (status ${status}).`);
+    }
   }
 
   console.log("\n==================================================");

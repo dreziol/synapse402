@@ -1,34 +1,48 @@
-﻿import React, { useState } from 'react';
+import { TEMPO_EXPLORER_URL, tempoTransactionUrl } from '../config/network';
+import React, { useState } from 'react';
 import { MonetizedApiEndpoint } from '../types/synapse402';
 import { Store, Plus, Copy, Check, Code2, Play, Loader2, CheckCircle2, ExternalLink, ArrowRightLeft, Coins, Sparkles, Zap, Flame, ShieldAlert, RefreshCw, ShieldCheck, DollarSign, Globe, Palette, FileText, Mic, Plane, TrendingUp, BarChart3, Box } from 'lucide-react';
 import { soundEngine } from '../utils/audioEffects';
 import { InfoBadge } from './InfoBadge';
+import { useSynapseState } from '../shared/SynapseStateContext';
 
 interface ApiMonetizationPortalProps {
   endpoints: MonetizedApiEndpoint[];
-  onAddEndpoint: (endpoint: { title: string; endpointUrl: string; pricePerCallUsd: number; category: string }) => void;
+  onAddEndpoint: (endpoint: { title: string; endpointUrl: string; pricePerCallUsd: number; category: string }) => Promise<boolean>;
   walletAddress?: string | null;
+  executionMode?: 'LIVE_TESTNET' | 'RESILIENT_SANDBOX';
 }
 
 export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
   endpoints,
   onAddEndpoint,
   walletAddress = null,
+  executionMode = 'RESILIENT_SANDBOX',
 }) => {
+  const { executePayment } = useSynapseState();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [testingEndpointId, setTestingEndpointId] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<{ id: string; status: number; txHash?: string; message: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ id: string; status: number; txHash?: string; receiptVerified?: boolean; message: string } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [showAllEndpoints, setShowAllEndpoints] = useState(false);
   const [localStats, setLocalStats] = useState<Record<string, { calls: number; earned: number }>>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  // Dynamic Surge Pricing / Anti-DDoS Simulator State
+  // Dynamic Surge Pricing / Burst Protection Simulator State
   const [isSurgeTesting, setIsSurgeTesting] = useState(false);
   const [surgeLogs, setSurgeLogs] = useState<Array<{ callNumber: number; costUsd: number; surgeActive: boolean; multiplier: number; status: number }>>([]);
 
   // Monetization Projection Calculator State
   const [calcMonthlyRequests, setCalcMonthlyRequests] = useState<number>(500000);
   const [calcPricePerRequest, setCalcPricePerRequest] = useState<number>(0.002);
+
+  // CoinGlass opportunity calculator: illustrative request volume, not a partnership claim.
+  const [coinglassRequests, setCoinglassRequests] = useState<number>(100000);
+  const coinglassPricePerQuery = 0.002;
+  const coinglassGrossRevenue = coinglassRequests * coinglassPricePerQuery;
+  const coinglassProtocolFee = coinglassGrossRevenue * 0.001;
+  const coinglassProviderPayout = coinglassGrossRevenue - coinglassProtocolFee;
 
   const handleRunSurgeDemo = async () => {
     soundEngine.playClick();
@@ -41,11 +55,13 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
       try {
         const res = await fetch('/api/v1/surge-demo');
         const data = await res.json();
+        const costUsd = Number(data.costPathUsd ?? data.effectivePrice ?? data.minPrice ?? 0.001);
+        const surgeMultiplier = Number(data.surgeMultiplier ?? (costUsd / 0.001));
         newLogs.push({
           callNumber: i,
-          costUsd: data.costPathUsd || 0.001,
-          surgeActive: Boolean(data.surgeActive),
-          multiplier: data.surgeMultiplier || 1,
+          costUsd: Number.isFinite(costUsd) ? costUsd : 0.001,
+          surgeActive: Boolean(data.surgeActive) || costUsd > 0.001,
+          multiplier: Number.isFinite(surgeMultiplier) ? surgeMultiplier : 1,
           status: res.status,
         });
         setSurgeLogs([...newLogs]);
@@ -144,7 +160,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
     };
     if (url.includes('verify') || url.includes('identity')) return {
       type: 'Compliance & Sanctions Report',
-      detail: 'Global Sanctions Screening: Negative • Law Enforcement Notice: Clear • Risk Score: 0.01 (Pass)',
+      detail: 'Example compliance payload • live sanctions lookup is not run in this demo.',
       iconName: 'ShieldCheck',
     };
     if (url.includes('binance') || url.includes('orderbook') || url.includes('market-depth')) return {
@@ -170,51 +186,46 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
     setTestResult(null);
 
     try {
-      const res = await fetch('/api/mpp/settle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetUrl: ep.endpointUrl,
-          pricePathUsd: ep.pricePerCallUsd,
-          category: ep.category,
-          allowDynamicWhitelist: true,
-        }),
+      const settleRes = await executePayment({
+        keyId: 'key_quant_alpha',
+        targetUrl: ep.endpointUrl,
+        pricePathUsd: ep.pricePerCallUsd,
+        category: ep.category,
+        evaluationOnly: executionMode !== 'LIVE_TESTNET',
+        jobId: `earn_${ep.id}_${Date.now()}`,
+        jobBudgetPathUsd: ep.pricePerCallUsd,
+        serviceName: ep.title,
+        providerName: ep.endpointUrl,
       });
-      const data = await res.json();
-      if (res.ok) {
-        const isLiveSettlement = data.trace?.executionMode === 'LIVE_TESTNET' && data.trace?.status === 'SETTLED' && Boolean(data.trace?.txHash);
-        if (isLiveSettlement) soundEngine.playSettlementChime();
-        setLocalStats((prev) => {
-          const current = prev[ep.id] || { calls: ep.totalCalls, earned: ep.totalEarnedUsd };
-          return {
-            ...prev,
-            [ep.id]: {
-              calls: current.calls + 1,
-              earned: Number((current.earned + (isLiveSettlement ? ep.pricePerCallUsd : 0)).toFixed(4)),
-            },
-          };
-        });
-        setTestResult({
-          id: ep.id,
-          status: 200,
-          txHash: data.trace?.txHash,
-          message: isLiveSettlement
-            ? `HTTP 200 OK • Settled on Tempo L1 (${data.trace?.latencyMs || 12}ms)`
-            : 'HTTP 200 OK • Evaluation response returned; no chain transaction was submitted',
-        });
-      } else {
-        soundEngine.playDefenseIntercept();
-        setTestResult({
-          id: ep.id,
-          status: res.status,
-          message: data.error || 'Payment execution failed',
-        });
-      }
-    } catch (err: any) {
+      const isLiveSettlement = settleRes.status === 'CONFIRMED'
+        && typeof settleRes.txHash === 'string'
+        && /^0x[a-fA-F0-9]{64}$/.test(settleRes.txHash);
+      if (isLiveSettlement) soundEngine.playSettlementChime();
+      setLocalStats((prev) => {
+        const current = prev[ep.id] || { calls: ep.totalCalls, earned: ep.totalEarnedUsd };
+        return {
+          ...prev,
+          [ep.id]: {
+            calls: current.calls + (isLiveSettlement ? 1 : 0),
+            earned: Number((current.earned + (isLiveSettlement ? ep.pricePerCallUsd : 0)).toFixed(4)),
+          },
+        };
+      });
       setTestResult({
         id: ep.id,
-        status: 500,
-        message: err.message || 'Network error',
+        status: 200,
+        txHash: settleRes.txHash || undefined,
+        receiptVerified: isLiveSettlement,
+        message: isLiveSettlement
+          ? `HTTP 200 OK • Settled on Tempo L1 (${Number.isFinite(Number(settleRes.latencyMs)) ? Number(settleRes.latencyMs) : 0}ms)`
+          : 'HTTP 200 OK • Evaluation response returned; no chain transaction was submitted',
+      });
+    } catch (err: any) {
+      soundEngine.playDefenseIntercept();
+      setTestResult({
+        id: ep.id,
+        status: 402,
+        message: err?.message || 'Payment execution failed',
       });
     } finally {
       setTestingEndpointId(null);
@@ -230,18 +241,23 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !endpointUrl || !pricePerCallUsd) return;
 
     soundEngine.playClick();
 
-    onAddEndpoint({
+    setSaveError(null);
+    const saved = await onAddEndpoint({
       title,
       endpointUrl,
       pricePerCallUsd: parseFloat(pricePerCallUsd),
       category,
     });
+    if (!saved) {
+      setSaveError('The route was not saved. Check the API response and try again.');
+      return;
+    }
 
     setTitle('');
     setEndpointUrl('');
@@ -252,37 +268,42 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
   return (
     <section id="section-api-monetization" className="space-y-6 font-sans">
       {/* Header */}
-      <div className="bg-white/[.03] backdrop-blur-md border border-white/[.08] rounded-xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full bg-[#d7ff4f]/10 text-[#d7ff4f] border border-[#d7ff4f]/30 text-xs font-semibold">
-              SERVICE OWNER • Offer paid machine access
-            </span>
-          </div>
+      <div className="ui-section relative isolate overflow-hidden bg-white/[.03] backdrop-blur-md border border-white/[.08] rounded-xl p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <svg aria-hidden="true" className="pointer-events-none absolute inset-x-[-8%] bottom-[-30%] h-[90%] w-[116%] opacity-25" viewBox="0 0 1200 360" fill="none" preserveAspectRatio="none">
+          {[0, 1, 2, 3, 4, 5].map((offset) => (
+            <path key={offset} d={`M-20 ${258 - offset * 22} C 110 ${120 + offset * 10}, 180 ${350 - offset * 8}, 330 ${205 + offset * 8} S 520 ${80 + offset * 20}, 690 ${225 - offset * 5} S 900 ${370 - offset * 9}, 1220 ${140 + offset * 14}`} stroke="#b6e84a" strokeOpacity={0.22 + offset * 0.025} strokeWidth="2" />
+          ))}
+        </svg>
+        <div className="relative z-10">
           <h3 className="text-xl font-bold text-zinc-100 tracking-tight flex items-center flex-wrap gap-1">
-            <span>Let agents pay for a structured API response</span>
+            <span>Let agents pay for a structured response</span>
             <InfoBadge
               title="How this works"
               text="A service can return a payment request for machine access. The connected backend confirms the payment status before the payload is treated as paid."
             />
           </h3>
-          <p className="text-sm text-zinc-300 mt-1 max-w-2xl leading-relaxed font-sans">
+          <p className="ui-explainer text-sm text-zinc-300 mt-1 max-w-2xl leading-relaxed font-sans">
             Most sites treat automated traffic as a threat and return a 403, so an agent cannot finish the job. Add a small payment gate with the SDK: an approved agent can request structured access, the service states its price, and the rules decide whether the request can continue. The figures below are examples; a payment is presented as confirmed only when the backend returns a trace.
           </p>
         </div>
 
-        <button
-          id="btn-register-api-endpoint"
-          onClick={() => setIsModalOpen(true)}
-          className="px-5 py-3 bg-[#d7ff4f] hover:bg-[#cbf540] text-[#08090c] font-black text-xs rounded-xl transition-all flex items-center gap-2 self-start md:self-auto cursor-pointer shadow-[0_0_15px_rgba(215,255,79,0.25)] border border-[#d7ff4f]"
-        >
-          <Plus className="w-4 h-4 text-[#08090c]" />
-          <span>+ Monetize an API Route</span>
-        </button>
+        <div className="relative z-10 self-start md:self-auto">
+          <button
+            id="btn-register-api-endpoint"
+            onClick={() => setIsModalOpen(true)}
+            className="px-5 py-3 bg-[#d7ff4f] hover:bg-[#cbf540] text-[#08090c] font-black text-xs rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(215,255,79,0.25)] border border-[#d7ff4f]"
+          >
+            <Plus className="w-4 h-4 text-[#08090c]" />
+            <span>+ Add route to demo</span>
+          </button>
+          <p className="text-[10px] text-zinc-500 mt-1 max-w-[15rem]">
+            Adds a sample route to this dashboard; it does not install middleware in your server.
+          </p>
+        </div>
       </div>
 
-      {/* Two-Sided Network Flywheel: Why Sellers & Buyers Both Win */}
-      <div className="bg-white/[0.02] border border-white/10 rounded-xl p-4 space-y-3">
+      {/* The page follows one exchange: a provider prices a route, an agent requests it, and a receipt records any confirmed payment. */}
+      <div className="ui-explainer bg-white/[0.02] border border-white/10 rounded-xl p-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2 border-b border-white/10 pb-2">
           <div className="flex items-center gap-2">
             <ArrowRightLeft className="w-4 h-4 text-[#d7ff4f]" />
@@ -291,87 +312,202 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
             </h4>
           </div>
           <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/[0.05] text-zinc-400 border border-white/10">
-              Who pays and who provides
+              One request, one price, one receipt
           </span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] font-sans">
-          <div className="bg-white/[.025] p-3.5 rounded-lg border border-white/[.08] space-y-2">
+          <div className="ui-meta bg-white/[.025] p-3.5 rounded-lg border border-white/[.08] space-y-2">
             <div className="flex items-center gap-2 font-bold text-[#f5f5f2]">
               <div className="w-6 h-6 rounded bg-[#d7ff4f]/10 text-[#d7ff4f] flex items-center justify-center shrink-0">
                 <Globe className="w-3.5 h-3.5" />
               </div>
-              <span>01. Service owners</span>
+              <span>Provider sets a price</span>
               <InfoBadge
-                title="Reverse Proxy Monetization"
-                text="Lets a service answer an approved paid request instead of maintaining user accounts. A live wallet is required before funds move on-chain."
+                title="What the provider does"
+                text="Lets a service answer an approved paid request instead of maintaining user accounts. In live mode the configured Treasury relayer submits the approved settlement and returns a receipt."
               />
             </div>
             <p className="text-zinc-300 text-[11px] leading-relaxed">
-              Monetize approved machine traffic with 2 lines of middleware. Set a per-request price and receive a payment record; live deposits require a connected wallet.
+              Set a per-request price and protect the route with the middleware. A live settlement uses the configured relayer; the provider receives a receipt for the request.
             </p>
           </div>
 
-          <div className="bg-white/[.025] p-3.5 rounded-lg border border-white/[.08] space-y-2">
+          <div className="ui-meta bg-white/[.025] p-3.5 rounded-lg border border-white/[.08] space-y-2">
             <div className="flex items-center gap-2 font-bold text-[#f5f5f2]">
               <div className="w-6 h-6 rounded bg-[#d7ff4f]/10 text-[#d7ff4f] flex items-center justify-center shrink-0">
                 <Zap className="w-3.5 h-3.5" />
               </div>
-              <span>02. AI Agents &amp; Crawlers</span>
+              <span>Agent requests access</span>
               <InfoBadge
-                title="Stateless Micro-Authorization"
+                title="What the agent does"
                 text="Agents purchase niche data on demand without human accounts, monthly retainers, or credit card forms."
               />
             </div>
             <p className="text-zinc-300 text-[11px] leading-relaxed">
-              No scraping account or manual checkout is needed. Agents answer an HTTP 402 challenge within their budget and receive <strong>clean, structured JSON</strong> when access is approved.
+              The agent answers the HTTP 402 challenge within its job limit and receives <strong>structured JSON</strong> when the route is approved. No checkout form or recurring account is needed.
             </p>
           </div>
 
-          <div className="bg-white/[.025] p-3.5 rounded-lg border border-white/[.08] space-y-2">
+          <div className="ui-meta bg-white/[.025] p-3.5 rounded-lg border border-white/[.08] space-y-2">
             <div className="flex items-center gap-2 font-bold text-[#f5f5f2]">
               <div className="w-6 h-6 rounded bg-[#d7ff4f]/10 text-[#d7ff4f] flex items-center justify-center shrink-0">
                 <Coins className="w-3.5 h-3.5" />
               </div>
-              <span>03. Mutual Economics</span>
+              <span>Payment is recorded</span>
               <InfoBadge
-                title="Tempo L1 Type 0x76 Rails"
+                title="What the receipt proves"
                 text="Small per-request prices make machine-to-machine access practical; exact chain fees are shown only for a confirmed live trace."
               />
             </div>
             <p className="text-zinc-300 text-[11px] leading-relaxed">
-              Service owners can charge for compute while AI agents get programmatic access. The gateway checks the rules first; a payment is shown as settled only when a confirmed trace is available.
+              The gateway checks the job limit and provider route first. Only a confirmed Tempo trace is shown as settled; otherwise the request stays an evaluation record.
             </p>
           </div>
         </div>
       </div>
 
-      {/* 2-Line Middleware Integration Guide */}
+      <div className="py-1 text-center" aria-hidden="true">
+        <span className="inline-flex items-center gap-2 border-y border-[#d7ff4f]/20 py-2 text-xs sm:text-sm font-mono font-black uppercase tracking-[0.12em] text-[#d7ff4f]">01 · CoinGlass Provider Case Study · Without vs With Synapse402 SDK</span>
+      </div>
+
+      {/* Concrete provider story: unified comparison & revenue simulator */}
+      <div className="rounded-2xl border border-[#d7ff4f]/25 bg-[#d7ff4f]/[.04] p-4 sm:p-6 space-y-5 shadow-[0_12px_40px_rgba(0,0,0,.14)]">
+        <div className="flex items-start gap-3 border-b border-white/10 pb-4">
+          <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#d7ff4f]/15 text-[#d7ff4f] border border-[#d7ff4f]/25">
+            <Store className="h-[18px] w-[18px]" />
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="text-base font-black uppercase tracking-wide text-white">CoinGlass Provider Opportunity (Case Study)</h4>
+              <span className="rounded border border-amber-300/25 bg-amber-300/10 px-2 py-0.5 text-[9px] font-mono font-bold uppercase text-amber-200">Illustrative Model</span>
+            </div>
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-zinc-300">
+              CoinGlass does not have the Synapse402 SDK, so the AI cannot buy only the liquidation data it needs. If CoinGlass added the SDK, the AI could pay a small amount for this single request, and CoinGlass could earn additional revenue from machine users who would not buy a full recurring API subscription.
+            </p>
+          </div>
+        </div>
+
+        {/* Side-by-Side Comparison */}
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-xl border border-white/10 bg-black/[.22] p-4 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Current State · Without Synapse402</span>
+              <span className="rounded bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 text-[9px] font-mono font-bold text-rose-300">BLOCKED</span>
+            </div>
+            <p className="text-xs leading-relaxed text-zinc-300">
+              Liquidation query needed by AI agent → no per-query payment path → agent cannot justify a full enterprise subscription for one check → request aborted.
+            </p>
+            <div className="pt-2 border-t border-white/[0.06] text-xs font-mono text-amber-200 font-bold">
+              Provider Revenue: $0.00 (lost machine traffic)
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[#d7ff4f]/30 bg-[#d7ff4f]/[.06] p-4 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-[#d7ff4f]">Next State · With Synapse402 SDK</span>
+              <span className="rounded bg-[#d7ff4f]/20 border border-[#d7ff4f]/40 px-1.5 py-0.5 text-[9px] font-mono font-bold text-[#d7ff4f]">MONETIZED</span>
+            </div>
+            <p className="text-xs leading-relaxed text-zinc-200">
+              AI requests liquidation route → HTTP 402 challenge → agent signs sub-cent Tempo payment ($0.002) → structured data returned immediately.
+            </p>
+            <div className="pt-2 border-t border-[#d7ff4f]/20 text-xs font-mono text-[#d7ff4f] font-bold">
+              Provider Revenue: $0.0020 per query (net automated income)
+            </div>
+          </div>
+        </div>
+
+        {/* Interactive Revenue Simulator */}
+        <div className="rounded-xl border border-white/10 bg-black/[.18] p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.08] pb-2.5">
+            <div>
+              <span className="text-xs font-bold text-white uppercase tracking-wider font-mono">Simulated Machine Query Revenue</span>
+              <span className="ml-2 text-[10px] text-zinc-400 font-mono">(at $0.0020 / request)</span>
+            </div>
+            <span className="text-xs font-mono font-black text-[#d7ff4f]">{coinglassRequests.toLocaleString()} queries/mo</span>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[1.15fr_1fr] lg:items-center pt-1">
+            <div>
+              <input
+                aria-label="Illustrative CoinGlass monthly liquidation queries"
+                type="range"
+                min="10000"
+                max="1000000"
+                step="10000"
+                value={coinglassRequests}
+                onChange={(event) => setCoinglassRequests(Number(event.target.value))}
+                className="w-full accent-[#d7ff4f]"
+              />
+              <div className="mt-1 flex justify-between text-[10px] font-mono text-zinc-500">
+                <span>10k queries</span>
+                <span>500k</span>
+                <span>1M queries</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-xl border border-white/10 bg-black/[.25] p-2.5">
+                <div className="text-[10px] uppercase tracking-wide text-zinc-400">Gross</div>
+                <div className="mt-0.5 text-base font-black text-white">${coinglassGrossRevenue.toFixed(2)}</div>
+              </div>
+              <div className="rounded-xl border border-[#d7ff4f]/30 bg-[#d7ff4f]/[.08] p-2.5">
+                <div className="text-[10px] uppercase tracking-wide text-[#d7ff4f]">Provider Net</div>
+                <div className="mt-0.5 text-base font-black text-[#d7ff4f]">${coinglassProviderPayout.toFixed(2)}</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/[.25] p-2.5">
+                <div className="text-[10px] uppercase tracking-wide text-zinc-400">0.1% Fee</div>
+                <div className="mt-0.5 text-base font-black text-zinc-300">${coinglassProtocolFee.toFixed(2)}</div>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-[11px] leading-relaxed text-zinc-400 border-t border-white/[0.06] pt-2.5">
+            In this model, CoinGlass would add the Synapse402 middleware to its own API and expose a priced liquidation route. AI agents buy only the specific liquidation snapshot they need. That SDK connection turns otherwise-lost automated demand into useful partner traffic and request-level revenue; it does not claim CoinGlass is already integrated.
+          </p>
+        </div>
+
+        {/* Provider Ecosystem */}
+        <div className="rounded-xl border border-white/10 bg-black/[.12] px-3.5 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[11px] font-black uppercase tracking-[0.14em] text-white">Universal Machine Economy Ecosystem</div>
+            <div className="text-[10px] font-mono font-bold uppercase tracking-wide text-[#d7ff4f]">Open to any API or Web Service</div>
+          </div>
+          <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">CoinGlass is one worked case study. The same SDK route can sell any useful API response to an agent, one request at a time.</p>
+          <div className="mt-2.5 flex flex-wrap gap-2 text-[10px] font-semibold text-zinc-200">
+            <span className="rounded-full border border-[#d7ff4f]/30 bg-[#d7ff4f]/10 px-2.5 py-1 text-[#d7ff4f]">Data providers</span>
+            <span className="rounded-full border border-white/10 bg-white/[.04] px-2.5 py-1">AI services</span>
+            <span className="rounded-full border border-white/10 bg-white/[.04] px-2.5 py-1">Research tools</span>
+            <span className="rounded-full border border-white/10 bg-white/[.04] px-2.5 py-1">Content platforms</span>
+            <span className="rounded-full border border-white/10 bg-white/[.04] px-2.5 py-1">Compute services</span>
+            <span className="rounded-full border border-white/10 bg-white/[.04] px-2.5 py-1">Specialist APIs</span>
+            <span className="rounded-full border border-white/10 bg-white/[.04] px-2.5 py-1 text-zinc-400">+ any paid machine service</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-1 text-center" aria-hidden="true">
+        <span className="inline-flex items-center gap-2 border-y border-[#d7ff4f]/20 py-2 text-xs sm:text-sm font-mono font-black uppercase tracking-[0.12em] text-[#d7ff4f]">02 · Implementation · Add the SDK route in provider code</span>
+      </div>
+
+      {/* Middleware integration guide */}
       <div className="space-y-2">
-        <div className="flex items-center gap-2 px-1">
-          <span className="px-2 py-0.5 rounded-md bg-[#d7ff4f] text-[#08090c] font-black text-[10px] tracking-wider uppercase">
-            STEP 1
-          </span>
-          <span className="text-xs font-bold text-white tracking-wide flex items-center">
-            <span>Protect Routes with 2-Line Middleware</span>
-            <InfoBadge
-              title="Dynamic SEO Segmentation & WAF Efficiency"
-                text="allowSearchCrawlers: true lets ordinary search crawlers pass freely, while other requests are checked against the configured price and policy."
-            />
-          </span>
+        <div className="rounded-xl border border-[#d7ff4f]/25 bg-[#d7ff4f]/[.04] px-4 py-3 text-center">
+          <div className="text-[10px] font-black uppercase tracking-widest text-[#d7ff4f]">What this code means for CoinGlass</div>
+          <p className="mx-auto mt-1 max-w-4xl text-xs leading-relaxed text-zinc-300">This is the integration point: CoinGlass would add the Synapse402 middleware to its own code, expose a priced liquidation route, and let useful AI agents request that data automatically. That creates a partner route where machine demand can become request-level revenue instead of being blocked or left unserved.</p>
         </div>
         <div className="bg-white/[.03] backdrop-blur-md border border-white/[.08] rounded-xl p-5 text-xs space-y-3 shadow-sm">
           <div className="flex items-center justify-between border-b border-white/[.08] pb-2">
             <span className="text-zinc-100 font-semibold flex items-center gap-2">
               <Code2 className="w-4 h-4 text-zinc-200" />
-              <span>2-Line Express / Fastify / Next.js HTTP 402 Middleware</span>
+              <span>Node.js HTTP 402 middleware example</span>
             </span>
             <div className="flex items-center gap-2">
               <span className="text-zinc-300 text-[10.5px] font-mono px-2 py-0.5 rounded bg-white/5 border border-white/10">
-                Developer SDK
+                Node.js example
               </span>
               <button
                 type="button"
-                onClick={() => handleCopy('middleware_code', `import { withTempoMpp } from './sdk';\n\napp.get('/articles/:id', withTempoMpp({\n  priceUsd: 0.001,\n  payee: '${walletAddress || '0xYourWallet'}',\n  allowSearchCrawlers: true,\n  surgePricing: { windowMs: 4000, maxBeforeSurge: 2, multiplier: 2.5 }\n}), (req, res) => {\n  res.json({ title: 'Unblocked Content', markdown: '# Clean Extracted Content' });\n});`)}
+                onClick={() => handleCopy('middleware_code', `import { withTempoMpp } from './sdk';\n\n// Human HTML stays on /articles/:id; this JSON route is paid for every request.\napp.get('/api/articles/:id', withTempoMpp({\n  priceUsd: 0.001,\n  payee: '${walletAddress || '0xYourWallet'}',\n  surgePricing: { windowMs: 4000, maxBeforeSurge: 2, multiplier: 2.5 }\n}), (req, res) => {\n  res.json({ title: 'Unblocked Content', markdown: '# Clean Extracted Content' });\n});`)}
                 className="px-2 py-0.5 rounded text-[10.5px] font-mono bg-white/[0.06] hover:bg-white/15 text-zinc-300 hover:text-white border border-white/10 transition flex items-center gap-1 cursor-pointer"
               >
                 {copiedId === 'middleware_code' ? (
@@ -389,21 +525,25 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
             </div>
           </div>
 
-          {/* Quick Copy 2-Liner Callout */}
+          {/* Quick copy callout */}
           <div className="bg-white/[.03] border border-white/[.08] rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2 overflow-x-auto">
               <span className="px-2 py-0.5 rounded bg-[#d7ff4f] text-[#08090c] font-black text-[10px] font-mono uppercase shrink-0">
-                2-Line SDK
+                Middleware example
               </span>
               <code className="text-xs font-mono text-zinc-200 whitespace-nowrap">
-              <span className="text-zinc-200">app</span>.<span className="text-zinc-300">use</span>('<span className="text-[#d7ff4f]">/api/data</span>', <span className="text-[#d7ff4f]">withTempoMpp</span>({'{'} <span className="text-zinc-300">priceUsd</span>: <span className="text-zinc-200">0.002</span>, <span className="text-zinc-300">payee</span>: '<span className="text-[#d7ff4f]">{walletAddress || '0xYourWallet'}</span>', <span className="text-zinc-300">allowSearchCrawlers</span>: <span className="text-zinc-200">true</span> {'}'}));
+              <span className="text-zinc-200">app</span>.<span className="text-zinc-300">use</span>('<span className="text-[#d7ff4f]">/api/data</span>', <span className="text-[#d7ff4f]">withTempoMpp</span>({'{'} <span className="text-zinc-300">priceUsd</span>: <span className="text-zinc-200">0.002</span>, <span className="text-zinc-300">payee</span>: '<span className="text-[#d7ff4f]">{walletAddress || '0xYourWallet'}</span>' {'}'}));
               </code>
             </div>
             <span className="text-[10px] font-mono text-zinc-200/80 shrink-0">Simple route setup</span>
           </div>
 
           {/* Developer Code Block with Syntax Highlighting */}
-          <div className="bg-white/[.02] p-4 rounded-lg border border-white/[.08] text-xs font-mono overflow-x-auto leading-relaxed space-y-1">
+          <div aria-label="SDK integration code example" className="relative bg-[#0a1015] p-4 rounded-lg border border-[#d7ff4f]/35 text-xs font-mono overflow-x-auto leading-relaxed space-y-1 shadow-[inset_0_2px_0_rgba(215,255,79,.65)]">
+            <div className="mb-3 flex items-center justify-between gap-3 border-b border-[#d7ff4f]/20 pb-2 not-italic">
+              <span className="rounded bg-[#d7ff4f] px-2 py-1 text-[10px] font-black uppercase tracking-wide text-[#08090c]">SDK integration code</span>
+              <span className="text-[10px] font-sans font-semibold text-zinc-500">Provider adds this to its own server</span>
+            </div>
             <div>
               <span className="text-zinc-200 font-bold">import</span> {'{ '}
               <span className="text-[#d7ff4f]">withTempoMpp</span>
@@ -413,16 +553,16 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
               // Stop burning cash on WAF defense — convert bot traffic into paid API revenue:
             </div>
             <div>
-              <span className="text-zinc-200">app</span>.<span className="text-zinc-300">get</span>(<span className="text-[#d7ff4f]">'/articles/:id'</span>, <span className="text-[#d7ff4f]">withTempoMpp</span>({'{'}
+              <span className="text-zinc-500 italic">// Human HTML stays on /articles/:id; this JSON route is paid for every request.</span>
+            </div>
+            <div>
+              <span className="text-zinc-200">app</span>.<span className="text-zinc-300">get</span>(<span className="text-[#d7ff4f]">'/api/articles/:id'</span>, <span className="text-[#d7ff4f]">withTempoMpp</span>({'{'}
             </div>
             <div className="pl-4">
               <span className="text-zinc-300">priceUsd</span>: <span className="text-zinc-200">0.001</span>,
             </div>
             <div className="pl-4">
               <span className="text-zinc-300">payee</span>: <span className="text-[#d7ff4f]">'{walletAddress || '0xYourWallet'}'</span>,
-            </div>
-            <div className="pl-4">
-              <span className="text-zinc-300">allowSearchCrawlers</span>: <span className="text-zinc-200">true</span>, <span className="text-zinc-500 italic">// Googlebot &amp; Bingbot pass free for SEO indexing!</span>
             </div>
             <div className="pl-4">
               <span className="text-zinc-300">surgePricing</span>: {'{ '}
@@ -443,11 +583,11 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
       </div>
 
       {/* Interactive Publisher Monetization Calculator (What Would I Earn?) */}
-      <div className="bg-white/[.03] backdrop-blur-md border border-white/[.08] rounded-2xl p-5 sm:p-6 space-y-4 shadow-sm">
+      <div className="api-calc-panel rounded-2xl p-5 sm:p-6 space-y-4 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-white/[0.05] text-[#d7ff4f] border border-white/10">
-              <DollarSign className="w-4 h-4 text-[#d7ff4f]" />
+            <div className="p-2 rounded-xl bg-sky-400/10 text-sky-300 border border-sky-300/25">
+              <DollarSign className="w-4 h-4 text-sky-300" />
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -459,7 +599,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-zinc-400 mt-0.5">
-                Calculate how much revenue your blocked bot traffic generates when converted into paid machine access.
+                Calculate how much revenue your blocked bot traffic generates when converted into paid machine access. The estimate shows why per-request pricing can be better than paying for idle traffic.
               </p>
             </div>
           </div>
@@ -470,7 +610,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Controls */}
-          <div className="space-y-3 bg-white/[.025] p-4 rounded-xl border border-white/[.08]">
+          <div className="api-calc-controls space-y-3 p-4 rounded-xl">
             <div>
               <div className="flex justify-between text-xs text-zinc-300 mb-1">
                 <span>Monthly Blocked Machine Requests:</span>
@@ -483,7 +623,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                 step="50000"
                 value={calcMonthlyRequests}
                 onChange={(e) => setCalcMonthlyRequests(Number(e.target.value))}
-                className="w-full accent-[#d7ff4f] cursor-pointer"
+                className="w-full accent-sky-300 cursor-pointer"
               />
               <div className="flex justify-between text-[9px] font-mono text-zinc-500">
                 <span>50k</span>
@@ -496,7 +636,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
             <div>
               <div className="flex justify-between text-xs text-zinc-300 mb-1">
                 <span>Price per Machine Request:</span>
-                <strong className="font-mono text-[#d7ff4f]">${calcPricePerRequest.toFixed(4)} ({((calcPricePerRequest)*100).toFixed(1)}¢)</strong>
+                <strong className="font-mono text-violet-200">${calcPricePerRequest.toFixed(4)} ({((calcPricePerRequest)*100).toFixed(1)}¢)</strong>
               </div>
               <input
                 type="range"
@@ -505,7 +645,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                 step="0.0005"
                 value={calcPricePerRequest}
                 onChange={(e) => setCalcPricePerRequest(Number(e.target.value))}
-                className="w-full accent-[#d7ff4f] cursor-pointer"
+                className="w-full accent-violet-300 cursor-pointer"
               />
               <div className="flex justify-between text-[9px] font-mono text-zinc-500">
                 <span>$0.0005 (0.05¢)</span>
@@ -516,52 +656,52 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
           </div>
 
           {/* Revenue Breakdown */}
-          <div className="grid grid-cols-3 gap-2 text-center bg-white/[.025] p-4 rounded-xl border border-white/[.08] flex items-center">
-            <div className="p-2.5 rounded-lg bg-white/[.03] border border-white/10">
-              <span className="text-[10px] uppercase font-mono text-zinc-400 block">Est. Gross Revenue</span>
-              <span className="text-sm sm:text-base font-black font-mono text-white mt-1 block">
+          <div className="api-calc-results grid grid-cols-3 gap-2 text-center p-4 rounded-xl flex items-center">
+            <div className="p-2.5 rounded-lg bg-sky-400/[.06] border border-sky-300/20">
+              <span className="text-[10px] uppercase font-mono text-sky-100/70 block">Est. Gross Revenue</span>
+              <span className="text-sm sm:text-base font-black font-mono text-sky-100 mt-1 block">
                 ${(calcMonthlyRequests * calcPricePerRequest).toFixed(2)}
               </span>
               <span className="text-[9px] text-zinc-500 font-mono mt-0.5 block">/month</span>
             </div>
 
-            <div className="p-2.5 rounded-lg bg-white/[.03] border border-white/[.06]">
-              <span className="text-[10px] uppercase font-mono text-zinc-400 block">Est. Server Compute</span>
-              <span className="text-sm sm:text-base font-black font-mono text-zinc-400 mt-1 block">
+            <div className="p-2.5 rounded-lg bg-amber-300/[.05] border border-amber-200/15">
+              <span className="text-[10px] uppercase font-mono text-amber-100/65 block">Est. Server Compute (Illustrative)</span>
+              <span className="text-sm sm:text-base font-black font-mono text-amber-100/75 mt-1 block">
                 -${(calcMonthlyRequests * 0.0003).toFixed(2)}
               </span>
-              <span className="text-[9px] text-zinc-500 font-mono mt-0.5 block">estimated server cost</span>
+              <span className="text-[9px] text-zinc-500 font-mono mt-0.5 block">illustrative assumption ($0.0003/req)</span>
             </div>
 
-            <div className="p-2.5 rounded-lg bg-[#d7ff4f]/[0.08] border border-[#d7ff4f]/30 shadow-[0_0_15px_rgba(215,255,79,0.12)]">
-              <span className="text-[10px] uppercase font-mono text-[#d7ff4f]/90 font-bold block">Est. Net Benefit</span>
-              <span className="text-sm sm:text-base font-black font-mono text-[#d7ff4f] mt-1 block">
+            <div className="p-2.5 rounded-lg bg-emerald-300/[0.08] border border-emerald-300/35 shadow-[0_0_15px_rgba(52,211,153,0.12)]">
+              <span className="text-[10px] uppercase font-mono text-emerald-200/90 font-bold block">Est. Net Benefit</span>
+              <span className="text-sm sm:text-base font-black font-mono text-emerald-200 mt-1 block">
                 +${Math.max(0, (calcMonthlyRequests * calcPricePerRequest) - (calcMonthlyRequests * 0.0003) - (calcMonthlyRequests * calcPricePerRequest * 0.001)).toFixed(2)}
               </span>
-              <span className="text-[9px] text-[#d7ff4f] font-mono mt-0.5 block font-bold">after hosting & 0.1% fee</span>
+              <span className="text-[9px] text-emerald-200/80 font-mono mt-0.5 block font-bold">after hosting & 0.1% fee</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Dynamic Surge Defense & Anti-DDoS Simulator Card */}
-      <div className="bg-white/[.03] backdrop-blur-md border border-white/[.08] rounded-xl p-5 space-y-4 shadow-sm">
+      {/* Dynamic Surge Defense & Burst Protection Simulator Card */}
+      <div className="api-surge-panel rounded-xl p-5 space-y-4 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-[#d7ff4f]/15 text-[#d7ff4f] border border-[#d7ff4f]/30">
-              <Flame className="w-4 h-4 text-[#d7ff4f]" />
+            <div className="p-2 rounded-lg bg-orange-300/10 text-orange-200 border border-orange-300/30">
+              <Flame className="w-4 h-4 text-orange-200" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-zinc-100 font-mono uppercase tracking-wider">
-                  Price Goes Up When Traffic Spikes (DDoS Defense)
+                  Dynamic Surge Pricing & Burst Protection
                 </span>
-                <span className="px-1.5 py-0.5 rounded bg-[#d7ff4f]/20 text-[#d7ff4f] border border-[#d7ff4f]/30 text-[9px] font-mono font-bold">
-                  PROTECTION TEST
+                <span className="px-1.5 py-0.5 rounded bg-orange-300/15 text-orange-200 border border-orange-300/30 text-[9px] font-mono font-bold">
+                  BURST TEST
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 mt-0.5">
-                When automated requests surge, Synapse402 dynamically raises price per request: low-value scraping is filtered out while high-priority queries continue executing.
+              <p className="text-[11px] text-orange-100/65 mt-0.5">
+                When automated requests surge, Synapse402 dynamically raises price per request: low-value scraping is rate-filtered while high-priority queries continue executing. This demo showcases the dynamic price adaptation rule before enabling it on a live route.
               </p>
             </div>
           </div>
@@ -590,7 +730,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
         <div className="space-y-2">
           <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 px-1">
             <span>PROVIDER RESPONSE PREVIEW (sample route):</span>
-            <span className="text-[#d7ff4f] font-bold">
+            <span className="text-orange-200 font-bold">
               Base Price: $0.0010 • Surge Multiplier: 2.5x per burst
             </span>
           </div>
@@ -601,10 +741,10 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
               return (
                 <div
                   key={reqNum}
-                  className={`p-3 rounded-lg border transition-all ${
+                  className={`api-surge-preview p-3 rounded-lg border transition-all ${
                     log
                       ? log.surgeActive
-                        ? 'bg-[#d7ff4f]/15 border-[#d7ff4f]/50'
+                        ? 'bg-orange-300/15 border-orange-300/55'
                         : 'bg-white/[0.04] border-white/15'
                       : 'bg-white/[.025] border-white/[.08] text-zinc-600'
                   }`}
@@ -612,13 +752,13 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                   <div className="flex items-center justify-between text-[10px] mb-1">
                     <span className="text-zinc-400 font-semibold">Req #{reqNum}</span>
                     <span className={`w-1.5 h-1.5 rounded-full ${
-                      log ? (log.surgeActive ? 'bg-[#d7ff4f]' : 'bg-white') : 'bg-zinc-700'
+                      log ? (log.surgeActive ? 'bg-orange-300' : 'bg-white') : 'bg-zinc-700'
                     }`} />
                   </div>
 
                   <div className="text-sm font-black font-mono">
                     {log ? (
-                      <span className={log.surgeActive ? 'text-[#d7ff4f]' : 'text-white'}>
+                      <span className={log.surgeActive ? 'text-orange-200' : 'text-white'}>
                         ${log.costUsd.toFixed(4)}
                       </span>
                     ) : (
@@ -629,7 +769,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                   <div className="mt-1 text-[9px] font-mono">
                     {log ? (
                       log.surgeActive ? (
-                        <span className="text-[#d7ff4f] font-bold flex items-center gap-1">
+                        <span className="text-orange-200 font-bold flex items-center gap-1">
                           <Flame className="w-2.5 h-2.5" />
                           <span>{log.multiplier}x Surge</span>
                         </span>
@@ -646,15 +786,15 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
           </div>
 
           <div className="p-3 rounded-lg bg-white/[.025] border border-white/[.08] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] font-sans text-zinc-300">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-[#d7ff4f] shrink-0" />
+              <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-orange-200 shrink-0" />
               <span>
                 <strong>Publisher Protection (simulated scenario):</strong> Normal bots pay $0.0010. Spammers and sudden bursts trigger dynamic exponential pricing, helping ensure server bandwidth remains economically viable.
               </span>
             </div>
             {surgeLogs.length > 0 && (
-              <span className="font-mono font-bold text-[#d7ff4f] text-xs shrink-0">
-                Total Earned in Burst: ${(surgeLogs.reduce((acc, l) => acc + l.costUsd, 0)).toFixed(4)} USD
+              <span className="font-mono font-bold text-orange-200 text-xs shrink-0">
+                Projected payout in burst: ${(surgeLogs.reduce((acc, l) => acc + l.costUsd, 0)).toFixed(4)} USD
               </span>
             )}
           </div>
@@ -674,6 +814,10 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
             {endpoints.length} Active Services Available
           </span>
         </div>
+
+        <p className="px-1 text-[11px] text-zinc-400">
+          Each card is a sample provider route an agent could call. The response is a demo preview; only a confirmed Tempo receipt proves that a payment settled.
+        </p>
 
         {/* Category Filter Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
@@ -696,7 +840,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {(selectedCategory === 'All' ? endpoints : endpoints.filter((ep) => ep.category === selectedCategory)).map((ep) => {
+        {(selectedCategory === 'All' ? (showAllEndpoints ? endpoints : endpoints.slice(0, 4)) : endpoints.filter((ep) => ep.category === selectedCategory)).map((ep) => {
           const totalCalls = (localStats[ep.id]?.calls ?? ep.totalCalls);
           const grossEarned = totalCalls * (ep.pricePerCallUsd || 0.001);
           const protocolFee = grossEarned * 0.001; // 0.1% protocol fee
@@ -707,7 +851,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
           return (
           <div
             key={ep.id}
-            className="bg-white/[.03] backdrop-blur-md border border-white/[.08] hover:border-white/20 rounded-xl p-5 shadow-sm flex flex-col justify-between transition-all"
+            className="ui-interactive bg-white/[.03] backdrop-blur-md border border-white/[.08] hover:border-white/20 rounded-xl p-5 shadow-sm flex flex-col justify-between transition-all"
           >
             <div>
               <div className="flex items-start justify-between gap-2 mb-2">
@@ -724,8 +868,8 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                 <div className="text-xs text-zinc-400 font-mono bg-white/[.025] px-2.5 py-1.5 rounded-lg border border-white/[.08] truncate flex-1">
                   {ep.endpointUrl}
                 </div>
-                <span className="text-[9px] font-mono px-1.5 py-1 rounded bg-white/5 border border-white/10 text-zinc-400 shrink-0">
-                  Simulated API
+                <span className={`text-[9px] font-mono px-1.5 py-1 rounded border shrink-0 ${ep.id === 'ep_demo_local' ? 'bg-[#d7ff4f]/10 border-[#d7ff4f]/30 text-[#d7ff4f]' : 'bg-white/5 border-white/10 text-zinc-400'}`}>
+                  {ep.id === 'ep_demo_local' ? 'Protected local demo route' : 'Demo Provider route'}
                 </span>
               </div>
 
@@ -740,21 +884,21 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                   <span className="text-[#d7ff4f] font-bold text-[11px]">${Number(ep.pricePerCallUsd || 0).toFixed(4)} / call</span>
                 </div>
                 <div className="pt-1 border-t border-white/[0.06] text-[10px] text-[#d7ff4f] font-sans flex items-center gap-1 font-medium">
-                  <span>✓</span>
+                  <Check className="w-3 h-3 text-[#d7ff4f] shrink-0" />
                   <span>{comp.gain}</span>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs bg-white/[.025] p-2.5 rounded-lg border border-white/[.08]">
                 <div>
-                  <span className="text-zinc-400 text-xs block">Example calls</span>
+                  <span className="text-zinc-400 text-xs block">Sample calls</span>
                   <span className="text-zinc-100 font-bold font-mono text-sm">{totalCalls.toLocaleString()}</span>
                   <span className="text-[10px] text-zinc-500 font-mono block mt-0.5">
                     Gross: ${grossEarned.toFixed(2)}
                   </span>
                 </div>
                 <div>
-                  <span className="text-zinc-400 text-xs block">Projected payout</span>
+                    <span className="text-zinc-400 text-xs block">Sample payout</span>
                   <span className="text-[#d7ff4f] font-bold font-mono text-sm">${netEarned.toFixed(2)}</span>
                   <span className="text-[10px] text-zinc-500 font-mono block mt-0.5" title="0.1% protocol fee">
                     Fee (0.1%): ${protocolFee.toFixed(4)}
@@ -785,7 +929,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                   type="button"
                   onClick={() => handleCopy(ep.id, ep.integrationSnippet)}
                   className="py-2 px-3 rounded-lg bg-white/[.04] hover:bg-[#1e2630] text-[#f5f5f2] border border-white/15 font-mono text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                  title="Copy 2-Line Middleware SDK"
+                  title="Copy middleware example"
                 >
                   {copiedId === ep.id ? (
                     <Check className="w-3.5 h-3.5 text-[#d7ff4f]" />
@@ -804,9 +948,9 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                 }`}>
                   <div className="flex items-center gap-1.5 font-bold">
                     {testResult.status === 200 ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-[#d7ff4f] shrink-0" />
+                      <ShieldCheck className="w-3.5 h-3.5 text-[#d7ff4f] shrink-0" />
                     ) : (
-                      <span className="text-white font-bold shrink-0">✕</span>
+                      <ShieldAlert className="w-3.5 h-3.5 text-white shrink-0" />
                     )}
                     <span className="truncate">{testResult.message}</span>
                   </div>
@@ -817,9 +961,9 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                       <div className="pt-2 border-t border-[#d7ff4f]/20 space-y-2 text-[10px]">
                         <div className="flex items-center justify-between">
                           <div>
-                            <span className="text-zinc-400 block font-sans uppercase">YOU EARNED:</span>
+                            <span className="text-zinc-400 block font-sans uppercase">{testResult.receiptVerified ? 'CONFIRMED EARNED:' : 'QUOTED PRICE / PROJECTED PAYOUT:'}</span>
                             <span className="text-[#d7ff4f] font-bold font-mono text-xs">
-                              {testResult.txHash ? '+' : 'Quoted '} ${Number(ep.pricePerCallUsd || 0.001).toFixed(4)} USD
+                              {testResult.receiptVerified ? '+' : 'Quoted '} ${Number(ep.pricePerCallUsd || 0.001).toFixed(4)} USD
                             </span>
                           </div>
                           <div className="text-right">
@@ -839,7 +983,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                               <span>Example execution outcome:</span>
                             </span>
                             <span className="text-zinc-400">
-                              {testResult.txHash ? '&lt;150ms • Tempo receipt' : 'Evaluation • no chain receipt'}
+                              {testResult.receiptVerified ? '&lt;150ms • confirmed Tempo receipt' : 'Evaluation • no chain receipt'}
                             </span>
                           </div>
                           <p className="text-zinc-200 text-[11px] font-mono">
@@ -853,7 +997,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                     );
                   })()}
 
-                  {testResult.txHash && (
+                  {testResult.receiptVerified && testResult.txHash && (
                     <div className="pt-1.5 border-t border-white/[.08] flex items-center justify-between gap-2 text-[10px] font-mono">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className="text-zinc-400">Proof:</span>
@@ -872,7 +1016,7 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                           )}
                         </button>
                         <a
-                          href="https://explore.tempo.xyz"
+                          href={tempoTransactionUrl(testResult.txHash)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-zinc-400 hover:text-white flex items-center gap-1 hover:underline"
@@ -890,6 +1034,15 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
         );
       })}
       </div>
+      {selectedCategory === 'All' && endpoints.length > 4 && (
+        <button
+          type="button"
+          onClick={() => setShowAllEndpoints((open) => !open)}
+          className="mx-auto block rounded-xl border border-white/15 bg-white/[.04] px-4 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/[.08] hover:text-white transition cursor-pointer"
+        >
+          {showAllEndpoints ? 'Show fewer provider routes' : `Show all ${endpoints.length} provider routes`}
+        </button>
+      )}
       </div>
 
       {/* Add Modal */}
@@ -897,6 +1050,9 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-white/[.03] backdrop-blur-md border border-white/[.08] rounded-xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <h3 className="font-bold text-base text-[#f5f5f2]">Monetize Your API with HTTP 402</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Add one route and choose its price. In this demo, a confirmed payment goes to the shared SynapseMPPReceiver gateway; a production integration can configure the provider's payee.
+            </p>
             
             <form onSubmit={handleSubmit} className="space-y-3 font-mono text-xs">
               <div>
@@ -965,9 +1121,10 @@ export const ApiMonetizationPortal: React.FC<ApiMonetizationPortalProps> = ({
                   type="submit"
                   className="px-4 py-2 bg-[#d7ff4f] text-[#0c0f12] font-bold rounded-lg hover:bg-[#bce63b]"
                 >
-                  Activate 402 Protection
+                  Add route to demo
                 </button>
               </div>
+              {saveError && <p className="text-xs text-red-300 pt-1">{saveError}</p>}
             </form>
           </div>
         </div>

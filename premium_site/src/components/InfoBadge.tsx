@@ -20,8 +20,8 @@ export const InfoBadge: React.FC<InfoBadgeProps> = ({ text, title = 'Why this ma
           setShow(!show);
         }}
         className="w-4 h-4 rounded-full bg-white/[.06] hover:bg-[#d7ff4f]/20 hover:text-[#d7ff4f] hover:border-[#d7ff4f]/40 text-zinc-400 inline-flex items-center justify-center border border-white/10 transition cursor-help"
-        title={text}
-        aria-label="Info"
+        aria-label={title}
+        aria-expanded={show}
       >
         <Info className="w-2.5 h-2.5" />
       </button>

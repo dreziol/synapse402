@@ -1,0 +1,9 @@
+.env export-ignore
+.env.* export-ignore
+*.env export-ignore
+*.env.zip export-ignore
+*.zip export-ignore
+server/.runtime/ export-ignore
+server/*.bak export-ignore
+dist/ export-ignore
+node_modules/ export-ignore

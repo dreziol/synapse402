@@ -13,7 +13,7 @@ async function main() {
 
   // 1. Deploy or link TIP-20 pathUSD token
   let tokenAddress = process.env.TEMPO_PATHUSD_ADDRESS;
-  if (!tokenAddress || network.chainId === 31337n) {
+  if (network.chainId === 31337n) {
     console.log("Deploying Mock TIP-20 pathUSD token...");
     const MockTIP20 = await ethers.getContractFactory("MockTIP20");
     const mockToken = await MockTIP20.deploy("Tempo pathUSD", "pathUSD");
@@ -21,6 +21,12 @@ async function main() {
     tokenAddress = await mockToken.getAddress();
     console.log(`✅ MockTIP20 deployed at: ${tokenAddress}`);
   } else {
+    if (!tokenAddress) {
+      throw new Error(`TEMPO_PATHUSD_ADDRESS is required on chain ${network.chainId}; refusing to deploy a mock token outside Hardhat localhost.`);
+    }
+    if (!ethers.isAddress(tokenAddress)) {
+      throw new Error(`TEMPO_PATHUSD_ADDRESS is not a valid EVM address: ${tokenAddress}`);
+    }
     console.log(`Using existing pathUSD at: ${tokenAddress}`);
   }
 

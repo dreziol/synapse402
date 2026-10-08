@@ -2,12 +2,14 @@
   id: string;
   name: string;
   role: string;
-  dailyLimitUsd: number;
-  spentTodayUsd: number;
+  reusableCapUsd: number;
+  cumulativeUsageUsd: number;
   status: 'ACTIVE' | 'PAUSED';
   sessionKey: string;
+  /** Unix timestamp after which this session rule must reject payment. */
+  validBeforeTimestamp?: number;
   avatarColor: string;
-  merkleRoot?: string; // SHA-256 Merkle root of whitelisted endpoints
+  merkleRoot?: string; // OpenZeppelin StandardMerkleTree root of whitelisted endpoints
   whitelistedDomains?: string[];
 }
 
@@ -15,13 +17,21 @@ export interface LivePaymentEvent {
   id: string;
   agentName: string;
   serviceName: string;
+  /** Canonical provider label returned by the backend record. */
+  providerName?: string;
   serviceUrl: string;
   amountUsd: number;
   latencyMs: number;
   timestamp: string;
   txHash: string;
-  executionMode?: 'LIVE_TESTNET' | 'RESILIENT_SANDBOX';
-  status?: 'SETTLED' | 'SIMULATED_PASS' | 'REJECTED' | 'VOIDED' | 'REFUNDED';
+  /** True only after the backend has matched this receipt to Tempo chain data. */
+  receiptVerified?: boolean;
+  /** The local showcase may return an example payload while the Tempo payment proof is real. */
+  providerDataStatus?: 'EVALUATION_FIXTURE' | 'UPSTREAM_RESPONSE';
+  explorerUrl?: string;
+  executionMode?: 'LIVE_TESTNET' | 'LIVE_TESTNET_PENDING_CONFIRMATION' | 'RESILIENT_SANDBOX' | 'FAILED_REVERT';
+  paymentMode?: 'LIVE_TESTNET' | 'DEMO';
+  status?: 'SETTLED' | 'PENDING' | 'SIMULATED_PASS' | 'REJECTED' | 'FAILED' | 'VOIDED' | 'REFUNDED';
   blockNumber: number;
   merkleProof?: string[];
   merkleRoot?: string;
@@ -41,12 +51,12 @@ export interface LivePaymentEvent {
   authAuthorizationHeader?: string;
   liveProxyPayload?: any;
   complianceVerification?: {
-    status: 'CLEARED' | 'FLAGGED';
+    status: 'CLEARED' | 'FLAGGED' | 'UNVERIFIED';
     policy: string;
     checkedAt: string;
   };
   sanctionsCompliance?: {
-    status: 'CLEARED' | 'FLAGGED';
+    status: 'CLEARED' | 'FLAGGED' | 'UNVERIFIED';
     policy: string;
     checkedAt: string;
   };
